@@ -1,0 +1,15 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × `include` is in the wrong place
+   ╭─[system.toml:5:1]
+ 4 │ repo = ["git"]
+ 5 │ include = ["@kiln/profiles/minimal"]
+   · ───┬───
+   ·    ╰── this became `packages.include`
+   ╰────
+  help: `include` must be a top-level key, before any table header. Written after a
+        `[section]` header, TOML makes it a key *of that section* instead.

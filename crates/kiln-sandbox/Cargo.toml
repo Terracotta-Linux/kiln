@@ -1,0 +1,13 @@
+[package]
+name        = "kiln-sandbox"
+description = "The Sandbox trait, and the bubblewrap and systemd-nspawn backends."
+
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+
+[dev-dependencies]
+insta = { workspace = true }

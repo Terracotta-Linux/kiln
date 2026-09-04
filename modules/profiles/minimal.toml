@@ -1,0 +1,25 @@
+# The smallest image that boots and can be administered — one line in your
+# config instead of the packages it stands for.
+#
+# A profile is the one place opinions live, and it is honest about it: a list of
+# includes plus the packages that are nobody's decision. `ostree` is one of
+# those — ostree's dracut module ships inside it, and `kiln status` on the booted
+# machine has nothing to read without it. There is no network stack here;
+# @kiln/profiles/workstation and server make opposite choices about that.
+#
+# It picks `linux`. To run a different kernel, copy this include list into your
+# own configuration and swap the `@kiln/kernel/*` line: a second kernel module
+# alongside a profile is a conflict, by design.
+kiln = 1
+
+include = [
+  "@kiln/kernel/linux",
+  "@kiln/boot/grub2",
+  "@kiln/hardware/firmware",
+]
+
+[packages]
+repo = ["base", "dracut", "ostree", "systemd-sysvcompat"]
+
+[systemd]
+enable = ["systemd-timesyncd.service"]

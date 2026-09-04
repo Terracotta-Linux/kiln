@@ -1,0 +1,13 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × missing `kiln` schema version
+   ╭─[system.toml:1:1]
+ 1 │ ╭─▶ [packages]
+ 2 │ ├─▶ repo = ["git"]
+   · ╰──── this file has no `kiln` key
+   ╰────
+  help: every Kiln file starts with `kiln = 1` as its first key

@@ -1,0 +1,9 @@
+# GNOME's session and shell, plus a normal desktop's apps. See @kiln/desktop/gnome-minimal for essentials only, @kiln/desktop/gnome-full for the whole gnome-extra group.
+kiln = 1
+
+[packages]
+repo = ["gnome-shell", "gdm", "gnome-control-center", "xdg-desktop-portal-gnome",
+        "gnome-console", "gnome-calculator", "gnome-calendar"]
+
+[systemd]
+enable = ["gdm.service"]

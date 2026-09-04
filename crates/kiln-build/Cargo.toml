@@ -1,0 +1,16 @@
+[package]
+name        = "kiln-build"
+description = "PKGBUILD realization: recipes, the build key, the build cache."
+
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+kiln-alpm     = { workspace = true }
+kiln-manifest = { workspace = true }
+kiln-sandbox  = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

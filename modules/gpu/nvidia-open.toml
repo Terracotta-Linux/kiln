@@ -1,0 +1,17 @@
+# NVIDIA's open kernel modules, prebuilt against `linux` (@kiln/kernel/linux).
+#
+# `nvidia-open`, never `nvidia-open-dkms`. DKMS builds the module on the machine
+# at install time, against headers Kiln deliberately does not ship — in
+# an immutable image it either fails in a scriptlet or leaves nothing behind.
+# The prebuilt package is the same driver with the build already done, which is
+# what an image wants. On @kiln/kernel/linux-lts use @kiln/gpu/nvidia-open-lts.
+kiln = 1
+
+[packages]
+repo = ["nvidia-open", "nvidia-utils"]
+
+[kernel]
+cmdline = ["nvidia_drm.modeset=1"]
+
+[kernel.modules]
+blacklist = ["nouveau"]

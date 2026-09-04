@@ -1,0 +1,27 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × unknown key `enabeld` in `boot`
+   ╭─[system.toml:5:1]
+ 4 │ timeout = 5
+ 5 │ enabeld = true
+   · ───┬───
+   ·    ╰── not part of the schema
+ 6 │ 
+   ╰────
+  help: in `boot` Kiln knows: initramfs, loader, timeout
+kiln::structure
+
+  × unknown key `excludes` in `packages`
+   ╭─[system.toml:9:1]
+ 8 │ repo = ["git"]
+ 9 │ excludes = ["nano"]
+   · ────┬───
+   ·     ╰── not part of the schema
+   ╰────
+  help: did you mean `exclude`?
+
+2 problems found.

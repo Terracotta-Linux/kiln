@@ -1,0 +1,6 @@
+# Niri, and the GTK portal it documents as its own dependency for file dialogs
+# and screencasting.
+kiln = 1
+
+[packages]
+repo = ["niri", "xdg-desktop-portal-gtk"]

@@ -1,0 +1,5 @@
+---
+source: crates/kiln-image/tests/kernel.rs
+expression: rendered
+---
+bwrap --bind <root> / --proc /proc --dev /dev --ro-bind-try /sys /sys --tmpfs /run --tmpfs /tmp --unshare-net --clearenv --setenv HOME /root --setenv LANG C.UTF-8 --setenv LC_ALL C.UTF-8 --setenv SOURCE_DATE_EPOCH 0 --setenv TERM dumb --setenv TZ UTC --setenv PATH /usr/bin:/usr/sbin:/bin:/sbin --die-with-parent --new-session -- dracut --force --no-hostonly --no-hostonly-cmdline --reproducible --kver 6.19.2-arch1-1 --add ostree /usr/lib/modules/6.19.2-arch1-1/initramfs.img

@@ -1,0 +1,10 @@
+# What a laptop needs that a desktop does not: audio DSP firmware, which most
+# machines made since 2019 have no working audio without, and the power profile
+# daemon every desktop environment's battery menu talks to.
+kiln = 1
+
+[packages]
+repo = ["sof-firmware", "power-profiles-daemon"]
+
+[systemd]
+enable = ["power-profiles-daemon.service"]

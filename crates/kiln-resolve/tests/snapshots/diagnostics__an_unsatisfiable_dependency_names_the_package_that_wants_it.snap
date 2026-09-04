@@ -1,0 +1,15 @@
+---
+source: crates/kiln-resolve/tests/diagnostics.rs
+expression: "render(\"diag-unsatisfied\",\n&BOOTABLE.replace(r#\"\"fixture-init\"]\"#,\nr#\"\"fixture-init\", \"fixture-broken\"]\"#,),)"
+---
+kiln::resolution
+
+  × `fixture-broken` requires `fixture-nonexistent`, which nothing provides
+    ╭─[system.toml:12:42]
+ 11 │ [packages]
+ 12 │ repo = ["fixture-linux", "fixture-init", "fixture-broken"]
+    ·                                          ────────┬───────
+    ·                                                  ╰── requested here
+    ╰────
+  help: the package exists but its dependency does not resolve — usually a repository
+        that is not enabled, or a partial mirror

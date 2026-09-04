@@ -1,0 +1,5 @@
+kiln = 1
+
+[[file]]
+source = "../../../../Cargo.toml"
+target = "/etc/leak.conf"

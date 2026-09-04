@@ -1,0 +1,7 @@
+# AMD graphics: the kernel driver is in-tree, so this is only userspace.
+#
+# No `amdgpu` module option and no blacklist: nothing else claims these cards.
+kiln = 1
+
+[packages]
+repo = ["mesa", "vulkan-radeon"]

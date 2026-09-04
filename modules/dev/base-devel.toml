@@ -1,0 +1,11 @@
+# The toolchain: compiler, make, autotools, fakeroot, and the rest of what
+# building an Arch package needs.
+#
+# You do not need this to let *Kiln* build a package. `packages.build` and
+# `packages.aur` are compiled in a sandbox with their own build root
+# which is assembled and thrown away — nothing of it reaches the image. This is
+# for building things *on* the machine afterwards.
+kiln = 1
+
+[packages]
+repo = ["base-devel"]

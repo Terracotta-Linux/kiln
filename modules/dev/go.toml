@@ -1,0 +1,5 @@
+# The Go toolchain from the repositories, updated with the rest of the image.
+kiln = 1
+
+[packages]
+repo = ["go"]

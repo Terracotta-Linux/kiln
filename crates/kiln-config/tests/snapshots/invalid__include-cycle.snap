@@ -1,0 +1,14 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::graph
+
+  × include cycle
+   ╭─[b.toml:2:12]
+ 1 │ kiln = 1
+ 2 │ include = ["a.toml"]
+   ·            ────┬───
+   ·                ╰── closes the cycle here
+   ╰────
+  help: the cycle is: a.toml → b.toml → a.toml

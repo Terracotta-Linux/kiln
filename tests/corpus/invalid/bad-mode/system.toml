@@ -1,0 +1,11 @@
+kiln = 1
+
+[[file]]
+source = "motd"
+target = "/etc/motd"
+mode   = 755
+
+[[file]]
+target  = "/usr/lib/sysctl.d/a.conf"
+content = "x\n"
+mode    = "0999"

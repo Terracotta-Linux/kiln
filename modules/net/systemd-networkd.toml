@@ -1,0 +1,17 @@
+# systemd's own network stack. Nothing to install — it ships with systemd — so
+# this module is purely the decision about which stack is in charge.
+#
+# It does not *disable* NetworkManager, though the mirror image of this module
+# disables networkd. Kiln makes naming a unit no package provides a hard error
+# in either direction, so a module that disabled NetworkManager would fail every
+# build that did not also install it — which is every build that chose this
+# stack. Including both stacks still resolves: @kiln/net/networkmanager's
+# `disable` beats this module's `enable`, so NetworkManager wins.
+#
+# It configures no interfaces. A `.network` file is machine state, not image
+# content (the usual test: change one and you do not need a new image), so it
+# belongs in /etc on the machine, or in a `[[file]]` in your own config.
+kiln = 1
+
+[systemd]
+enable = ["systemd-networkd.service", "systemd-resolved.service"]

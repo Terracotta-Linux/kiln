@@ -1,0 +1,15 @@
+---
+source: crates/kiln-cli/src/check.rs
+expression: report.render()
+---
+  repo packages          4 changed
+    linux                  6.19.2-1     →  6.19.3-1
+    mesa                   26.1.4-1     →  26.1.5-1
+    ripgrep                —            →  14.1.1-1
+    vim                    9.1-1        →  removed
+  aur                    1 changed
+    zen-browser-bin        1.16.3       →  1.17.0         (commit 3f1a9c → 88bd02)
+  built packages         1 rebuild
+    v4l2loopback                                          (kernel 6.19.2-1 → 6.19.3-1)
+  files                  1 changed
+    files/myapp.conf       b3:aaaa1111  →  b3:bbbb2222

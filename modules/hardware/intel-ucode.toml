@@ -1,0 +1,6 @@
+# Intel microcode. Loaded by the bootloader before the kernel starts, so it is
+# image content even though nothing in userspace ever reads it.
+kiln = 1
+
+[packages]
+repo = ["intel-ucode"]

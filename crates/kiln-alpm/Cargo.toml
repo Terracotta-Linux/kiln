@@ -1,0 +1,13 @@
+[package]
+name        = "kiln-alpm"
+description = "libalpm: repository metadata, the dependency solver, and the transaction."
+
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+alpm = "5"
+
+[dev-dependencies]

@@ -1,0 +1,20 @@
+---
+source: crates/kiln-resolve/tests/diagnostics.rs
+expression: "render(\"diag-excluded\",\n&format!(\"{}\\nexclude = [\\\"fixture-libfoo\\\"]\\n\",\nBOOTABLE.replace(r#\"\"fixture-init\"]\"#,\nr#\"\"fixture-init\", \"fixture-app\"]\"#,)),)"
+---
+kiln::resolution
+
+  × `fixture-libfoo` is excluded, but the image would contain it
+    ╭─[system.toml:12:42]
+ 11 │ [packages]
+ 12 │ repo = ["fixture-linux", "fixture-init", "fixture-app"]
+    ·                                          ──────┬──────
+    ·                                                ╰── `fixture-app` requires it
+ 13 │ 
+ 14 │ exclude = ["fixture-libfoo"]
+    ·            ────────┬───────
+    ·                    ╰── excluded here
+    ╰────
+  help: Kiln will not drop a dependency to satisfy an exclusion: that produces an image
+        missing something a program links against. Remove the exclusion, or remove what
+        needs it.

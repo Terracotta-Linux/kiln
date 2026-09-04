@@ -1,0 +1,16 @@
+---
+source: crates/kiln-resolve/tests/diagnostics.rs
+expression: "render(\"diag-no-kernel\",\nr#\"\nkiln = 1\n\n[image]\nname = \"fixture\"\narch = \"x86_64\"\n\n[kernel]\npackage = \"fixture-linux\"\n\n[packages]\nrepo = [\"fixture-init\"]\n\"#,)"
+---
+kiln::resolution
+
+  × no kernel in this image: nothing installs `fixture-linux`
+    ╭─[system.toml:9:11]
+  8 │ [kernel]
+  9 │ package = "fixture-linux"
+    ·           ───────┬───────
+    ·                  ╰── named here
+ 10 │ 
+    ╰────
+  help: add `fixture-linux` to `packages.repo`. `@kiln/profiles/minimal` is the one-line
+        answer — it stands for the handful of packages any bootable image needs

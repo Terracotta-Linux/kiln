@@ -1,0 +1,17 @@
+# Members of `wheel` may use sudo.
+#
+# Kiln does not manage accounts — this says what the *policy* is, and who
+# is in `wheel` is a fact about the machine. The file lands in /etc, which Kiln
+# translates to /usr/etc and three-way merges at deploy time, so an
+# edit on the machine survives an update.
+kiln = 1
+
+[packages]
+repo = ["sudo"]
+
+[[file]]
+target  = "/etc/sudoers.d/10-wheel"
+content = "%wheel ALL=(ALL:ALL) ALL\n"
+# sudo refuses to read a sudoers file that anyone but root can write, and
+# ignores it silently rather than failing.
+mode    = "0440"

@@ -1,0 +1,10 @@
+# ROCm on top of the driver from @kiln/gpu/amd — a separate decision from the
+# driver itself (rule 1: amd installs mesa and vulkan-radeon and stops
+# there).
+#
+# `rocm-hip-sdk` pulls in MIOpen — ROCm's cuDNN equivalent — through alpm's
+# own dependency resolution, so nothing here needs to name it separately.
+kiln = 1
+
+[packages]
+repo = ["rocm-hip-sdk"]

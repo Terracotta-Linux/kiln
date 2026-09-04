@@ -1,0 +1,10 @@
+# Docker, and buildx. A daemon running as root, enabled at boot: choosing this
+# over @kiln/virt/podman is choosing that, and the module says so rather than
+# leaving it to be discovered.
+kiln = 1
+
+[packages]
+repo = ["docker", "docker-buildx"]
+
+[systemd]
+enable = ["docker.service"]

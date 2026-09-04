@@ -1,0 +1,140 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 120
+expression: rendered
+---
+config_id: b3:09520e424ae83f48c2d2ab03795bef4a47167e17f8296dd2e05a8f0c2c952f32
+
+
+  boot: 
+    initramfs: "dracut"
+    loader: "grub2"
+    timeout: 0
+  files: 
+    /etc/motd: 
+      content: []
+      mode: []
+      source: 
+        - "files/motd"
+      target: "/etc/motd"
+    /usr/bin/mytool: 
+      content: []
+      mode: 
+        - 493
+      source: 
+        - "files/mytool"
+      target: "/usr/bin/mytool"
+    /usr/lib/tmpfiles.d/scratch.conf: 
+      content: 
+        - "d /var/scratch 0755 root root 30d\n"
+      mode: []
+      source: []
+      target: "/usr/lib/tmpfiles.d/scratch.conf"
+  hash_epoch: 3
+  image: 
+    arch: "[ARCH]"
+    name: "workstation"
+  kernel: 
+    cmdline: 
+      - "amd_iommu=on"
+      - "nvidia_drm.modeset=1"
+      - "quiet"
+      - "rw"
+      - "zswap.enabled=0"
+    headers: false
+    modules: 
+      blacklist: 
+        - "nouveau"
+      load: 
+        - "kvm_intel"
+      options: 
+        v4l2loopback: "devices=2 exclusive_caps=1"
+    out_of_tree: {}
+    package: "linux"
+  local_digests: 
+    files/20-locale.sh: "b3:d93c38ec5fbbe57b9eb26742864b7b46fcc60af4a3db9b509762df7bf1b851ed"
+    files/motd: "b3:8876b82b2f052d7533903ded58b1f0a37ee4b8fc1a4220677a292ef83530fa25"
+    files/mytool: "b3:fc2cbc0dfa8ea62d093bab9c041feaebea9b3343d6534a1a539bcb67716081f5"
+    units/backup.timer: "b3:10a3a9333f95f0a9c2018b8129fef872c37d45023b62c7d5c41d6e15b5e58519"
+  packages: 
+    aur: 
+      foo-git: 
+        commit: 
+          - "a81fc2e"
+        name: "foo-git"
+      zen-browser-bin: 
+        commit: []
+        name: "zen-browser-bin"
+    build: []
+    exclude: 
+      - "nano"
+    file: {}
+    repo: 
+      - "base"
+      - "dracut"
+      - "efibootmgr"
+      - "fish"
+      - "gdm"
+      - "git"
+      - "gnome-calculator"
+      - "gnome-calendar"
+      - "gnome-console"
+      - "gnome-control-center"
+      - "gnome-shell"
+      - "grub"
+      - "intel-ucode"
+      - "linux"
+      - "linux-firmware"
+      - "neovim"
+      - "networkmanager"
+      - "nvidia-open"
+      - "nvidia-utils"
+      - "ostree"
+      - "systemd-sysvcompat"
+      - "xdg-desktop-portal-gnome"
+  repos: 
+    extra: {}
+    mirrors: []
+    snapshot: 
+      date: "2026-08-24"
+  schema: 1
+  scripts: 
+    20-locale: 
+      after: "files"
+      content: []
+      name: "20-locale"
+      source: 
+        - "files/20-locale.sh"
+  system: 
+    hostname: 
+      - "forge"
+    keymap: "us"
+    locale: 
+      generate: 
+        - "en_US.UTF-8 UTF-8"
+      lang: "en_US.UTF-8"
+    timezone: "Asia/Riyadh"
+  systemd: 
+    disable: 
+      - "systemd-networkd.service"
+    enable: 
+      - "NetworkManager.service"
+      - "fstrim.timer"
+      - "gdm.service"
+      - "sshd.socket"
+      - "systemd-timesyncd.service"
+    mask: 
+      - "NetworkManager-wait-online.service"
+    units: 
+      backup.timer: 
+        content: []
+        enable: true
+        name: "backup.timer"
+        source: 
+          - "units/backup.timer"
+      hello.service: 
+        content: 
+          - "[Unit]\nDescription=Hello\n[Service]\nExecStart=/usr/bin/true\n"
+        enable: true
+        name: "hello.service"
+        source: []

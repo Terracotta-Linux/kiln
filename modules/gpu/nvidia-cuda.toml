@@ -1,0 +1,11 @@
+# CUDA and cuDNN, on top of the driver from @kiln/gpu/nvidia-open or
+# @kiln/gpu/nvidia-open-lts — a separate decision from the driver itself
+# (rule 1: nvidia-open installs the driver and stops there).
+#
+# `cuda` pulls in `opencl-nvidia` through alpm's own dependency resolution, so
+# nothing here needs to name it. No NCCL, no TensorRT: those are decisions
+# about a specific workload, not about whether CUDA is present at all.
+kiln = 1
+
+[packages]
+repo = ["cuda", "cudnn"]

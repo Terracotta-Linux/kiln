@@ -1,0 +1,11 @@
+# KVM through libvirt: the daemon, QEMU, a manager, and the DNS/DHCP server the
+# default NAT network is unusable without.
+#
+# Socket-activated, so a machine that never starts a VM never runs the daemon.
+kiln = 1
+
+[packages]
+repo = ["libvirt", "qemu-desktop", "virt-manager", "dnsmasq"]
+
+[systemd]
+enable = ["libvirtd.socket"]

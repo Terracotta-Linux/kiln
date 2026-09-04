@@ -1,0 +1,65 @@
+kiln = 1
+
+include = [
+  "hardware.toml",
+  "@kiln/profiles/minimal",
+  "@kiln/desktop/gnome",
+  "@kiln/net/networkmanager",
+]
+
+[image]
+name = "workstation"
+arch = "x86_64"
+
+[repos]
+snapshot = "2026-08-24"
+
+[packages]
+repo    = ["git", "neovim", "fish"]
+aur     = ["zen-browser-bin", { name = "foo-git", commit = "a81fc2e" }]
+exclude = ["nano"]
+
+[kernel]
+cmdline = ["quiet", "zswap.enabled=0"]
+
+[kernel.modules]
+load    = ["kvm_intel"]
+options = { v4l2loopback = "devices=2 exclusive_caps=1" }
+
+[boot]
+timeout = 0
+
+[systemd]
+enable = ["sshd.socket", "fstrim.timer"]
+
+[[systemd.unit]]
+name   = "backup.timer"
+source = "units/backup.timer"
+enable = true
+
+[[systemd.unit]]
+name    = "hello.service"
+enable  = true
+content = "[Unit]\nDescription=Hello\n[Service]\nExecStart=/usr/bin/true\n"
+
+[[file]]
+source = "files/motd"
+target = "/etc/motd"
+
+[[file]]
+source = "files/mytool"
+target = "/usr/bin/mytool"
+mode   = "0755"
+
+[[file]]
+target  = "/usr/lib/tmpfiles.d/scratch.conf"
+content = "d /var/scratch 0755 root root 30d\n"
+
+[[script]]
+source = "files/20-locale.sh"
+
+[system]
+hostname = "forge"
+timezone = "Asia/Riyadh"
+keymap   = "us"
+locale   = { lang = "en_US.UTF-8", generate = ["en_US.UTF-8 UTF-8"] }

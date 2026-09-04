@@ -1,0 +1,10 @@
+# PipeWire as the audio stack, with the PulseAudio and ALSA compatibility
+# layers every application still expects, and the session manager that actually
+# routes anything.
+#
+# No systemd units: these are *user* services, started by the user's own systemd
+# instance, and Kiln manages image content rather than login sessions.
+kiln = 1
+
+[packages]
+repo = ["pipewire", "pipewire-pulse", "pipewire-alsa", "wireplumber"]

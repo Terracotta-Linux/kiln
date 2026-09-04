@@ -1,0 +1,14 @@
+# Plasma's session and portal, plus a normal desktop's apps: a terminal, a
+# calculator, and a calendar. See @kiln/desktop/plasma-minimal for
+# essentials only, and plasma-full for plasma-meta, KDE's "everything"
+# package.
+kiln = 1
+
+[packages]
+repo = [
+  "plasma-desktop", "sddm", "xdg-desktop-portal-kde",
+  "konsole", "kcalc", "korganizer",
+]
+
+[systemd]
+enable = ["sddm.service"]

@@ -1,0 +1,16 @@
+# Xfce: session, window manager, panel, desktop, settings, file manager, and
+# a display manager to start it — no other apps. See @kiln/desktop/xfce for
+# the full xfce4 + xfce4-goodies groups; there is no xfce-full.
+#
+# Named packages rather than the `xfce4` group: libalpm resolves package
+# names, not group names, so a module naming a group installs nothing at all.
+kiln = 1
+
+[packages]
+repo = [
+  "xfce4-session", "xfwm4", "xfce4-panel", "xfdesktop", "xfce4-settings",
+  "thunar", "lightdm", "lightdm-gtk-greeter",
+]
+
+[systemd]
+enable = ["lightdm.service"]

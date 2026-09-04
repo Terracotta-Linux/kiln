@@ -1,0 +1,29 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::semantic
+
+  × `NetworkManager` is not a systemd unit name
+   ╭─[system.toml:4:10]
+ 3 │ [systemd]
+ 4 │ enable = ["NetworkManager"]
+   ·          ─────────┬────────
+   ·                   ╰── here
+ 5 │ 
+   ╰────
+  help: `NetworkManager` has no unit type; write `NetworkManager.service` if that is
+        what you meant
+kiln::semantic
+
+  × `backup.tmier` is not a systemd unit name
+   ╭─[system.toml:7:11]
+ 6 │ [[systemd.unit]]
+ 7 │ name    = "backup.tmier"
+   ·           ───────┬──────
+   ·                  ╰── here
+ 8 │ content = "[Timer]\n"
+   ╰────
+  help: did you mean `timer`?
+
+2 problems found.

@@ -1,0 +1,4 @@
+kiln = 1
+
+[packages]
+file = [{ path = "pkgs/myapp-1.0-1-x86_64.pkg.tar.zst" }]

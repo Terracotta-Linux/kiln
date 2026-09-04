@@ -1,0 +1,28 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::semantic
+
+  × Kiln cannot ship a file to `/boot/extra.conf`
+   ╭─[system.toml:4:11]
+ 3 │ [[file]]
+ 4 │ target  = "/boot/extra.conf"
+   ·           ─────────┬────────
+   ·                    ╰── here
+ 5 │ content = "x\n"
+   ╰────
+  help: OSTree owns /boot; the kernel and boot entries are Kiln's to place
+kiln::semantic
+
+  × `etc/relative` is not an absolute path
+   ╭─[system.toml:8:11]
+ 7 │ [[file]]
+ 8 │ target  = "etc/relative"
+   ·           ───────┬──────
+   ·                  ╰── here
+ 9 │ content = "x\n"
+   ╰────
+  help: `target` is a real system path and must start with `/`
+
+2 problems found.

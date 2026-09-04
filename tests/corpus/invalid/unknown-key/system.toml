@@ -1,0 +1,9 @@
+kiln = 1
+
+[boot]
+timeout = 5
+enabeld = true
+
+[packages]
+repo = ["git"]
+excludes = ["nano"]

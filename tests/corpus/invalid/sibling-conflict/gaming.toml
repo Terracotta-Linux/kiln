@@ -1,0 +1,4 @@
+kiln = 1
+
+[boot]
+timeout = 0

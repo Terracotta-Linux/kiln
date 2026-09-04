@@ -1,0 +1,8 @@
+kiln = 1
+
+[systemd]
+enable = ["NetworkManager"]
+
+[[systemd.unit]]
+name    = "backup.tmier"
+content = "[Timer]\n"

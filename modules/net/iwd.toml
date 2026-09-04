@@ -1,0 +1,14 @@
+# iwd as the wifi daemon, instead of wpa_supplicant.
+#
+# iwd only associates with an access point; something else still has to bring
+# the interface up and run DHCP — pair this with @kiln/net/systemd-networkd,
+# or point NetworkManager's own `wifi.backend` at iwd in a `[[file]]`. Two
+# daemons both trying to drive the same wireless device is a machine problem,
+# not a config Kiln can resolve for you, so include only one wifi manager.
+kiln = 1
+
+[packages]
+repo = ["iwd"]
+
+[systemd]
+enable = ["iwd.service"]

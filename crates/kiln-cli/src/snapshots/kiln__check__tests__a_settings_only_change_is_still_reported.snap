@@ -1,0 +1,6 @@
+---
+source: crates/kiln-cli/src/check.rs
+expression: report.render()
+---
+  configuration          1 changed
+    config_id              b3:11c4de    →  b3:99887766    (settings changed with no change to any input)

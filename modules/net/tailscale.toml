@@ -1,0 +1,12 @@
+# Tailscale, enabled at boot.
+#
+# It ships no auth key and joins no tailnet: `tailscale up` is an interactive
+# login the same way a `wheel` user is a fact about the machine rather than
+# the image — this module only decides that the daemon is there to run it.
+kiln = 1
+
+[packages]
+repo = ["tailscale"]
+
+[systemd]
+enable = ["tailscaled.service"]

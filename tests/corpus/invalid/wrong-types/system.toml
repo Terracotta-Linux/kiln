@@ -1,0 +1,10 @@
+kiln = 1
+
+[boot]
+timeout = "five"
+
+[packages]
+repo = "git"
+
+[kernel]
+headers = "yes"

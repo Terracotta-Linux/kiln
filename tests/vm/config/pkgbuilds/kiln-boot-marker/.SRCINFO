@@ -1,0 +1,9 @@
+pkgbase = kiln-boot-marker
+	pkgdesc = Proof that a PKGBUILD in the configuration tree reaches the image
+	pkgver = 1.0
+	pkgrel = 1
+	arch = x86_64
+	license = MIT
+	options = !debug
+
+pkgname = kiln-boot-marker

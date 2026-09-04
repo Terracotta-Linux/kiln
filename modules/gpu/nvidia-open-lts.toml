@@ -1,0 +1,16 @@
+# The same driver, prebuilt against `linux-lts` (@kiln/kernel/linux-lts).
+#
+# A separate module rather than a flag, because which kernel a binary module was
+# compiled against is a fact about the image and not a preference. Arch ships no
+# non-open NVIDIA kernel module any more, so there is no proprietary variant to
+# choose between.
+kiln = 1
+
+[packages]
+repo = ["nvidia-open-lts", "nvidia-utils"]
+
+[kernel]
+cmdline = ["nvidia_drm.modeset=1"]
+
+[kernel.modules]
+blacklist = ["nouveau"]

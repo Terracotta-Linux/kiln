@@ -1,0 +1,69 @@
+---
+source: crates/kiln-image/tests/overlay.rs
+expression: "rendered.join(\"\\n\\n\")"
+---
+/usr/bin/mytool
+  → usr/bin/mytool
+
+/usr/lib/sysctl.d/99-mine.conf
+  → usr/lib/sysctl.d/99-mine.conf
+
+/etc/motd
+  → etc/motd
+
+/etc/sudoers.d/10-wheel
+  → etc/sudoers.d/10-wheel
+
+/usr/etc/sudoers.d/10-wheel
+  ✗ /usr/etc is where Kiln puts /etc, not somewhere to write
+      write `/etc/sudoers.d/10-wheel` instead
+
+/var/lib/myapp/seed.db
+  → usr/share/factory/var/lib/myapp/seed.db
+  C /var/lib/myapp/seed.db
+
+/opt/thing/config
+  → usr/share/factory/var/opt/thing/config
+  C /var/opt/thing/config
+
+/srv/http/index.html
+  → usr/share/factory/var/srv/http/index.html
+  C /var/srv/http/index.html
+
+/boot/grub/custom.cfg
+  ✗ OSTree owns /boot; the bootloader and kernels are placed by Kiln
+
+/home/abdullah/.bashrc
+  ✗ home directories are machine state, not image content
+      Kiln does not manage login accounts or their files
+
+/root/.ssh/authorized_keys
+  ✗ home directories are machine state, not image content
+      Kiln does not manage login accounts or their files
+
+/tmp/scratch
+  ✗ this is a runtime filesystem; nothing written here would survive a boot
+
+/run/nope
+  ✗ this is a runtime filesystem; nothing written here would survive a boot
+
+/proc/nope
+  ✗ this is a runtime filesystem; nothing written here would survive a boot
+
+/dev/nope
+  ✗ this is a runtime filesystem; nothing written here would survive a boot
+
+/mnt/nope
+  ✗ /mnt is not a directory the image has
+
+relative/path
+  ✗ a target must be an absolute path
+
+/usr/lib/trailing/
+  ✗ a target directory needs a name for the file inside it
+
+/usr/lib/../etc/sneaky
+  ✗ a target must be normalized: no `.` or `..` components
+
+/toplevel
+  ✗ nothing is written at the top level of the image

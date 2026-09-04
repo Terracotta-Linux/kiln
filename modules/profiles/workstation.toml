@@ -1,0 +1,24 @@
+# A desktop machine: everything @kiln/profiles/minimal has, plus what a person
+# sitting in front of one needs.
+#
+# No graphics driver and no desktop: @kiln/gpu/* depends on the card and
+# @kiln/desktop/* on taste, so both are yours to add. It picks `linux`; see
+# @kiln/profiles/minimal on swapping that.
+kiln = 1
+
+include = [
+  "@kiln/kernel/linux",
+  "@kiln/boot/grub2",
+  "@kiln/hardware/firmware",
+  "@kiln/hardware/bluetooth",
+  "@kiln/hardware/printing",
+  "@kiln/net/networkmanager",
+  "@kiln/audio/pipewire",
+  "@kiln/security/wheel-sudo",
+]
+
+[packages]
+repo = ["base", "dracut", "ostree", "systemd-sysvcompat"]
+
+[systemd]
+enable = ["systemd-timesyncd.service"]

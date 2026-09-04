@@ -1,0 +1,7 @@
+# systemd-boot is what most Arch users run, and what an earlier draft of the
+# design defaulted to — so this is a mistake people will make on purpose.
+kiln = 1
+
+[boot]
+loader  = "systemd-boot"
+timeout = 3

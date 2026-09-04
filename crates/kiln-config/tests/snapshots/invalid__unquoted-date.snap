@@ -1,0 +1,14 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × dates are not a Kiln value type
+   ╭─[system.toml:4:12]
+ 3 │ [repos]
+ 4 │ snapshot = 2026-08-24
+   ·            ─────┬────
+   ·                 ╰── unquoted date
+   ╰────
+  help: quote it: `snapshot = "2026-08-24"`

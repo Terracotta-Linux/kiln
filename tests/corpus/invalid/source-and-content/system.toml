@@ -1,0 +1,9 @@
+kiln = 1
+
+[[file]]
+source  = "motd"
+target  = "/etc/motd"
+content = "also this\n"
+
+[[file]]
+target = "/etc/hostname"

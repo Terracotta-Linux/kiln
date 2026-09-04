@@ -1,0 +1,17 @@
+---
+source: crates/kiln-resolve/tests/local_packages.rs
+expression: "kiln_diag::render_all(&errs)"
+---
+kiln::resolution
+
+  × `packages/myapp-1.0-1-x86_64.pkg.tar.zst` is not the file its `sha256` describes
+    ╭─[system.toml:14:18]
+ 13 │ 
+ 14 │ file = [{ path = "packages/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "f238df2ae16f95a3461bb262b8db52df5808bb03a6f2d85471442835bb31c65b" }]
+    ·                  ────────────────────┬────────────────────
+    ·                                      ╰── declared here
+    ╰────
+  help: the file on disk hashes to sha256 =
+        "1170c8939638387ed45a0d39fa66b9cf4302208f2192e7d2ffefb1b9e2a620af" — update the
+        line if that change was intended; if it was not, something replaced a package
+        Kiln was about to install

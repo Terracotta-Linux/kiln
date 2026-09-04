@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members  = ["crates/*"]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.85"
+license      = "MIT"
+
+[workspace.dependencies]
+kiln-diag     = { path = "crates/kiln-diag" }
+kiln-config   = { path = "crates/kiln-config" }
+kiln-manifest = { path = "crates/kiln-manifest" }
+kiln-alpm     = { path = "crates/kiln-alpm" }
+kiln-resolve  = { path = "crates/kiln-resolve" }
+kiln-sandbox  = { path = "crates/kiln-sandbox" }
+kiln-aur      = { path = "crates/kiln-aur" }
+kiln-build    = { path = "crates/kiln-build" }
+kiln-image    = { path = "crates/kiln-image" }
+kiln-record   = { path = "crates/kiln-record" }
+kiln-ostree   = { path = "crates/kiln-ostree" }
+
+blake3     = "1"
+# One syscall: `lgetxattr`, to read overlayfs's `trusted.overlay.opaque` marker.
+# Nothing else in the workspace links libc directly — `mounts` and the
+# sandbox shell out — but an opaque directory that goes unread is stale files
+# left in the image, and that is not a thing to leave to whether `getfattr`
+# happens to be installed.
+libc       = "0.2"
+miette     = "7"
+thiserror  = "2"
+toml_edit  = "0.22"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The AUR RPC and `git ls-remote` are the only network Kiln does that libalpm
+# does not already do for it. The transport is behind a trait, so this
+# dependency touches one file and the tests never reach it (recorded
+# fixtures, never the network).
+ureq       = "3"
+
+# libostree through its GObject-introspection bindings, not `ostree(1)`.
+# `glib` and `gio` come with them and are not a separate choice: every call
+# takes a `gio::Cancellable` and returns a `glib::Error`.
+# The version features gate which libostree symbols the bindings expose, and
+# they are cumulative. `v2025_3` is the highest the crate offers; the system
+# library here is 2026.4, so nothing is being asked for that is not present.
+ostree     = { version = "0.20", features = ["v2025_3"] }
+glib       = "0.20"
+gio        = "0.20"
+# The build record goes into commit metadata compressed. GVariant metadata
+# is read on every `kiln list`, and a 400 KB record per commit is not that.
+zstd       = "0.13"
+
+insta    = { version = "1", features = ["filters"] }
+proptest = "1"
+
+[profile.dev]
+debug = 1

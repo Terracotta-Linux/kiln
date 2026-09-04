@@ -1,0 +1,22 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::merge
+
+  × conflicting values for `boot.timeout`
+   ╭─[desktop.toml:4:11]
+ 3 │ [boot]
+ 4 │ timeout = 5
+   ·           ┬
+   ·           ╰── set to 5 here
+   ╰────
+  help: `desktop.toml` and `gaming.toml` are both included by `system.toml`. Set
+        `boot.timeout` in `system.toml` to resolve it — the includer always wins.
+  × also in gaming.toml
+   ╭─[gaming.toml:4:11]
+ 3 │ [boot]
+ 4 │ timeout = 0
+   ·           ┬
+   ·           ╰── and to 0 here
+   ╰────

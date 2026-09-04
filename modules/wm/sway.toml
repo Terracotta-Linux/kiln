@@ -1,0 +1,8 @@
+# Sway and the wlroots portal. `swaybg` is here because Sway's own default
+# config references it and the session errors on startup without it — which is
+# the module library's own rule: shipped because the thing does not work otherwise, not
+# because a wallpaper is an opinion worth having.
+kiln = 1
+
+[packages]
+repo = ["sway", "swaybg", "xdg-desktop-portal-wlr"]

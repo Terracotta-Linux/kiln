@@ -1,0 +1,7 @@
+# i3, and the X server it cannot start without — it is the one entry in `wm/`
+# that is not a Wayland compositor, so the display server is part of the
+# decision rather than something already present.
+kiln = 1
+
+[packages]
+repo = ["i3-wm", "xorg-server", "xorg-xinit"]

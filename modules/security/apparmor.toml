@@ -1,0 +1,20 @@
+# AppArmor, with the kargs that turn it on.
+#
+# The `lsm=` list is not a preference: the kernel's default stack does not
+# include AppArmor, and enabling the service without it leaves a daemon loading
+# profiles into a subsystem that is not there. It is written out in full because
+# `lsm=` replaces the list rather than adding to it.
+kiln = 1
+
+[packages]
+repo = ["apparmor"]
+
+[kernel]
+cmdline = [
+  "lsm=landlock,lockdown,yama,integrity,apparmor,bpf",
+  "apparmor=1",
+  "security=apparmor",
+]
+
+[systemd]
+enable = ["apparmor.service"]

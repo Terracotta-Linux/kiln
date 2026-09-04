@@ -1,0 +1,7 @@
+---
+source: crates/kiln-image/tests/units.rs
+expression: "format!(\"{err}\")"
+---
+1 unit cannot be realized:
+  sshd.sockte — nothing in this image provides it, and it is being enabled
+      did you mean `sshd.socket`?

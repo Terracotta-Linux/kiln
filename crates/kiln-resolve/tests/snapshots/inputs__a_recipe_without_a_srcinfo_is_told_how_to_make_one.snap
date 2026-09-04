@@ -1,0 +1,17 @@
+---
+source: crates/kiln-resolve/tests/inputs.rs
+expression: "kiln_diag::render_all(&errs)"
+---
+kiln::resolution
+
+  × `pkgbuilds/mytool` has no .SRCINFO
+    ╭─[system.toml:14:10]
+ 13 │ 
+ 14 │ build = ["pkgbuilds/mytool"]
+    ·          ─────────┬────────
+    ·                   ╰── declared here
+    ╰────
+  help: Kiln reads what a recipe declares rather than running it, so that `kiln check`
+        stays a metadata query. Commit one beside the PKGBUILD:
+        
+                cd pkgbuilds/mytool && makepkg --printsrcinfo > .SRCINFO

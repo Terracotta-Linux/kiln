@@ -1,0 +1,8 @@
+# The value an Arch user reaches for, and the one that would otherwise
+# be accepted and then quietly ignored — kiln-image runs dracut regardless. A
+# configuration that says one thing and does another is worse than one that is
+# refused, so this is a named error with the reason attached.
+kiln = 1
+
+[boot]
+initramfs = "mkinitcpio"

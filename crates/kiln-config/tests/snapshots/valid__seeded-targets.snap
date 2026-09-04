@@ -1,0 +1,116 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 120
+expression: rendered
+---
+config_id: b3:c73deb405d8f5e1d3db55ed6d2beac5575e38f96e2e6dd67e88997f0376e7da9
+
+kiln::semantic
+
+  ⚠ `/var/lib/myapp/state.db` is seeded, not written into the image
+    ╭─[system.toml:13:11]
+ 12 │ [[file]]
+ 13 │ target  = "/var/lib/myapp/state.db"
+    ·           ────────────┬────────────
+    ·                       ╰── here
+ 14 │ content = "seeded default\n"
+    ╰────
+  help: /var is not in the commit: this becomes a factory copy plus a tmpfiles `C` line,
+        so it is restored on a machine that has no copy of its own and left alone on one
+        that does
+kiln::semantic
+
+  ⚠ `/opt/vendor/config.ini` is seeded, not written into the image
+    ╭─[system.toml:17:11]
+ 16 │ [[file]]
+ 17 │ target  = "/opt/vendor/config.ini"
+    ·           ────────────┬───────────
+    ·                       ╰── here
+ 18 │ content = "key = value\n"
+    ╰────
+  help: /opt is relocated into /var before the drain, so this is seeded rather than
+        written — install to /usr instead if you want it in the image itself
+kiln::semantic
+
+  ⚠ `/srv/http/index.html` is seeded, not written into the image
+    ╭─[system.toml:21:11]
+ 20 │ [[file]]
+ 21 │ target  = "/srv/http/index.html"
+    ·           ───────────┬──────────
+    ·                      ╰── here
+ 22 │ content = "<h1>hello</h1>\n"
+    ╰────
+  help: /srv is relocated into /var before the drain, so this is seeded rather than
+        written
+
+3 warnings found.
+
+
+  boot: 
+    initramfs: "dracut"
+    loader: "grub2"
+    timeout: 5
+  files: 
+    /opt/vendor/config.ini: 
+      content: 
+        - "key = value\n"
+      mode: []
+      source: []
+      target: "/opt/vendor/config.ini"
+    /srv/http/index.html: 
+      content: 
+        - "<h1>hello</h1>\n"
+      mode: []
+      source: []
+      target: "/srv/http/index.html"
+    /usr/share/myapp/defaults.conf: 
+      content: 
+        - "written into the image\n"
+      mode: []
+      source: []
+      target: "/usr/share/myapp/defaults.conf"
+    /var/lib/myapp/state.db: 
+      content: 
+        - "seeded default\n"
+      mode: []
+      source: []
+      target: "/var/lib/myapp/state.db"
+  hash_epoch: 3
+  image: 
+    arch: "[ARCH]"
+    name: "system"
+  kernel: 
+    cmdline: []
+    headers: false
+    modules: 
+      blacklist: []
+      load: []
+      options: {}
+    out_of_tree: {}
+    package: "linux"
+  local_digests: {}
+  packages: 
+    aur: {}
+    build: []
+    exclude: []
+    file: {}
+    repo: []
+  repos: 
+    extra: {}
+    mirrors: []
+    snapshot: 
+      latest: true
+  schema: 1
+  scripts: {}
+  system: 
+    hostname: []
+    keymap: "us"
+    locale: 
+      generate: []
+      lang: "C.UTF-8"
+    timezone: "UTC"
+  systemd: 
+    disable: []
+    enable: []
+    mask: []
+    units: {}

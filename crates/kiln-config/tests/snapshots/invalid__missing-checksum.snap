@@ -1,0 +1,14 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::semantic
+
+  × a local package is missing `sha256`
+   ╭─[system.toml:4:9]
+ 3 │ [packages]
+ 4 │ file = [{ path = "pkgs/myapp-1.0-1-x86_64.pkg.tar.zst" }]
+   ·         ────────────────────────┬───────────────────────
+   ·                                 ╰── this entry
+   ╰────
+  help: a local package needs a `sha256`

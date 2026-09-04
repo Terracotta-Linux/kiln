@@ -1,0 +1,9 @@
+# The Rust toolchain from the repositories, updated with the rest of the image.
+#
+# Not `rustup`: it installs into a user's home and updates itself, which is a
+# tool for managing several toolchains rather than image content — and a thing
+# that rewrites itself under an immutable /usr is a thing that does not work.
+kiln = 1
+
+[packages]
+repo = ["rust"]

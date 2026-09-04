@@ -1,0 +1,22 @@
+# A machine nobody sits in front of: reachable, firewalled, and on the kernel
+# that changes least. No desktop, no audio, no bluetooth, no printing.
+#
+# It picks `linux-lts`, which is the whole difference in temperament between
+# this profile and @kiln/profiles/workstation; see minimal on swapping that.
+kiln = 1
+
+include = [
+  "@kiln/kernel/linux-lts",
+  "@kiln/boot/grub2",
+  "@kiln/hardware/firmware",
+  "@kiln/net/systemd-networkd",
+  "@kiln/net/nftables",
+  "@kiln/net/sshd",
+  "@kiln/security/wheel-sudo",
+]
+
+[packages]
+repo = ["base", "dracut", "ostree", "systemd-sysvcompat"]
+
+[systemd]
+enable = ["systemd-timesyncd.service"]

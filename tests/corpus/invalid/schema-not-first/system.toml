@@ -1,0 +1,2 @@
+include = ["@kiln/profiles/minimal"]
+kiln = 1

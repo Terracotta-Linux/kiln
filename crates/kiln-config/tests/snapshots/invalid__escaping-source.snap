@@ -1,0 +1,17 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::security
+
+  × file source escapes the config root
+   ╭─[system.toml:4:10]
+ 3 │ [[file]]
+ 4 │ source = "../../../../Cargo.toml"
+   ·          ────────────┬───────────
+   ·                      ╰── resolves to [ROOT]/Cargo.toml
+ 5 │ target = "/etc/leak.conf"
+   ╰────
+  help: the config root is [ROOT]/tests/corpus/invalid/escaping-source. Everything the
+        image is built from must live inside it. Pass --allow-external-sources if you
+        really mean this.

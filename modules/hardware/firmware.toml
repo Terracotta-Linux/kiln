@@ -1,0 +1,8 @@
+# Firmware blobs the kernel loads at boot for wifi, graphics and storage.
+#
+# Image content by the usual test: change it and you need a new image, because the
+# kernel reads it before anything is writable.
+kiln = 1
+
+[packages]
+repo = ["linux-firmware"]

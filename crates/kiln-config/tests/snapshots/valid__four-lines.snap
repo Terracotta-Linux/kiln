@@ -1,0 +1,64 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+config_id: b3:ea7f29d517424a82a938072c4111aa8ea7ce8914ce6ec85ead0899387c2eb23b
+
+
+  boot: 
+    initramfs: "dracut"
+    loader: "grub2"
+    timeout: 5
+  files: {}
+  hash_epoch: 3
+  image: 
+    arch: "[ARCH]"
+    name: "system"
+  kernel: 
+    cmdline: 
+      - "rw"
+    headers: false
+    modules: 
+      blacklist: []
+      load: []
+      options: {}
+    out_of_tree: {}
+    package: "linux"
+  local_digests: {}
+  packages: 
+    aur: {}
+    build: []
+    exclude: []
+    file: {}
+    repo: 
+      - "base"
+      - "dracut"
+      - "efibootmgr"
+      - "firefox"
+      - "fish"
+      - "grub"
+      - "linux"
+      - "linux-firmware"
+      - "neovim"
+      - "ostree"
+      - "systemd-sysvcompat"
+  repos: 
+    extra: {}
+    mirrors: []
+    snapshot: 
+      latest: true
+  schema: 1
+  scripts: {}
+  system: 
+    hostname: []
+    keymap: "us"
+    locale: 
+      generate: []
+      lang: "C.UTF-8"
+    timezone: "UTC"
+  systemd: 
+    disable: []
+    enable: 
+      - "systemd-timesyncd.service"
+    mask: []
+    units: {}

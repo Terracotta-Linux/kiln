@@ -1,0 +1,15 @@
+# The whole KDE experience: @kiln/desktop/plasma plus plasma-meta, KDE's own
+# meta-package for everything it ships. Unlike gnome-extra or the xfce
+# groups, plasma-meta is a real package name, so alpm resolves its
+# dependency closure and no member list is needed here.
+kiln = 1
+
+[packages]
+repo = [
+  "plasma-desktop", "sddm", "xdg-desktop-portal-kde",
+  "konsole", "kcalc", "korganizer",
+  "plasma-meta",
+]
+
+[systemd]
+enable = ["sddm.service"]

@@ -1,0 +1,17 @@
+[package]
+name        = "kiln-aur"
+description = "AUR resolution: the RPC, git commit identity, and the dependency closure."
+
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+kiln-manifest = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+ureq          = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

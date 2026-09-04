@@ -1,0 +1,24 @@
+# Boot with GRUB2 — the only loader libostree can drive against an ext4 /boot
+# — and automatic rollback on boot failure, which needs the
+# bootloader in the image rather than only on the disk.
+#
+# `grub` is here because libostree regenerates /boot/grub/grub.cfg by running
+# grub-mkconfig inside the deployment, the only place Kiln's boot-counting
+# fragment is ever read; without it, BLS entries alone and nothing counts.
+# `efibootmgr` is merely an *optional* dependency of grub, so it needs naming:
+# `grub-install` execs it to write the UEFI boot entry, and whoever partitions
+# the disk runs grub-install inside this image.
+kiln = 1
+
+[packages]
+repo = ["grub", "efibootmgr"]
+
+[boot]
+loader  = "grub2"
+timeout = 5
+
+[kernel]
+# Without it the deployment's root is mounted read-only and the first boot
+# reaches an emergency shell. Kargs are fully declarative, so it has to be
+# written down somewhere rather than assumed.
+cmdline = ["rw"]

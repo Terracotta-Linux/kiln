@@ -1,0 +1,22 @@
+[package]
+name        = "kiln-ostree"
+description = "libostree: commit, deploy, generations, rollback."
+
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+kiln-manifest = { workspace = true }
+kiln-record   = { workspace = true }
+kiln-resolve  = { workspace = true }
+ostree        = { workspace = true }
+glib          = { workspace = true }
+gio           = { workspace = true }
+zstd          = { workspace = true }
+serde_json    = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+kiln-record = { workspace = true }

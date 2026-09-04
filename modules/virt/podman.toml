@@ -1,0 +1,6 @@
+# Rootless containers. No daemon, so nothing to enable — which is most of the
+# reason to choose it over @kiln/virt/docker.
+kiln = 1
+
+[packages]
+repo = ["podman"]

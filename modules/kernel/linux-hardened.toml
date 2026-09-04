@@ -1,0 +1,18 @@
+# The hardened kernel: exploit mitigations, at the cost of some out-of-tree drivers.
+#
+# A kernel is a package *and* a name Kiln has to know: Kiln finds the version by
+# reading /usr/lib/modules/*/pkgbase and refuses to guess when it finds two. So
+# including two of these is a conflict on `kernel.package`, reported against both
+# files — which is the answer, not a limitation.
+#
+# **Every profile already includes one**, so this does not compose with
+# `@kiln/profiles/*`. To run a different kernel, write your own include list from
+# these namespaces instead of using a profile; a profile is a list of includes
+# and a handful of packages, and copying one is five lines.
+kiln = 1
+
+[kernel]
+package = "linux-hardened"
+
+[packages]
+repo = ["linux-hardened"]

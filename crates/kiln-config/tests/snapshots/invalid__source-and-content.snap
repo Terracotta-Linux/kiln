@@ -1,0 +1,29 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::semantic
+
+  × this file has both `source` and `content`
+   ╭─[system.toml:3:1]
+ 2 │     
+ 3 │ ╭─▶ [[file]]
+ 4 │ │   source  = "motd"
+ 5 │ │   target  = "/etc/motd"
+ 6 │ ├─▶ content = "also this\n"
+   · ╰──── here
+ 7 │     
+   ╰────
+  help: pick one — Kiln will not guess which you meant
+kiln::semantic
+
+  × this file has no content
+   ╭─[system.toml:8:1]
+ 7 │     
+ 8 │ ╭─▶ [[file]]
+ 9 │ ├─▶ target = "/etc/hostname"
+   · ╰──── here
+   ╰────
+  help: give the file either a `source` path or inline `content`
+
+2 problems found.

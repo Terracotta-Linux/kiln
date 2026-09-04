@@ -1,0 +1,9 @@
+kiln = 1
+
+[[file]]
+target  = "/boot/extra.conf"
+content = "x\n"
+
+[[file]]
+target  = "etc/relative"
+content = "x\n"

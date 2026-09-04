@@ -1,0 +1,22 @@
+[package]
+name        = "kiln-image"
+description = "Filesystem tree assembly and normalization: the OSTree contract."
+
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+kiln-alpm     = { workspace = true }
+kiln-diag     = { workspace = true }
+kiln-manifest = { workspace = true }
+kiln-record   = { workspace = true }
+kiln-resolve  = { workspace = true }
+kiln-sandbox  = { workspace = true }
+
+libc       = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

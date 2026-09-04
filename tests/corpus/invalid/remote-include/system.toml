@@ -1,0 +1,2 @@
+kiln = 1
+include = ["git+https://example.com/modules.git#main"]

@@ -1,0 +1,14 @@
+---
+source: crates/kiln-resolve/tests/diagnostics.rs
+expression: "render(\"diag-typo\",\n&BOOTABLE.replace(r#\"\"fixture-init\"]\"#,\nr#\"\"fixture-init\", \"fixture-libfo\"]\"#,),)"
+---
+kiln::resolution
+
+  × no package named `fixture-libfo`
+    ╭─[system.toml:12:42]
+ 11 │ [packages]
+ 12 │ repo = ["fixture-linux", "fixture-init", "fixture-libfo"]
+    ·                                          ───────┬───────
+    ·                                                 ╰── not in any configured repository
+    ╰────
+  help: did you mean `fixture-libfoo`?

@@ -1,0 +1,9 @@
+---
+source: crates/kiln-image/tests/overlay.rs
+expression: "format!(\"{err}\")"
+---
+3 [[file]] entries cannot be realized:
+  /boot/x — OSTree owns /boot; the bootloader and kernels are placed by Kiln
+  /home/me/x — home directories are machine state, not image content
+      Kiln does not manage login accounts or their files
+  /proc/x — this is a runtime filesystem; nothing written here would survive a boot

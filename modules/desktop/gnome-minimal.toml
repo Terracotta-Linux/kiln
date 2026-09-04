@@ -1,0 +1,10 @@
+# GNOME, and only GNOME. Session, display manager, and the shell — no
+# other apps. See @kiln/desktop/gnome for a normal app set on top of this,
+# and @kiln/desktop/gnome-full for the whole gnome-extra group.
+kiln = 1
+
+[packages]
+repo = ["gnome-shell", "gdm", "gnome-control-center", "xdg-desktop-portal-gnome"]
+
+[systemd]
+enable = ["gdm.service"]

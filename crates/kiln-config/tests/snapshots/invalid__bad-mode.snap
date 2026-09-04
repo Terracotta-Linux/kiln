@@ -1,0 +1,27 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::semantic
+
+  × `mode` must be a string
+   ╭─[system.toml:6:10]
+ 5 │ target = "/etc/motd"
+ 6 │ mode   = 755
+   ·          ─┬─
+   ·           ╰── this is the decimal number 755
+ 7 │ 
+   ╰────
+  help: write `mode = "0755"` — TOML has no octal literal
+kiln::semantic
+
+  × `0999` is not a file mode
+    ╭─[system.toml:11:11]
+ 10 │ content = "x\n"
+ 11 │ mode    = "0999"
+    ·           ───┬──
+    ·              ╰── here
+    ╰────
+  help: a mode is three or four octal digits, as a string: "0755"
+
+2 problems found.

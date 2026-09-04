@@ -1,0 +1,11 @@
+[package]
+name         = "kiln-diag"
+description  = "Source provenance, the Kiln error taxonomy, and rendered diagnostics."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+miette    = { workspace = true, features = ["fancy"] }
+thiserror = { workspace = true }

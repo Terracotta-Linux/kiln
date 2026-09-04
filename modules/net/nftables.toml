@@ -1,0 +1,12 @@
+# A firewall that is on at first boot, with the ruleset the package ships.
+#
+# Kiln ships no rules of its own: an opinion about which ports you want open is
+# not Kiln's to have (rule 4). Write your own with a `[[file]]` targeting
+# /etc/nftables.conf, where it is hashed into `config_id` like anything else.
+kiln = 1
+
+[packages]
+repo = ["nftables"]
+
+[systemd]
+enable = ["nftables.service"]

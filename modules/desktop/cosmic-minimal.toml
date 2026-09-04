@@ -1,0 +1,14 @@
+# COSMIC: the compositor, the session that starts it, the shell pieces a
+# session is unusable without, and its greeter — no other apps. See
+# @kiln/desktop/cosmic for the full cosmic group; there is no cosmic-full.
+kiln = 1
+
+[packages]
+repo = [
+  "cosmic-session", "cosmic-comp", "cosmic-panel", "cosmic-settings",
+  "cosmic-settings-daemon", "cosmic-launcher", "cosmic-bg",
+  "xdg-desktop-portal-cosmic", "cosmic-greeter",
+]
+
+[systemd]
+enable = ["cosmic-greeter.service"]

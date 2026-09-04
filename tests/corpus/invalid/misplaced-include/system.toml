@@ -1,0 +1,5 @@
+kiln = 1
+
+[packages]
+repo = ["git"]
+include = ["@kiln/profiles/minimal"]

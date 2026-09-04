@@ -1,0 +1,15 @@
+# Remote login over SSH, socket-activated so it costs nothing until used.
+#
+# It ships no key, no `sshd_config` and no authorized_keys. Host keys are
+# machine identity and are generated on first boot; an image that carried one
+# would hand the same private key to every machine built from it.
+kiln = 1
+
+[packages]
+repo = ["openssh"]
+
+[systemd]
+# `sshd.service`, not `sshd.socket`: current `openssh` ships no socket unit, and
+# enabling a unit that does not exist is a warning at assembly and a machine you
+# cannot reach afterwards.
+enable = ["sshd.service"]

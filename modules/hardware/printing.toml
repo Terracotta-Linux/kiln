@@ -1,0 +1,11 @@
+# CUPS, socket-activated so it costs nothing until something prints.
+#
+# No drivers. Which printer you own is not a fact about the image, and the ones
+# that need a package say so in their own documentation.
+kiln = 1
+
+[packages]
+repo = ["cups"]
+
+[systemd]
+enable = ["cups.socket"]

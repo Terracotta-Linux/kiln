@@ -1,0 +1,5 @@
+---
+source: crates/kiln-ostree/tests/commit.rs
+expression: "format!(\"{err}\")"
+---
+commit a81fc2e1b4d9 has no `kiln.version` in its metadata: it was not built by Kiln

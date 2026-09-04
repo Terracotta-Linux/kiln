@@ -1,0 +1,13 @@
+[Unit]
+Description=Kiln boot acceptance probe
+
+# A timer, not `WantedBy=multi-user.target`. The probe asks systemd whether boot
+# succeeded, so it must not be part of the boot transaction it is judging: as a
+# unit inside that transaction it can only ever observe "starting", and anything
+# it did that waited for the queue to drain would deadlock on itself.
+[Timer]
+OnBootSec=2s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,14 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::graph
+
+  × no such module `@kiln/profiles/minmial`
+   ╭─[system.toml:2:12]
+ 1 │ kiln = 1
+ 2 │ include = ["@kiln/profiles/minmial"]
+   ·            ────────────┬───────────
+   ·                        ╰── included here
+   ╰────
+  help: did you mean `@kiln/profiles/minimal`?

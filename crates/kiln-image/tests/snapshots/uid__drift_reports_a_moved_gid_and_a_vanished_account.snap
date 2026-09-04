@@ -1,0 +1,6 @@
+---
+source: crates/kiln-image/tests/uid.rs
+expression: "found.iter().map(Drift::describe).collect::<Vec<_>>().join(\"\\n\")"
+---
+games was pinned to 12:100 but is not in the image at all; anything in /var owned by it is now orphaned
+systemd-journal was pinned to gid 972 but the image allocated gid 973; existing /var content owned by it will be misattributed

@@ -1,0 +1,10 @@
+# KDE Plasma: session, display manager, and the portal that makes file
+# dialogs work outside the session's own applications — no other apps. See
+# @kiln/desktop/plasma for a normal app set and plasma-full for plasma-meta.
+kiln = 1
+
+[packages]
+repo = ["plasma-desktop", "sddm", "xdg-desktop-portal-kde"]
+
+[systemd]
+enable = ["sddm.service"]

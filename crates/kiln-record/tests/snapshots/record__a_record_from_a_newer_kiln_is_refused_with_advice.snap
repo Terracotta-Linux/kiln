@@ -1,0 +1,5 @@
+---
+source: crates/kiln-record/tests/record.rs
+expression: "format!(\"{err}\")"
+---
+this commit's build record is format 2; this Kiln understands 1. The image was built by a newer Kiln — upgrade, or build a new generation from your configuration instead of reading this one

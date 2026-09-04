@@ -1,0 +1,18 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::semantic
+
+  × systemd-boot cannot boot an OSTree system
+   ╭─[system.toml:6:11]
+ 5 │ [boot]
+ 6 │ loader  = "systemd-boot"
+   ·           ───────┬──────
+   ·                  ╰── not available
+ 7 │ timeout = 3
+   ╰────
+  help: OSTree keeps /boot/loader as a symlink pair so that entry swaps are atomic, and
+        UEFI firmware reads only FAT — so /boot cannot be the ESP, and systemd-boot
+        cannot read the ext4 /boot OSTree needs. Kiln uses GRUB2 through libostree's own
+        backend instead; remove this line to get it.

@@ -1,0 +1,138 @@
+#!/usr/bin/bash
+# The in-image boot acceptance probe.
+#
+# Everything Kiln claims about the Arch→OSTree contract is a claim
+# about a *running* system, and this is the only place any of it can actually be
+# checked. A snapshot test can say `/etc` is absent from a staging root; only
+# this can say the deployment's `/etc` is writable, its `/usr` is read-only, the
+# `/var` drain put everything back, and libostree can read its own sysroot from
+# inside the image it is booted from.
+#
+# Every line is `KILN| key=value`, parsed by the harness off the serial console
+# after the VM powers off. Anything not in that form is ignored, so `set -e` is
+# deliberately absent: a probe that dies halfway reports fewer facts, and the
+# harness fails on the missing ones. Aborting would report none, and "the probe
+# crashed" is a worse diagnosis than "usr_readonly=no".
+
+say() { echo "KILN| $*"; }
+
+say "BEGIN"
+
+# --- who am I -------------------------------------------------------------
+# The generation comes from the record Kiln wrote into the image itself (
+# step 11), not from anything the harness passed in. That is the whole question
+# a rollback test asks: which image is actually running?
+say "generation=$(sed -n 's/.*"generation": *\([0-9]*\).*/\1/p' /usr/lib/kiln/record.json 2>/dev/null | head -1)"
+say "image=$(sed -n 's/.*"image": *"\([^"]*\)".*/\1/p' /usr/lib/kiln/record.json 2>/dev/null | head -1)"
+say "plan_id=$(sed -n 's/.*"plan_id": *"\([^"]*\)".*/\1/p' /usr/lib/kiln/record.json 2>/dev/null | head -1)"
+say "manifest_present=$( [ -s /usr/lib/kiln/manifest.json ] && echo yes || echo no )"
+say "kernel=$(uname -r)"
+
+# --- the OSTree filesystem contract ---------------------------------------
+if awk '$2=="/usr"' /proc/mounts | grep -qw ro; then say "usr_readonly=yes"; else say "usr_readonly=no"; fi
+if touch /etc/.kiln-probe 2>/dev/null; then say "etc_writable=yes"; rm -f /etc/.kiln-probe; else say "etc_writable=no"; fi
+say "etc_passwd=$( [ -s /etc/passwd ] && echo yes || echo no )"
+say "usr_etc_absent_from_view=$( [ -e /usr/etc ] && echo present || echo absent )"
+
+# --- the /var drain -------------------------------------------------------
+# Every `d` and `C` line Kiln generated must have produced something. A missing
+# one is a directory a service will fail to start without, on a machine whose
+# /var was empty at first boot — which is every machine, once.
+present=0; missing=0; missing_list=""
+for conf in /usr/lib/tmpfiles.d/kiln-var.conf /usr/lib/tmpfiles.d/kiln.conf; do
+  [ -e "$conf" ] || continue
+  while read -r type path rest; do
+    case "$type" in d|C|L) ;; *) continue ;; esac
+    if [ -e "$path" ]; then present=$((present+1))
+    else missing=$((missing+1)); missing_list="$missing_list $path"; fi
+  done < <(grep -v '^#' "$conf" 2>/dev/null)
+done
+say "var_entries_present=$present"
+say "var_entries_missing=$missing"
+[ "$missing" -gt 0 ] && say "var_missing_paths=$(echo $missing_list | cut -c1-400)"
+say "var_lib_pacman_absent=$( [ -e /var/lib/pacman ] && echo no || echo yes )"
+say "var_home=$( [ -d /var/home ] && echo yes || echo no )"
+say "roothome=$( [ -d /root ] && echo yes || echo no )"
+
+# The `[[file]]` that targeted /var is routed to /usr/share/factory with
+# a tmpfiles `C` line; if the two halves disagree, this is empty on a machine
+# whose /var started out bare.
+say "var_seed=$(cat /var/lib/kiln-boot/seed 2>/dev/null | head -1)"
+
+# --- what the configuration asked for -------------------------------------
+# The build script's changeset, read back from a read-only /usr on a
+# running system. This is the end of the line for "build scripts work".
+say "script_marker=$(cat /usr/share/kiln-boot/marker 2>/dev/null | head -1)"
+
+# The `packages.build` recipe, which is the only end of the line for
+# "realization works": a build root was assembled, `makepkg` ran in a sandbox
+# with no network, and libalpm installed the resulting file. If any of those
+# failed the build would not have finished — but a package installed and then
+# lost during normalization would look exactly like a build that never ran, and
+# only a booted system can tell the two apart.
+say "built_package=$(pacman -Q kiln-boot-marker >/dev/null 2>&1 && echo yes || echo no)"
+say "built_package_runs=$(/usr/bin/kiln-boot-marker 2>/dev/null | head -1)"
+say "built_package_owns=$(pacman -Qqo /usr/bin/kiln-boot-marker 2>/dev/null | head -1)"
+
+# --- the package database in a read-only /usr -----------------------------
+say "pacman_db_path=$(grep -E '^\s*DBPath' /etc/pacman.conf 2>/dev/null | head -1 | tr -d ' ')"
+say "pacman_query_count=$(pacman -Q 2>/dev/null | wc -l)"
+say "nano_installed=$(pacman -Q nano >/dev/null 2>&1 && echo yes || echo no)"
+
+# --- UID/GID pinning ------------------------------------------------------
+# Reported rather than asserted against fixed numbers: what matters is that the
+# *same* image reports the same ids across generations, which the harness checks
+# by comparing generations rather than by knowing what Arch allocates.
+for g in systemd-journal systemd-network systemd-timesync; do
+  say "gid_$g=$(getent group $g | cut -d: -f3)"
+done
+
+# --- libostree's own view -------------------------------------------------
+# Without `/ostree → sysroot/ostree` libostree cannot read its own
+# sysroot from inside the booted image, and `kiln list`, `kiln status` and
+# `kiln rollback` all have nothing to stand on.
+say "booted_via_ostree=$( [ -e /run/ostree-booted ] && echo yes || echo no )"
+say "sysroot_mounted=$(findmnt -no TARGET /sysroot 2>/dev/null || echo NOT-MOUNTED)"
+say "sysroot_repo=$( [ -d /sysroot/ostree/repo ] && echo yes || echo no )"
+# Counting `^[* ] ` would also match the four-space-indented `origin refspec:`
+# lines and report twice as many deployments as exist. A deployment line is
+# `* kiln <csum>.0` or `  kiln <csum>.0` — the stateroot name is what makes it
+# one, so that is what is matched.
+say "ostree_deployments=$(ostree admin status 2>/dev/null | grep -cE '^[* ] [a-z0-9_-]+ [0-9a-f]{8}')"
+ostree admin status 2>&1 | sed 's/^/KILN| ostree_status: /'
+
+# --- automatic rollback on boot failure -----------------------------------
+# The three pieces of the grubenv mechanism, each checked where it actually
+# lives. This is the only place any of it can be checked at all: the snippet is
+# a file until grub-mkconfig reads it, and grub-mkconfig only runs chrooted
+# inside a real deployment.
+say "grub_snippet=$( [ -x /etc/grub.d/09_kiln_boot_counter ] && echo yes || echo no )"
+say "grub_snippet_counts=$(/etc/grub.d/09_kiln_boot_counter 2>/dev/null | grep -c 'boot_counter')"
+say "bless_script=$( [ -x /usr/lib/kiln/boot-success ] && echo yes || echo no )"
+say "bless_unit_enabled=$(systemctl is-enabled kiln-boot-success.service 2>&1)"
+say "grub_editenv=$( [ -x /usr/bin/grub-editenv ] && echo yes || echo no )"
+# The end of the line for automatic rollback: this generation reached
+# boot-complete.target, the unit ran, and the counter it was armed with is
+# gone. A `boot_counter` still set here is a machine that would demote a
+# working generation.
+say "boot_counter=$(grub-editenv /boot/grub/grubenv list 2>/dev/null | sed -n 's/^boot_counter=//p')"
+say "boot_success=$(grub-editenv /boot/grub/grubenv list 2>/dev/null | sed -n 's/^boot_success=//p')"
+# Reported, never asserted: this system was deployed through `--sysroot`, where
+# libostree's grub2 backend cannot run at all (it chroots into the deployment
+# and passes a host-absolute output path), so there is no grub.cfg here by
+# design. Printed anyway, because the day this harness grows an ESP it
+# is the first thing to look at.
+say "grub_cfg=$( [ -s /boot/grub/grub.cfg ] && echo yes || echo no )"
+
+# --- did the boot actually succeed ----------------------------------------
+# Not `is-system-running --wait`: it waits for the job queue to drain and this
+# probe is itself a job in that queue. Ask the two questions that matter.
+say "multi_user_reached=$(systemctl is-active multi-user.target 2>&1)"
+say "failed_units=$(systemctl list-units --failed --no-legend --plain 2>/dev/null | wc -l)"
+say "system_running=$(systemctl is-system-running 2>&1)"
+systemctl --failed --no-legend --plain 2>/dev/null | sed 's/^/KILN| failed_unit: /'
+
+say "END"
+
+sync
+systemctl poweroff --no-block

@@ -1,0 +1,5 @@
+---
+source: crates/kiln-sandbox/tests/isolation.rs
+expression: "render(&Nspawn::new(\"/var/lib/kiln/build/b3-7f2a/sandbox\").argv(&spec()).unwrap())"
+---
+systemd-nspawn --quiet --directory /var/lib/kiln/build/b3-7f2a/root --register=no --keep-unit --as-pid2 --link-journal=no --private-network --setenv HOME=/root --setenv LANG=C.UTF-8 --setenv LC_ALL=C.UTF-8 --setenv SOURCE_DATE_EPOCH=0 --setenv TERM=dumb --setenv TZ=UTC --setenv PATH=/usr/bin:/usr/sbin:/bin:/sbin depmod -a 6.19.2-arch1

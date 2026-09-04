@@ -1,0 +1,19 @@
+# The whole GNOME experience: @kiln/desktop/gnome plus the gnome-extra
+# group — games, gnome-boxes, gnome-builder, gnome-tweaks, and the rest.
+# libalpm resolves package names, not group names, so its members are
+# listed here individually.
+kiln = 1
+
+[packages]
+repo = [
+  "gnome-shell", "gdm", "gnome-control-center", "xdg-desktop-portal-gnome",
+  "gnome-console", "gnome-calculator", "gnome-calendar",
+  "chatty", "d-spy", "dconf-editor", "endeavour", "file-roller", "ghex",
+  "gnome-boxes", "gnome-builder", "gnome-calls", "gnome-chess", "gnome-mines",
+  "gnome-nibbles", "gnome-robots", "gnome-sound-recorder", "gnome-sudoku",
+  "gnome-tweaks", "iagno", "lightsoff", "manuals", "quadrapassel",
+  "swell-foop", "sysprof",
+]
+
+[systemd]
+enable = ["gdm.service"]

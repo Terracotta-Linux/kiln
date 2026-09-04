@@ -1,0 +1,15 @@
+---
+source: crates/kiln-resolve/tests/diagnostics.rs
+expression: "render(\"diag-conflict\",\n&BOOTABLE.replace(r#\"\"fixture-init\"]\"#,\nr#\"\"fixture-init\", \"fixture-clash-a\", \"fixture-clash-b\"]\"#,),)"
+---
+kiln::resolution
+
+  × `fixture-clash-a` and `fixture-clash-b` cannot both be in one image
+    ╭─[system.toml:12:42]
+ 11 │ [packages]
+ 12 │ repo = ["fixture-linux", "fixture-init", "fixture-clash-a", "fixture-clash-b"]
+    ·                                          ────────┬────────  ────────┬────────
+    ·                                                  │                  ╰── `fixture-clash-b` requested here
+    ·                                                  ╰── `fixture-clash-a` requested here
+    ╰────
+  help: remove one of them, or exclude one with `packages.exclude`

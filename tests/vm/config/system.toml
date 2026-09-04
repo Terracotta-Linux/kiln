@@ -1,0 +1,76 @@
+# The boot acceptance image.
+#
+# This is a real Kiln configuration, not a fixture the harness assembles by
+# hand — which is the point. Everything the image needs in order to be
+# *checkable from the inside* arrives through the ordinary schema: the probe is
+# a `[[file]]`, its units are `[[systemd.unit]]`s, and the marker a build script
+# leaves behind is a `[[script]]`. If any of those mechanisms is broken, the
+# probe says so from inside a booted system rather than a snapshot test saying
+# so about a directory.
+kiln = 1
+
+include = ["@kiln/profiles/minimal"]
+
+[image]
+name = "bootacceptance"
+arch = "x86_64"
+
+[kernel]
+# `root=` is here, and that is not a quirk of the test. Kargs are **fully
+# declarative**: Kiln passes the complete set from `kernel.cmdline` on
+# every deploy, so a karg that is not written here is a karg the next
+# `kiln apply` removes. Whoever installs the system — an installer, against the
+# `--sysroot` seam — owns the disk layout and therefore writes this
+# line. `/dev/vda` is the whole virtio disk, because the harness gives the VM
+# an unpartitioned image.
+#
+# `console=ttyS0` is how the probe's verdict reaches the harness at all: qemu
+# runs with `-nographic`, so the serial console is the only output there is.
+# `systemd.journald.forward_to_console` carries unit failures out with it, which
+# is what makes a failed boot diagnosable instead of merely red.
+cmdline = [
+  "root=/dev/vda",
+  "console=ttyS0",
+  "systemd.journald.forward_to_console=1",
+]
+
+[boot]
+# Irrelevant to this test — it boots the kernel directly (see tests/vm/README.md)
+# — but 0 is what a machine that is not being watched should have.
+timeout = 0
+
+[[file]]
+source = "files/probe"
+target = "/usr/bin/kiln-boot-probe"
+mode   = "0755"
+
+# The targets table's `/var` route: not written into the commit, but drained to
+# /usr/share/factory with a tmpfiles `C` line that restores it. The probe checks
+# the file is actually there after boot, which is the only way to know the drain
+# and the tmpfiles fragment agree with each other.
+[[file]]
+target  = "/var/lib/kiln-boot/seed"
+content = "restored from factory\n"
+
+[[systemd.unit]]
+name   = "kiln-boot-probe.service"
+source = "units/kiln-boot-probe.service"
+
+[[systemd.unit]]
+name   = "kiln-boot-probe.timer"
+source = "units/kiln-boot-probe.timer"
+enable = true
+
+# A script whose changeset the probe can see from inside the booted
+# image, so "build scripts work" is proven on a running system rather than in a
+# staging root.
+[[script]]
+source = "scripts/10-marker.sh"
+after  = "files"
+
+# A PKGBUILD in the configuration tree, built through the two-phase build
+# and installed into the image from disk. It is the only place the whole of
+# realization — build root, sandbox, build cache, `pkg_load` — is proved on a
+# system that then has to boot.
+[packages]
+build = ["pkgbuilds/kiln-boot-marker"]

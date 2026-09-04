@@ -1,0 +1,5 @@
+---
+source: crates/kiln-image/tests/overlay.rs
+expression: "applied.notes.join(\"\\n\")"
+---
+/var/lib/myapp/seed.db is under /var, which is not in the image: it becomes a default restored on a machine that has none

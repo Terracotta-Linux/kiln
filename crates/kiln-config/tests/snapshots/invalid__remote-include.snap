@@ -1,0 +1,16 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 131
+expression: rendered
+---
+kiln::graph
+
+  × remote includes are not supported
+   ╭─[system.toml:2:12]
+ 1 │ kiln = 1
+ 2 │ include = ["git+https://example.com/modules.git#main"]
+   ·            ─────────────────────┬────────────────────
+   ·                                 ╰── here
+   ╰────
+  help: vendor the module into your config tree instead. A remote include is an unpinned
+        supply-chain input that breaks offline builds.

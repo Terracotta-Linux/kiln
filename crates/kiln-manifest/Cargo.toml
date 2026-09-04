@@ -1,0 +1,20 @@
+[package]
+name        = "kiln-manifest"
+description = "The canonical merged IR, its canonical encoding, and config_id."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+kiln-diag = { workspace = true }
+blake3    = { workspace = true }
+# For the copy of the manifest that goes into the image (assembly step 11), which is
+# what lets `kiln show <gen>` and `kiln rebuild <gen>` work against a generation
+# whose configuration has since been edited or deleted. It is **not** what
+# `config_id` is computed from — that stays `canon.rs`, hand-written, so the
+# hash input cannot drift with a dependency's formatting.
+serde     = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,0 +1,10 @@
+# NetworkManager as the network stack.
+kiln = 1
+
+[packages]
+repo = ["networkmanager"]
+
+[systemd]
+enable  = ["NetworkManager.service"]
+disable = ["systemd-networkd.service"]
+mask    = ["NetworkManager-wait-online.service"]

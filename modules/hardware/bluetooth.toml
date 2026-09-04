@@ -1,0 +1,8 @@
+# Bluetooth: the stack, its command-line tools, and the daemon running at boot.
+kiln = 1
+
+[packages]
+repo = ["bluez", "bluez-utils"]
+
+[systemd]
+enable = ["bluetooth.service"]

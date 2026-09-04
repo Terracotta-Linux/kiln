@@ -1,0 +1,31 @@
+# A `packages.build` recipe for the boot acceptance test.
+#
+# The whole of realization runs for this one package: a build root is assembled
+# from the same repositories as the image, `makepkg` runs unprivileged in a
+# sandbox with no network, the artifact lands in the build cache keyed by
+# `build_key`, and libalpm installs it from disk. The probe then asks the booted
+# system whether it is there — which is the only place that question has a real
+# answer.
+#
+# **No `source=()`.** Every source would need a checksum in `.SRCINFO`, which is
+# a second copy of a fact that changes whenever this fixture is edited — and
+# `marker.c` is already covered by `config_id`, because the frontend hashes the
+# whole recipe directory. `$startdir` is the recipe directory, mounted
+# read-only at a fixed path inside the sandbox.
+pkgname=kiln-boot-marker
+pkgver=1.0
+pkgrel=1
+pkgdesc="Proof that a PKGBUILD in the configuration tree reaches the image"
+arch=('x86_64')
+license=('MIT')
+options=('!debug')
+
+build() {
+  gcc -static -Os -o kiln-boot-marker "$startdir/marker.c"
+}
+
+package() {
+  install -Dm755 kiln-boot-marker "$pkgdir/usr/bin/kiln-boot-marker"
+  install -dm755 "$pkgdir/usr/share/kiln-boot"
+  printf 'built-package\n' > "$pkgdir/usr/share/kiln-boot/built-package"
+}

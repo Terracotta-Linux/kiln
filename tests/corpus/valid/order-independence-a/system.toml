@@ -1,0 +1,5 @@
+kiln = 1
+[packages]
+repo = ["alpha", "beta", "gamma"]
+[kernel]
+cmdline = ["quiet", "rw"]

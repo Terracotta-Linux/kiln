@@ -1,0 +1,12 @@
+[Unit]
+Description=Kiln boot acceptance probe
+# Ordered after the boot transaction, and activated by a timer rather than
+# wanted by a target — see the timer for why that distinction is load-bearing.
+After=multi-user.target systemd-tmpfiles-setup.service
+Requires=systemd-tmpfiles-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kiln-boot-probe
+StandardOutput=journal+console
+StandardError=journal+console

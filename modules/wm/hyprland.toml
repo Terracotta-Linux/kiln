@@ -1,0 +1,7 @@
+# Hyprland, and the portal without which screen sharing and file dialogs do not
+# work. A compositor is not a desktop: there is no bar, launcher, terminal or
+# display manager here, because each of those is your choice to make.
+kiln = 1
+
+[packages]
+repo = ["hyprland", "xdg-desktop-portal-hyprland"]

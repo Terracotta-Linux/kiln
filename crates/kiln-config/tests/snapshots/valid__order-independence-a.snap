@@ -1,0 +1,56 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+config_id: b3:170adbf0d27b6a4af061b37cc60736afa1d82746a2da451916a2e24add7ddfff
+
+
+  boot: 
+    initramfs: "dracut"
+    loader: "grub2"
+    timeout: 5
+  files: {}
+  hash_epoch: 3
+  image: 
+    arch: "[ARCH]"
+    name: "system"
+  kernel: 
+    cmdline: 
+      - "quiet"
+      - "rw"
+    headers: false
+    modules: 
+      blacklist: []
+      load: []
+      options: {}
+    out_of_tree: {}
+    package: "linux"
+  local_digests: {}
+  packages: 
+    aur: {}
+    build: []
+    exclude: []
+    file: {}
+    repo: 
+      - "alpha"
+      - "beta"
+      - "gamma"
+  repos: 
+    extra: {}
+    mirrors: []
+    snapshot: 
+      latest: true
+  schema: 1
+  scripts: {}
+  system: 
+    hostname: []
+    keymap: "us"
+    locale: 
+      generate: []
+      lang: "C.UTF-8"
+    timezone: "UTC"
+  systemd: 
+    disable: []
+    enable: []
+    mask: []
+    units: {}

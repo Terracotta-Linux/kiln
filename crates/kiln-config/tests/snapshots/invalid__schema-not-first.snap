@@ -1,0 +1,16 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × `kiln` must be the first key in the file
+   ╭─[system.toml:1:1]
+ 1 │ include = ["@kiln/profiles/minimal"]
+   · ───┬───
+   ·    ╰── `include` comes before it
+ 2 │ kiln = 1
+   · ──┬─
+   ·   ╰── `kiln` is here
+   ╰────
+  help: move `kiln = 1` to the top of the file

@@ -1,0 +1,5 @@
+---
+source: crates/kiln-image/tests/kernel.rs
+expression: err
+---
+the initramfs does not contain `ostree-prepare-root`, so this image would boot to an emergency shell. The `ostree` dracut module ships in the `ostree` package: check that it is in `packages.repo` and that dracut found /usr/lib/dracut/modules.d/50ostree.

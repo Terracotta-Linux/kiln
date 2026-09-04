@@ -1,0 +1,36 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × `boot.timeout` must be an integer, found string
+   ╭─[system.toml:4:11]
+ 3 │ [boot]
+ 4 │ timeout = "five"
+   ·           ───┬──
+   ·              ╰── here
+ 5 │ 
+   ╰────
+kiln::structure
+
+  × `packages.repo` must be a list, found string
+   ╭─[system.toml:7:8]
+ 6 │ [packages]
+ 7 │ repo = "git"
+   ·        ──┬──
+   ·          ╰── here
+ 8 │ 
+   ╰────
+kiln::structure
+
+  × `kernel.headers` must be a boolean, found string
+    ╭─[system.toml:10:11]
+  9 │ [kernel]
+ 10 │ headers = "yes"
+    ·           ──┬──
+    ·             ╰── here
+    ╰────
+  help: write `kernel.headers = true`
+
+3 problems found.

@@ -1,0 +1,6 @@
+kiln = 1
+
+include = ["@kiln/gpu/nvidia-open", "@kiln/hardware/intel-ucode"]
+
+[kernel]
+cmdline = ["amd_iommu=on"]

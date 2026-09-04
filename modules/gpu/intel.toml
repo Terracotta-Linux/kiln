@@ -1,0 +1,9 @@
+# Intel graphics: the kernel driver is in-tree, so this is only userspace.
+#
+# `intel-media-driver` is the VA-API driver for Broadwell and later. Older parts
+# want `libva-intel-driver` instead, which is a different decision and so not
+# this file.
+kiln = 1
+
+[packages]
+repo = ["mesa", "vulkan-intel", "intel-media-driver"]

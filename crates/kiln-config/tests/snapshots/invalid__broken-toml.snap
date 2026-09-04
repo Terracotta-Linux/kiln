@@ -1,0 +1,15 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::syntax
+
+  × invalid TOML
+   ╭─[system.toml:3:6]
+ 2 │ 
+ 3 │ [boot
+   ·      ┬
+   ·      ╰─┤ invalid table header
+   ·        │ expected `.`, `]`
+ 4 │ timeout = 5
+   ╰────

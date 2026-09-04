@@ -1,0 +1,19 @@
+[package]
+name        = "kiln-config"
+description = "Discovery, parsing with spans, the include graph, merge, and validation."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[dependencies]
+kiln-diag     = { workspace = true }
+kiln-manifest = { workspace = true }
+toml_edit     = { workspace = true }
+blake3        = { workspace = true }
+
+[dev-dependencies]
+kiln-diag = { workspace = true }
+insta    = { workspace = true }
+proptest = { workspace = true }
+tempfile = "3"

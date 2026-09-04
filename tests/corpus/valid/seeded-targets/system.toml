@@ -1,0 +1,28 @@
+# The targets table's middle rows: targets that are accepted but do not mean what they look
+# like. These are not written into the commit — /var does not exist there
+# — they become a factory copy plus a tmpfiles `C` line that restores
+# them on a machine that has no copy of its own.
+#
+# Here as a *valid* case with a snapshotted warning, because the note is the
+# whole feature. Silently doing something different from what the target says
+# would be the bug; refusing it, which Kiln used to do, made the one obvious way
+# to ship a default impossible to express.
+kiln = 1
+
+[[file]]
+target  = "/var/lib/myapp/state.db"
+content = "seeded default\n"
+
+[[file]]
+target  = "/opt/vendor/config.ini"
+content = "key = value\n"
+
+[[file]]
+target  = "/srv/http/index.html"
+content = "<h1>hello</h1>\n"
+
+# For contrast, in the same file: a /usr target is written, not seeded, and
+# gets no note.
+[[file]]
+target  = "/usr/share/myapp/defaults.conf"
+content = "written into the image\n"

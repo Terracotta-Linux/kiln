@@ -1,0 +1,19 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 131
+expression: rendered
+---
+kiln::semantic
+
+  × mkinitcpio cannot build an initramfs that boots an OSTree system
+   ╭─[system.toml:8:13]
+ 7 │ [boot]
+ 8 │ initramfs = "mkinitcpio"
+   ·             ──────┬─────
+   ·                   ╰── not available
+   ╰────
+  help: the sysroot pivot needs an initramfs hook, and upstream ostree
+        ships one for dracut (`50ostree`, in the `ostree` package) and
+        none for mkinitcpio. Writing and maintaining a boot-critical
+        hook is not something Kiln does; remove this                              line
+        to get dracut.

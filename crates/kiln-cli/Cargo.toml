@@ -1,0 +1,32 @@
+[package]
+name        = "kiln-cli"
+description = "The kiln command."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+
+[[bin]]
+name = "kiln"
+path = "src/main.rs"
+
+[dependencies]
+kiln-config   = { workspace = true }
+kiln-diag     = { workspace = true }
+kiln-manifest = { workspace = true }
+kiln-resolve  = { workspace = true }
+kiln-image    = { workspace = true }
+kiln-ostree   = { workspace = true }
+kiln-record   = { workspace = true }
+kiln-sandbox  = { workspace = true }
+kiln-aur      = { workspace = true }
+kiln-alpm     = { workspace = true }
+kiln-build    = { workspace = true }
+
+# One syscall: `statvfs`, for the disk budget. A build that fails halfway
+# through a transaction with a full disk is the failure this avoids, and there
+# is no way to ask how much room is left without asking the kernel.
+libc          = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

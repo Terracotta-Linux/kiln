@@ -1,0 +1,6 @@
+# "a complete, bootable configuration is this short".
+kiln = 1
+include = ["@kiln/profiles/minimal"]
+
+[packages]
+repo = ["neovim", "fish", "firefox"]

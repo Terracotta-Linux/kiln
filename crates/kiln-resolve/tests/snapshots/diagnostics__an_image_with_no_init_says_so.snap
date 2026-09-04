@@ -1,0 +1,15 @@
+---
+source: crates/kiln-resolve/tests/diagnostics.rs
+expression: "render(\"diag-no-init\",\nr#\"\nkiln = 1\n\n[image]\nname = \"fixture\"\narch = \"x86_64\"\n\n[kernel]\npackage = \"fixture-linux\"\n\n[packages]\nrepo = [\"fixture-linux\"]\n\"#,)"
+---
+kiln::resolution
+
+  × no init in this image: nothing provides `init`, so it cannot boot
+    ╭─[system.toml:12:8]
+ 11 │ [packages]
+ 12 │ repo = ["fixture-linux"]
+    ·        ────────┬────────
+    ·                ╰── this package set has no init
+    ╰────
+  help: `@kiln/profiles/minimal` is the one-line answer — it stands for the handful of
+        packages any bootable image needs

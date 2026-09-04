@@ -1,0 +1,7 @@
+# AMD microcode. The same decision as @kiln/hardware/intel-ucode, for the other
+# vendor — and a separate file because installing both is installing one you
+# will never load.
+kiln = 1
+
+[packages]
+repo = ["amd-ucode"]
