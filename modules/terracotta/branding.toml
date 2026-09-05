@@ -1,6 +1,6 @@
-# Terracotta's branding assets, from kiln's own release, not the Arch repos.
+# Terracotta's branding assets.
 kiln = 1
 
 [[packages.file]]
-path = "https://github.com/Terracotta-Linux/kiln/releases/latest/download/terracotta-branding-any.pkg.tar.zst"
-sha256 = "https://github.com/Terracotta-Linux/kiln/releases/latest/download/terracotta-branding-any.pkg.tar.zst.sha256"
+path = "https://github.com/Terracotta-Linux/terracotta-branding/releases/latest/download/terracotta-branding-any.pkg.tar.zst"
+sha256 = "https://github.com/Terracotta-Linux/terracotta-branding/releases/latest/download/terracotta-branding-any.pkg.tar.zst.sha256"
