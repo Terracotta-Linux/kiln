@@ -14,6 +14,7 @@ use kiln_manifest::Manifest;
 use ostree::gio;
 use ostree::{Deployment, SysrootSimpleWriteDeploymentFlags};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The stateroot. Every Kiln deployment lives under one, and there is one.
 ///
@@ -362,6 +363,18 @@ impl Sysroot {
         }
         match grubenv::arm(&self.path, tries) {
             Ok(()) => Counter::Armed(tries),
+            // `/boot` read-only is the common case on a booted system, and
+            // `kiln apply` runs as root there just as `kiln-boot-success.service`
+            // does inside the image — so take the same remount-write-remount
+            // path rather than settling for an unarmed counter. Only tried
+            // against `/`: under `--sysroot` there is no live mount to take
+            // read-write, and `self.path` is a plain directory.
+            Err(first) if self.path == Path::new("/") => {
+                match remount_rw_and_retry(&self.boot(), || grubenv::arm(&self.path, tries)) {
+                    Ok(()) => Counter::Armed(tries),
+                    Err(_) => Counter::Unwritable(first.to_string()),
+                }
+            }
             Err(e) => Counter::Unwritable(e.to_string()),
         }
     }
@@ -657,6 +670,33 @@ impl Sysroot {
             .cleanup(gio::Cancellable::NONE)
             .map_err(Error::of("cleaning up old deployments"))
     }
+}
+
+/// Take `mountpoint` read-write, run `write`, then put it back read-only —
+/// the same dance `kiln-boot-success.service`'s script does inside the image
+/// (`kiln_image::bootcount::BOOT_SUCCESS`), done here from the live host so
+/// arming the counter doesn't need to wait for that service's first run.
+///
+/// Best-effort on both remounts: if `mountpoint` is not actually a separate
+/// mount (a `--sysroot` directory, or a system that already mounts `/boot`
+/// read-write), the `remount,rw` fails and `write` runs against whatever is
+/// already there — no worse than not trying. If the `remount,ro` afterwards
+/// fails, the write already succeeded and is not undone by leaving `/boot`
+/// writable; that's the same trade `kiln-boot-success.service` makes.
+fn remount_rw_and_retry<T>(mountpoint: &Path, write: impl FnOnce() -> Result<T>) -> Result<T> {
+    let remounted = Command::new("mount")
+        .args(["-o", "remount,rw"])
+        .arg(mountpoint)
+        .status()
+        .is_ok_and(|s| s.success());
+    let result = write();
+    if remounted {
+        let _ = Command::new("mount")
+            .args(["-o", "remount,ro"])
+            .arg(mountpoint)
+            .status();
+    }
+    result
 }
 
 /// What `kiln rm` and `kiln clean` would do, decided without touching the disk.
