@@ -1,0 +1,39 @@
+# Maintainer: Abdullah AL-Swedi
+#
+# Standalone: this file works on its own, fetching the source from git
+# rather than assuming it is sitting inside the checkout it packages.
+# Tracks a tagged release — bump pkgver (and tag the release `v$pkgver`
+# upstream) rather than pointing this at a branch.
+
+pkgname=terracotta-kiln
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A declarative Linux system image builder."
+arch=('x86_64')
+url="https://github.com/Terracotta-Linux/kiln"
+license=('MIT')
+depends=('pacman' 'bubblewrap' 'ostree' 'dracut' 'grub' 'git')
+makedepends=('cargo' 'git' 'glib2' 'pkgconf')
+options=('!lto')
+source=("$pkgname-$pkgver::git+https://github.com/Terracotta-Linux/kiln.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+build() {
+	cd "$srcdir/$pkgname-$pkgver"
+	cargo build --release --locked -p kiln-cli
+}
+
+check() {
+	cd "$srcdir/$pkgname-$pkgver"
+	cargo test --release --locked --workspace
+}
+
+package() {
+	cd "$srcdir/$pkgname-$pkgver"
+	install -Dm755 target/release/kiln "$pkgdir/usr/bin/kiln"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+	install -Dm644 docs/GUIDE.md "$pkgdir/usr/share/doc/$pkgname/GUIDE.md"
+	install -d "$pkgdir/usr/share/kiln"
+	cp -a modules "$pkgdir/usr/share/kiln/modules"
+}

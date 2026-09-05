@@ -141,8 +141,12 @@ compose, and every unit a module names must come from a package that module inst
 four CI-enforced by `crates/kiln-config/tests/modules.rs`, the last of them against the
 host's pacman file database, skipping with a message where there is none),
 `tests/corpus/` (valid and invalid configs), `tests/repo-fixture/` (a real tiny pacman repo
-built in-tree), and `tests/vm/` (the boot acceptance fixture). Packaging lives in its own
-repository, not here.
+built in-tree), `tests/vm/` (the boot acceptance fixture), and `packaging/` (the Arch
+`PKGBUILD`, package name `terracotta-kiln` — standalone, cloning tag `v$pkgver` of
+`https://github.com/Terracotta-Linux/kiln.git` itself rather than assuming it is sitting
+inside the checkout it packages, and building `kiln-cli`'s `kiln` binary plus the `modules/`
+library from that clone. A release means bumping `pkgver` here and pushing the matching
+`vX.Y.Z` tag upstream).
 
 Installation is not this project's job. `--sysroot` and `kiln sysroot init` are the only
 surface Kiln exposes for building into a target that is not the running root; nothing beyond

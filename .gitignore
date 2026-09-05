@@ -27,3 +27,11 @@ target
 # Binary packages do not belong in git; the script that produces them does.
 /tests/repo-fixture/repo/
 /tests/repo-fixture/.work/
+
+# makepkg build artifacts, and .SRCINFO (only needed for AUR, which this
+# is not). The PKGBUILD is the source; these are not.
+/packaging/pkg/
+/packaging/src/
+/packaging/*.pkg.tar.zst
+/packaging/*.pkg.tar.zst.sig
+/packaging/.SRCINFO
