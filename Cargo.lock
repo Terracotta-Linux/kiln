@@ -522,14 +522,14 @@ dependencies = [
 
 [[package]]
 name = "kiln-alpm"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "alpm",
 ]
 
 [[package]]
 name = "kiln-aur"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "kiln-manifest",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-build"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "kiln-alpm",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "kiln-alpm",
@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-config"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "insta",
@@ -582,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-diag"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "miette",
  "thiserror 2.0.20",
@@ -590,7 +590,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-image"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "kiln-alpm",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-manifest"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "kiln-diag",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-ostree"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "gio",
  "glib",
@@ -630,7 +630,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-record"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "kiln-manifest",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-resolve"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "kiln-alpm",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sandbox"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
 ]
