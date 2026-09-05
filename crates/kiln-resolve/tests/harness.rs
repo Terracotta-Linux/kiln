@@ -162,3 +162,20 @@ pub fn plan_with(name: &str, toml: &str, extra: &[(&str, &str)]) -> BuildPlan {
     )
     .unwrap_or_else(|e| panic!("resolution failed:\n{}", kiln_diag::render_all(&e)))
 }
+
+/// Resolve against a transport that is not empty — for `packages.file`
+/// entries whose `sha256` is itself a URL, which resolution has to fetch.
+pub fn try_plan_with_transport(
+    name: &str,
+    toml: &str,
+    extra: &[(&str, &str)],
+    transport: &kiln_aur::Recorded,
+) -> Result<BuildPlan, kiln_diag::Errors> {
+    let (m, dir) = manifest_with(name, toml, extra);
+    kiln_resolve::resolve(
+        &m,
+        &dir.join("config"),
+        &options(&dir, "."),
+        &Inputs::new(transport),
+    )
+}

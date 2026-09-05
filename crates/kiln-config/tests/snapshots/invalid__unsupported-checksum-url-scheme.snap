@@ -1,0 +1,15 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 131
+expression: rendered
+---
+kiln::semantic
+
+  × checksum `ftp://example.com/myapp.sha256` has an unsupported URL scheme
+   ╭─[system.toml:5:81]
+ 4 │ [packages]
+ 5 │ file = [{ path = "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "ftp://example.com/myapp.sha256" }]
+   ·                                                                                 ────────────────┬───────────────
+   ·                                                                                                 ╰── referenced here
+   ╰────
+  help: only http:// and https:// are supported

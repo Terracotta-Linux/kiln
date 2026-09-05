@@ -1,0 +1,15 @@
+---
+source: crates/kiln-resolve/tests/local_packages.rs
+assertion_line: 174
+expression: "kiln_diag::render_all(&errs)"
+---
+kiln::resolution
+
+  × `https://example.com/not-a-checksum` is not a sha256 checksum file
+    ╭─[system.toml:14:18]
+ 13 │ 
+ 14 │ file = [{ path = "https://example.com/myapp.pkg.tar.zst", sha256 = "https://example.com/not-a-checksum" }]
+    ·                  ───────────────────┬───────────────────
+    ·                                     ╰── declared here
+    ╰────
+  help: expected a line starting with 64 hex characters, the way `sha256sum` writes one

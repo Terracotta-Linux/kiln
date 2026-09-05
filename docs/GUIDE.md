@@ -364,6 +364,13 @@ happens during `kiln build`, not `kiln check` — resolution carries the URL and
 through untouched, the same way it carries an AUR package's pinned commit. Only `http://` and
 `https://` are accepted.
 
+**`sha256` can be a URL too**, pointing at a `.sha256` file rather than naming the digest
+directly: `sha256 = "https://example.com/myapp.pkg.tar.zst.sha256"`. Unlike the package itself,
+`kiln check` *does* fetch this — it is a few bytes, the same kind of network call resolution
+already makes to ask the AUR for a package's current commit — and resolves it to the concrete
+digest before it reaches the plan. The file is parsed the way `sha256sum` writes one: 64 hex
+characters, optionally followed by whitespace and a filename.
+
 **The network is off during every build.** It is on during resolution and while fetching
 sources, and off from the moment a build phase starts. That constraint is exactly what makes
 a build's output a function of things Kiln has hashed — and it means a PKGBUILD that

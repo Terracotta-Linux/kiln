@@ -191,7 +191,7 @@ pub fn resolve(
     // checksum, an unreadable recipe and a missing AUR package should report
     // three problems, not one per build.
     let mut problems = Errors::new();
-    let locals = local_packages(manifest, config_root, &mut problems);
+    let locals = local_packages(manifest, config_root, inputs.aur, &mut problems);
     let declared = recipes::read_all(manifest, config_root, &mut problems);
     let modules = recipes::modules(manifest, &mut problems);
     let aur = aur::resolve(manifest, inputs.aur, &session, &mut problems);
@@ -489,10 +489,15 @@ fn volatile_sources(recipe: &recipes::Declared) -> Vec<VolatileInput> {
 fn local_packages(
     manifest: &Manifest,
     config_root: &std::path::Path,
+    transport: &dyn kiln_aur::Transport,
     problems: &mut Errors,
 ) -> Vec<ResolvedInput> {
     let mut out = Vec::new();
     for (path, package) in &manifest.packages.file {
+        let Some(sha256) = resolve_checksum(manifest, path, &package.sha256, transport, problems)
+        else {
+            continue;
+        };
         if kiln_manifest::is_url(path) {
             // Nothing to hash yet: the bytes are not on this machine. The
             // frontend already folded `path` + `sha256` into `config_id`
@@ -502,7 +507,7 @@ fn local_packages(
             // without resolution touching its contents.
             out.push(ResolvedInput::FilePackage {
                 path: path.clone(),
-                sha256: package.sha256.clone(),
+                sha256,
             });
             continue;
         }
@@ -525,7 +530,7 @@ fn local_packages(
             );
             continue;
         };
-        if actual != package.sha256 {
+        if actual != sha256 {
             problems.push(
                 label(
                     manifest,
@@ -550,10 +555,70 @@ fn local_packages(
         }
         out.push(ResolvedInput::FilePackage {
             path: path.clone(),
-            sha256: package.sha256.clone(),
+            sha256,
         });
     }
     out
+}
+
+/// Turn a declared `sha256` into a concrete hex digest, fetching it first when
+/// it names a `.sha256` file's URL rather than the digest itself.
+///
+/// A checksum file is metadata, not the package — small enough that
+/// resolution fetches it eagerly, the same way it asks the AUR RPC for a
+/// `pkgbase`'s current commit rather than deferring that question to
+/// realization too. What comes back is parsed the way `sha256sum` writes it:
+/// 64 hex characters, optionally followed by whitespace and a filename.
+fn resolve_checksum(
+    manifest: &Manifest,
+    path: &str,
+    declared: &str,
+    transport: &dyn kiln_aur::Transport,
+    problems: &mut Errors,
+) -> Option<String> {
+    if !kiln_manifest::is_url(declared) {
+        return Some(declared.to_string());
+    }
+    let body = match transport.get(declared) {
+        Ok(b) => b,
+        Err(e) => {
+            problems.push(
+                label(
+                    manifest,
+                    "packages.file",
+                    path,
+                    Diag::error(
+                        "kiln::resolution",
+                        format!("could not fetch the checksum for `{path}`"),
+                    ),
+                    "declared here",
+                )
+                .help(e.to_string()),
+            );
+            return None;
+        }
+    };
+    let token = body.split_whitespace().next().unwrap_or("");
+    let plausible = token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit());
+    if !plausible {
+        problems.push(
+            label(
+                manifest,
+                "packages.file",
+                path,
+                Diag::error(
+                    "kiln::resolution",
+                    format!("`{declared}` is not a sha256 checksum file"),
+                ),
+                "declared here",
+            )
+            .help(
+                "expected a line starting with 64 hex characters, the way `sha256sum` writes one",
+            ),
+        );
+        return None;
+    }
+    Some(token.to_ascii_lowercase())
 }
 
 /// Attach the span of one element of a list-valued key, when the manifest has

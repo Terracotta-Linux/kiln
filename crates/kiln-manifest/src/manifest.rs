@@ -158,8 +158,9 @@ pub struct LocalPackage {
     /// A path relative to the config root, or an `http://`/`https://` URL —
     /// see [`is_url`].
     pub path: String,
-    /// Required, not optional: an optional integrity guarantee is not a
-    /// guarantee.
+    /// The digest itself, or an `http://`/`https://` URL to a `.sha256` file
+    /// naming it (parsed the way `sha256sum` writes one). Required, not
+    /// optional: an optional integrity guarantee is not a guarantee.
     pub sha256: String,
 }
 

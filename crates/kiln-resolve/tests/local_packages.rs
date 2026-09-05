@@ -114,3 +114,62 @@ file = [{{ path = "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 =
         _ => unreachable!(),
     }
 }
+
+/// `sha256` may itself be a URL to a `.sha256` file — resolution fetches it
+/// (it is metadata, the same kind of network call as an AUR RPC lookup) and
+/// resolves it to the concrete digest before it ever reaches the plan.
+#[test]
+fn a_checksum_url_is_fetched_and_resolved_to_the_digest_it_names() {
+    let toml = format!(
+        r#"{BOOTABLE}
+file = [{{ path = "packages/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "https://example.com/myapp.pkg.tar.zst.sha256" }}]
+"#
+    );
+    // `sha256sum`'s own format: hex, two spaces, the filename.
+    let transport = kiln_aur::Recorded {
+        bodies: std::collections::BTreeMap::from([(
+            "https://example.com/myapp.pkg.tar.zst.sha256".to_string(),
+            format!("{BODY_SHA256}  myapp-1.0-1-x86_64.pkg.tar.zst\n"),
+        )]),
+        ..kiln_aur::Recorded::new()
+    };
+
+    let plan = harness::try_plan_with_transport(
+        "checksum-url-ok",
+        &toml,
+        &[("packages/myapp-1.0-1-x86_64.pkg.tar.zst", BODY)],
+        &transport,
+    )
+    .unwrap_or_else(|e| panic!("resolution failed:\n{}", kiln_diag::render_all(&e)));
+
+    match plan
+        .inputs
+        .iter()
+        .find(|i| matches!(i, ResolvedInput::FilePackage { .. }))
+        .unwrap()
+    {
+        ResolvedInput::FilePackage { sha256, .. } => assert_eq!(sha256, BODY_SHA256),
+        _ => unreachable!(),
+    }
+}
+
+/// The case the checksum-URL feature exists to catch: the file it names does
+/// not hold a valid sha256 line.
+#[test]
+fn a_checksum_url_that_is_not_a_sha256_file_is_refused() {
+    let toml = format!(
+        r#"{BOOTABLE}
+file = [{{ path = "https://example.com/myapp.pkg.tar.zst", sha256 = "https://example.com/not-a-checksum" }}]
+"#
+    );
+    let transport = kiln_aur::Recorded {
+        bodies: std::collections::BTreeMap::from([(
+            "https://example.com/not-a-checksum".to_string(),
+            "<html>404</html>\n".to_string(),
+        )]),
+        ..kiln_aur::Recorded::new()
+    };
+    let errs = harness::try_plan_with_transport("checksum-url-bad", &toml, &[], &transport)
+        .expect_err("a body with no plausible sha256 must fail resolution");
+    insta::assert_snapshot!(kiln_diag::render_all(&errs));
+}

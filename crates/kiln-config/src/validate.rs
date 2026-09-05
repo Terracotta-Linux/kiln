@@ -407,6 +407,17 @@ impl Validator<'_> {
             } else {
                 self.hash_local(&path, e, "local package");
             }
+            if sha256.contains("://") && !is_url(&sha256) {
+                self.errs.push(
+                    Diag::error(
+                        "kiln::semantic",
+                        format!("checksum `{sha256}` has an unsupported URL scheme"),
+                    )
+                    .label(self.at(e, "sha256"), "referenced here")
+                    .help("only http:// and https:// are supported"),
+                );
+                continue;
+            }
             self.note_item("packages.file", &path, e, "path");
             file.insert(path.clone(), LocalPackage { path, sha256 });
         }

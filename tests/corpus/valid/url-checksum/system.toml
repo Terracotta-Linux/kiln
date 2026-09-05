@@ -1,0 +1,5 @@
+kiln = 1
+include = ["@kiln/profiles/minimal"]
+
+[packages]
+file = [{ path = "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst.sha256" }]
