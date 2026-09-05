@@ -1,0 +1,6 @@
+# Terracotta's own installer, from its release, not the Arch repos.
+kiln = 1
+
+[[packages.file]]
+path = "https://github.com/Terracotta-Linux/terracotta-installer/releases/latest/download/terracotta-installer-x86_64.pkg.tar.zst"
+sha256 = "https://github.com/Terracotta-Linux/terracotta-installer/releases/latest/download/terracotta-installer-x86_64.pkg.tar.zst.sha256"

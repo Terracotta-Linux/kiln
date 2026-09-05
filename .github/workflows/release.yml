@@ -35,11 +35,14 @@ jobs:
         run: |
           su builder -c "cd '$GITHUB_WORKSPACE/packaging' && makepkg --syncdeps --noconfirm --skippgpcheck --nocheck"
 
-      - name: Compute checksum
+      - name: Rename package and compute checksum
         id: pkg
         run: |
           cd packaging
-          pkgfile=$(ls -- *.pkg.tar.zst | head -n1)
+          built=$(ls -- *.pkg.tar.zst | head -n1)
+          arch=$(echo "$built" | rev | cut -d- -f1 | rev | sed 's/\.pkg\.tar\.zst$//')
+          pkgfile="terracotta-kiln-${arch}.pkg.tar.zst"
+          mv -- "$built" "$pkgfile"
           sha256sum "$pkgfile" > "$pkgfile.sha256"
           echo "pkgfile=$pkgfile" >> "$GITHUB_OUTPUT"
 
