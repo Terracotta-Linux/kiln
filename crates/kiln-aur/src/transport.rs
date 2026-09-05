@@ -39,6 +39,14 @@ pub trait Transport {
     /// says — silently, and only when a maintainer happened to push between
     /// the two.
     fn clone_at(&self, repository: &str, commit: &str, into: &Path) -> Result<(), Error>;
+
+    /// GET a URL's raw bytes into `dest`, which must not already exist.
+    ///
+    /// Separate from `get`: a `packages.file` URL is a `.pkg.tar.zst`, and
+    /// `get` decodes its response as UTF-8 text, which would corrupt it.
+    /// Realization only, for the same reason `clone_at` is — resolution
+    /// carries the URL and its declared `sha256` through untouched.
+    fn download(&self, url: &str, dest: &Path) -> Result<(), Error>;
 }
 
 /// The real one.
@@ -121,6 +129,24 @@ impl Transport for Network {
         git(&["clone", "--quiet", repository, &at])?;
         git(&["-C", &at, "checkout", "--quiet", "--detach", commit])
     }
+
+    fn download(&self, url: &str, dest: &Path) -> Result<(), Error> {
+        let mut response = self.agent.get(url).call().map_err(|e| Error::Http {
+            url: url.to_string(),
+            why: e.to_string(),
+        })?;
+        let mut file = std::fs::File::create(dest).map_err(|e| Error::Http {
+            url: url.to_string(),
+            why: format!("could not create {}: {e}", dest.display()),
+        })?;
+        std::io::copy(&mut response.body_mut().as_reader(), &mut file).map_err(|e| {
+            Error::Http {
+                url: url.to_string(),
+                why: e.to_string(),
+            }
+        })?;
+        Ok(())
+    }
 }
 
 /// `<oid>\tHEAD` — the first field of the first line.
@@ -142,6 +168,9 @@ pub struct Recorded {
     pub heads: BTreeMap<String, String>,
     /// repository → a directory on disk that stands in for its clone.
     pub recipes: BTreeMap<String, std::path::PathBuf>,
+    /// url → the bytes `download` hands back, standing in for a `.pkg.tar.zst`
+    /// fetched over the network.
+    pub blobs: BTreeMap<String, Vec<u8>>,
     /// Every URL asked for, in order. This promises the RPC is *batched*, and
     /// this is how a test proves one request was made rather than forty.
     pub requests: std::cell::RefCell<Vec<String>>,
@@ -178,6 +207,12 @@ impl Recorded {
 
     pub fn request_count(&self) -> usize {
         self.requests.borrow().len()
+    }
+
+    /// A blob to hand back as the download of `url`.
+    pub fn with_blob(mut self, url: impl Into<String>, bytes: impl Into<Vec<u8>>) -> Recorded {
+        self.blobs.insert(url.into(), bytes.into());
+        self
     }
 }
 
@@ -225,6 +260,18 @@ impl Transport for Recorded {
                 repository: repository.to_string(),
                 why: String::from_utf8_lossy(&out.stderr).trim().to_string(),
             })
+    }
+
+    fn download(&self, url: &str, dest: &Path) -> Result<(), Error> {
+        self.requests.borrow_mut().push(url.to_string());
+        let bytes = self.blobs.get(url).ok_or_else(|| Error::Http {
+            url: url.to_string(),
+            why: "no recorded blob".into(),
+        })?;
+        std::fs::write(dest, bytes).map_err(|e| Error::Http {
+            url: url.to_string(),
+            why: e.to_string(),
+        })
     }
 }
 

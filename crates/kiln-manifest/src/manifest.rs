@@ -155,10 +155,21 @@ pub struct AurPackage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalPackage {
+    /// A path relative to the config root, or an `http://`/`https://` URL —
+    /// see [`is_url`].
     pub path: String,
     /// Required, not optional: an optional integrity guarantee is not a
     /// guarantee.
     pub sha256: String,
+}
+
+/// Whether a `packages.file` entry names a remote URL rather than a path
+/// relative to the config root.
+///
+/// Restricted to `http://`/`https://`: any other scheme is rejected at parse
+/// time rather than silently treated as a local path with a colon in it.
+pub fn is_url(path: &str) -> bool {
+    path.starts_with("http://") || path.starts_with("https://")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

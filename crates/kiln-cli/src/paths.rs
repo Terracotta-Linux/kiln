@@ -54,6 +54,13 @@ pub fn cache(state: &Path) -> PathBuf {
     state.join("cache/pkg")
 }
 
+/// Where a `packages.file` URL's download lands, keyed by its declared
+/// `sha256` — content-addressed like `cache`, so a plan shared across
+/// generations downloads it once.
+pub fn file_packages(state: &Path) -> PathBuf {
+    state.join("cache/file-packages")
+}
+
 pub fn hostname() -> String {
     std::fs::read_to_string("/etc/hostname")
         .ok()

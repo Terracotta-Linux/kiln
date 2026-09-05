@@ -346,7 +346,7 @@ Five kinds of input, all of which end up as a `.pkg.tar.zst` going through pacma
 | `packages.repo` | official Arch repositories, and any `repos.extra` you add |
 | `packages.aur` | AUR packages, built in a sandbox |
 | `packages.build` | your own PKGBUILDs, from a directory in your config tree |
-| `packages.file` | a local `.pkg.tar.zst`, with a required `sha256` |
+| `packages.file` | a `.pkg.tar.zst`, local or by URL, with a required `sha256` |
 | `[[kernel.module]]` | an out-of-tree module, built against the image's kernel |
 
 A few things that surprise people:
@@ -357,6 +357,12 @@ A few things that surprise people:
 
 **A local package's checksum is required, not optional.** An optional integrity guarantee is
 not a guarantee.
+
+**`packages.file`'s `path` can be a URL instead.** `{ path = "https://example.com/myapp.pkg.tar.zst",
+sha256 = "…" }` works the same as a path relative to the config root, except the download
+happens during `kiln build`, not `kiln check` — resolution carries the URL and its `sha256`
+through untouched, the same way it carries an AUR package's pinned commit. Only `http://` and
+`https://` are accepted.
 
 **The network is off during every build.** It is on during resolution and while fetching
 sources, and off from the moment a build phase starts. That constraint is exactly what makes

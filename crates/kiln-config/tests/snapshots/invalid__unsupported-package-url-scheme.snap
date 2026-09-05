@@ -1,0 +1,16 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 131
+expression: rendered
+---
+kiln::semantic
+
+  × local package `ftp://example.com/myapp-1.0-1-x86_64.pkg.tar.zst` has an unsupported
+  │ URL scheme
+   ╭─[system.toml:5:18]
+ 4 │ [packages]
+ 5 │ file = [{ path = "ftp://example.com/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "f238df2ae16f95a3461bb262b8db52df5808bb03a6f2d85471442835bb31c65b" }]
+   ·                  ─────────────────────────┬────────────────────────
+   ·                                           ╰── referenced here
+   ╰────
+  help: only http:// and https:// are supported

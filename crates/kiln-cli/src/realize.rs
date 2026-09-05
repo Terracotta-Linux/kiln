@@ -133,6 +133,51 @@ pub struct Options<'a> {
     pub keep_failed: bool,
 }
 
+/// Download a `packages.file` URL, verify it against the `sha256` resolution
+/// already carried through untouched, and cache it by that hash.
+///
+/// Content-addressed by `sha256` rather than by URL: a plan shared across
+/// generations downloads it once, and a URL that starts serving something
+/// else is caught here rather than silently reused from a stale cache keyed
+/// on the URL itself.
+fn file_package_url(
+    state: &Path,
+    url: &str,
+    sha256: &str,
+    transport: &dyn kiln_aur::Transport,
+) -> Result<Produced, ExitCode> {
+    let dest = paths::file_packages(state).join(sha256);
+    let from_cache = dest.exists();
+    if !from_cache {
+        std::fs::create_dir_all(paths::file_packages(state)).map_err(|e| {
+            eprintln!("\x1b[1;31merror\x1b[0m {e}");
+            ExitCode::System
+        })?;
+        println!("  \x1b[1mfile\x1b[0m {url}");
+        transport.download(url, &dest).map_err(|e| {
+            eprintln!("\x1b[1;31merror\x1b[0m could not fetch `{url}`: {e}");
+            ExitCode::Resolution
+        })?;
+        let actual = kiln_alpm::sha256(&dest).ok_or_else(|| {
+            eprintln!("\x1b[1;31merror\x1b[0m could not hash the download of `{url}`");
+            ExitCode::Resolution
+        })?;
+        if actual != sha256 {
+            let _ = std::fs::remove_file(&dest);
+            eprintln!(
+                "\x1b[1;31merror\x1b[0m `{url}` is not the file its `sha256` describes\n\n\
+                 downloaded content hashes to sha256 = \"{actual}\""
+            );
+            return Err(ExitCode::Resolution);
+        }
+    }
+    Ok(Produced {
+        files: vec![dest],
+        from_cache,
+        kind: "file",
+    })
+}
+
 /// Turn every non-repository input into a package file on disk.
 ///
 /// Errors are collected, not returned at the first one. *one package
@@ -148,18 +193,21 @@ pub fn realize(
     let mut artifacts = Artifacts::default();
     let jobs = jobs(plan);
 
-    // Nothing to build: resolution already verified the checksum against
-    // the bytes on disk, which is the whole guarantee the key exists for.
     for input in &plan.inputs {
-        if let ResolvedInput::FilePackage { path, .. } = input {
-            artifacts.produced.insert(
-                path.clone(),
+        if let ResolvedInput::FilePackage { path, sha256 } = input {
+            let produced = if kiln_manifest::is_url(path) {
+                file_package_url(&opts.ctx.state, path, sha256, transport)?
+            } else {
+                // Nothing to build: resolution already verified the checksum
+                // against the bytes on disk, which is the whole guarantee the
+                // key exists for.
                 Produced {
                     files: vec![opts.ctx.config_root.join(path)],
                     from_cache: false,
                     kind: "file",
-                },
-            );
+                }
+            };
+            artifacts.produced.insert(path.clone(), produced);
         }
     }
 
@@ -847,5 +895,50 @@ mod tests {
         let out = highlight(text);
         assert!(out.contains("\x1b[1;31m==> ERROR: A failure occurred in build()."));
         assert!(!out.contains("\x1b[1;31mgcc: warning"));
+    }
+
+    /// `pkg\n`'s sha256, matching the constant used in
+    /// `kiln-resolve/tests/local_packages.rs`.
+    const BODY: &[u8] = b"pkg\n";
+    const BODY_SHA256: &str = "f238df2ae16f95a3461bb262b8db52df5808bb03a6f2d85471442835bb31c65b";
+
+    #[test]
+    fn a_url_package_is_downloaded_and_cached_by_its_hash() {
+        let state = std::env::temp_dir().join(format!("kiln-test-url-ok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&state);
+        let url = "https://example.com/myapp.pkg.tar.zst";
+        let transport = kiln_aur::Recorded::new().with_blob(url, BODY.to_vec());
+
+        let produced = file_package_url(&state, url, BODY_SHA256, &transport).unwrap();
+        assert!(!produced.from_cache);
+        assert_eq!(
+            produced.files,
+            vec![paths::file_packages(&state).join(BODY_SHA256)]
+        );
+        assert_eq!(std::fs::read(&produced.files[0]).unwrap(), BODY);
+
+        // A second call finds it already there and does not ask the
+        // transport again.
+        let again = file_package_url(&state, url, BODY_SHA256, &transport).unwrap();
+        assert!(again.from_cache);
+        assert_eq!(transport.request_count(), 1);
+
+        let _ = std::fs::remove_dir_all(&state);
+    }
+
+    /// The case the checksum exists for: the URL served something else.
+    #[test]
+    fn a_url_package_whose_download_does_not_match_is_refused() {
+        let state =
+            std::env::temp_dir().join(format!("kiln-test-url-mismatch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&state);
+        let url = "https://example.com/myapp.pkg.tar.zst";
+        let transport = kiln_aur::Recorded::new().with_blob(url, b"different\n".to_vec());
+
+        let err = file_package_url(&state, url, BODY_SHA256, &transport).unwrap_err();
+        assert_eq!(err, ExitCode::Resolution);
+        assert!(!paths::file_packages(&state).join(BODY_SHA256).exists());
+
+        let _ = std::fs::remove_dir_all(&state);
     }
 }

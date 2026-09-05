@@ -1,0 +1,65 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 120
+expression: rendered
+---
+config_id: b3:7507aa3267632951ecb5efda8eeb4c17d9ec840b161e206186c84816639f9a17
+
+
+  boot: 
+    initramfs: "dracut"
+    loader: "grub2"
+    timeout: 5
+  files: {}
+  hash_epoch: 3
+  image: 
+    arch: "[ARCH]"
+    name: "system"
+  kernel: 
+    cmdline: 
+      - "rw"
+    headers: false
+    modules: 
+      blacklist: []
+      load: []
+      options: {}
+    out_of_tree: {}
+    package: "linux"
+  local_digests: {}
+  packages: 
+    aur: {}
+    build: []
+    exclude: []
+    file: 
+      https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst: 
+        path: "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst"
+        sha256: "f238df2ae16f95a3461bb262b8db52df5808bb03a6f2d85471442835bb31c65b"
+    repo: 
+      - "base"
+      - "dracut"
+      - "efibootmgr"
+      - "grub"
+      - "linux"
+      - "linux-firmware"
+      - "ostree"
+      - "systemd-sysvcompat"
+  repos: 
+    extra: {}
+    mirrors: []
+    snapshot: 
+      latest: true
+  schema: 1
+  scripts: {}
+  system: 
+    hostname: []
+    keymap: "us"
+    locale: 
+      generate: []
+      lang: "C.UTF-8"
+    timezone: "UTC"
+  systemd: 
+    disable: []
+    enable: 
+      - "systemd-timesyncd.service"
+    mask: []
+    units: {}

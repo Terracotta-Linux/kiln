@@ -87,3 +87,30 @@ fn the_blob_is_part_of_the_configuration_identity_as_well() {
     );
     assert_ne!(one.plan_id(), two.plan_id());
 }
+
+/// A `packages.file` entry may name an `http(s)://` URL instead of a path.
+/// Resolution never fetches it — that happens at realization — so it is
+/// trusted through on the strength of the declared `sha256` alone, the same
+/// way an AUR closure carries a pinned commit through resolution untouched.
+#[test]
+fn a_url_package_enters_the_plan_without_being_fetched() {
+    let toml = format!(
+        r#"{BOOTABLE}
+file = [{{ path = "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "{BODY_SHA256}" }}]
+"#
+    );
+    let plan = plan("url-file", &toml);
+    let found: Vec<&ResolvedInput> = plan
+        .inputs
+        .iter()
+        .filter(|i| matches!(i, ResolvedInput::FilePackage { .. }))
+        .collect();
+    assert_eq!(found.len(), 1);
+    match found[0] {
+        ResolvedInput::FilePackage { path, sha256 } => {
+            assert_eq!(path, "https://example.com/myapp-1.0-1-x86_64.pkg.tar.zst");
+            assert_eq!(sha256, BODY_SHA256);
+        }
+        _ => unreachable!(),
+    }
+}

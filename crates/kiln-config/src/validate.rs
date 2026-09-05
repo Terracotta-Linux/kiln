@@ -389,7 +389,24 @@ impl Validator<'_> {
             let Some(sha256) = self.required(e, "sha256", "a local package") else {
                 continue;
             };
-            self.hash_local(&path, e, "local package");
+            if path.contains("://") {
+                if !is_url(&path) {
+                    self.errs.push(
+                        Diag::error(
+                            "kiln::semantic",
+                            format!("local package `{path}` has an unsupported URL scheme"),
+                        )
+                        .label(self.at(e, "path"), "referenced here")
+                        .help("only http:// and https:// are supported"),
+                    );
+                    continue;
+                }
+                // A URL is fetched during realization, not hashed here: the
+                // frontend never touches the network. `sha256` is what carries
+                // its identity into `config_id` instead of a local digest.
+            } else {
+                self.hash_local(&path, e, "local package");
+            }
             self.note_item("packages.file", &path, e, "path");
             file.insert(path.clone(), LocalPackage { path, sha256 });
         }

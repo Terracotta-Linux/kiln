@@ -493,6 +493,19 @@ fn local_packages(
 ) -> Vec<ResolvedInput> {
     let mut out = Vec::new();
     for (path, package) in &manifest.packages.file {
+        if kiln_manifest::is_url(path) {
+            // Nothing to hash yet: the bytes are not on this machine. The
+            // frontend already folded `path` + `sha256` into `config_id`
+            // (there is no local digest to fold in instead), so this is
+            // trusted through to realization, which downloads and verifies
+            // it the same way the AUR closure fetches a pinned commit
+            // without resolution touching its contents.
+            out.push(ResolvedInput::FilePackage {
+                path: path.clone(),
+                sha256: package.sha256.clone(),
+            });
+            continue;
+        }
         let at = config_root.join(path);
         let Some(actual) = kiln_alpm::sha256(&at) else {
             // The frontend already proved the path resolves, so reaching here
