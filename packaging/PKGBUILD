@@ -6,7 +6,7 @@
 # upstream) rather than pointing this at a branch.
 
 pkgname=terracotta-kiln
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="A declarative Linux system image builder."
 arch=('x86_64')
