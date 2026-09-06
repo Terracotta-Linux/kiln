@@ -1,9 +1,8 @@
 ---
 source: crates/kiln-config/tests/corpus.rs
-assertion_line: 120
 expression: rendered
 ---
-config_id: b3:c73deb405d8f5e1d3db55ed6d2beac5575e38f96e2e6dd67e88997f0376e7da9
+config_id: b3:fc933c4312b36c5ccbf3816e4e56d1d9de3a5ef9e6811de9875dc6dad80c3546
 
 kiln::semantic
 
@@ -75,12 +74,13 @@ kiln::semantic
       mode: []
       source: []
       target: "/var/lib/myapp/state.db"
-  hash_epoch: 3
+  hash_epoch: 4
   image: 
     arch: "[ARCH]"
     name: "system"
   kernel: 
     cmdline: []
+    dracut_modules: []
     headers: false
     modules: 
       blacklist: []

@@ -29,6 +29,7 @@ pub fn summary(m: &Manifest, files: &[kiln_diag::Src], verbose: bool) {
         &[
             Some(m.kernel.package.clone()),
             count("cmdline", m.kernel.cmdline.len()),
+            count("dracut modules", m.kernel.dracut_modules.len()),
             count(
                 "modules",
                 m.kernel.modules.load.len() + m.kernel.modules.blacklist.len(),
@@ -105,6 +106,10 @@ pub fn detail(m: &Manifest) {
         m.kernel.package, m.kernel.headers
     );
     list("kernel.cmdline", m.kernel.cmdline.iter().cloned());
+    list(
+        "kernel.dracut_modules",
+        m.kernel.dracut_modules.iter().cloned(),
+    );
     list("modules.load", m.kernel.modules.load.iter().cloned());
     list(
         "modules.blacklist",

@@ -1,6 +1,15 @@
 # Plymouth, the boot splash. No theme here — that is a branding decision,
 # not a boot one; see @kiln/terracotta/branding-plymouth.
+#
+# `dracut_modules` is needed, not optional: dracut's default module selection
+# does not pull Plymouth's module in just because the package is installed,
+# so without it Plymouth never runs. `splash` is what tells Plymouth to
+# actually take the console instead of sitting idle.
 kiln = 1
 
 [packages]
 repo = ["plymouth"]
+
+[kernel]
+cmdline = ["splash", "quiet"]
+dracut_modules = ["plymouth"]

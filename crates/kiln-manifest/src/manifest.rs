@@ -26,7 +26,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// | 1 | the first frozen encoding |
 /// | 2 | `boot.loader` defaults to `grub2` rather than `systemd-boot`. A different bootloader is a genuinely different image, so every identity moving is correct rather than incidental. |
 /// | 3 | the UID seed became a users/groups pair carrying `home` and `shell`, not a flat map of numbers. Writing the assembler showed that the flat shape cannot say whether a user owns a group of its own name, and that a seed omitting home and shell decides them by omission. |
-pub const HASH_EPOCH: u32 = 3;
+/// | 4 | `kernel.dracut_modules` joined `Kernel`'s canonical encoding. dracut's default, non-hostonly module selection does not include every module whose package is installed — a module can be present but excluded unless named — so which dracut modules are requested is genuinely part of what is inside the image, not incidental to it. |
+pub const HASH_EPOCH: u32 = 4;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -180,6 +181,11 @@ pub struct Kernel {
     /// Shipping ~150 MB of them in an immutable image is pure waste.
     pub headers: bool,
     pub cmdline: BTreeSet<String>,
+    /// dracut modules to `--add` beyond the `ostree` one Kiln always requests.
+    /// Needed because dracut's default, non-hostonly module selection does not
+    /// pull in every module whose package is present — some (Plymouth's among
+    /// them) are only ever included on request.
+    pub dracut_modules: BTreeSet<String>,
     pub modules: KernelModules,
     pub out_of_tree: BTreeMap<String, OutOfTreeModule>,
 }
@@ -190,6 +196,7 @@ impl Default for Kernel {
             package: "linux".into(),
             headers: false,
             cmdline: BTreeSet::new(),
+            dracut_modules: BTreeSet::new(),
             modules: KernelModules::default(),
             out_of_tree: BTreeMap::new(),
         }
@@ -437,6 +444,7 @@ impl Canonical for Kernel {
             ("package", Canon::str(&self.package)),
             ("headers", Canon::Bool(self.headers)),
             ("cmdline", self.cmdline.canon()),
+            ("dracut_modules", self.dracut_modules.canon()),
             ("modules", self.modules.canon()),
             ("out_of_tree", self.out_of_tree.canon()),
         ])

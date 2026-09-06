@@ -4,7 +4,7 @@ expression: "Record::of(&plan(), 42, uid_map()).to_json()"
 ---
 {
   "kiln": 1,
-  "plan_id": "b3:d6735a6e3efb3bd7b90f809d789e6765514667dd270d97e52acb6100905ccb7c",
+  "plan_id": "b3:1ffd0287639eef968170bba887fd92592711a4db46ae965e989c4df8a9bb1561",
   "config_id": "b3:11c4de",
   "generation": 42,
   "built_at": "2026-08-30T19:04:11Z",

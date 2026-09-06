@@ -1,9 +1,8 @@
 ---
 source: crates/kiln-config/tests/corpus.rs
-assertion_line: 120
 expression: rendered
 ---
-config_id: b3:09520e424ae83f48c2d2ab03795bef4a47167e17f8296dd2e05a8f0c2c952f32
+config_id: b3:16f6363f65a3425f29b53c2c41606a8267bdd8bd83f9ba52c7cd5af58a9c389b
 
 
   boot: 
@@ -30,7 +29,7 @@ config_id: b3:09520e424ae83f48c2d2ab03795bef4a47167e17f8296dd2e05a8f0c2c952f32
       mode: []
       source: []
       target: "/usr/lib/tmpfiles.d/scratch.conf"
-  hash_epoch: 3
+  hash_epoch: 4
   image: 
     arch: "[ARCH]"
     name: "workstation"
@@ -41,6 +40,7 @@ config_id: b3:09520e424ae83f48c2d2ab03795bef4a47167e17f8296dd2e05a8f0c2c952f32
       - "quiet"
       - "rw"
       - "zswap.enabled=0"
+    dracut_modules: []
     headers: false
     modules: 
       blacklist: 

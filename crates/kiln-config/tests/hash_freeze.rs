@@ -12,8 +12,12 @@
 use kiln_config::Options;
 use std::path::{Path, PathBuf};
 
-/// Frozen at hash epoch 2 — `boot.loader` now defaults to `grub2` rather than
-/// `systemd-boot`, which is a different image, so every identity moved.
+/// Frozen at hash epoch 4 — `kernel.dracut_modules` joined `Kernel`'s
+/// canonical encoding. dracut's default, non-hostonly module selection does
+/// not include every module whose package is installed, so which dracut
+/// modules a build requests is genuinely part of the image; that moved all
+/// five fixtures together, which is what says it was a schema change rather
+/// than a module content change (see cause (c) below).
 /// Do not "fix" these by pasting new values.
 ///
 /// Three of these fixtures include shipped modules, so their identity depends on
@@ -52,29 +56,29 @@ use std::path::{Path, PathBuf};
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
-        "b3:ea7f29d517424a82a938072c4111aa8ea7ce8914ce6ec85ead0899387c2eb23b",
+        "b3:a33a09bf16a2108e5a57ec0f527101162a4da6cfc530b19292237a3cffa88fb6",
     ),
     (
         "minimal",
-        "b3:fad6c797af3d25650e33afbdd3444fbf7946648162456a0d349752f06737729c",
+        "b3:7aef83aed85a842a86412e1a039f4d9725d43597dfed99ca5fca4133c34a364d",
     ),
     (
         "order-independence-a",
-        "b3:170adbf0d27b6a4af061b37cc60736afa1d82746a2da451916a2e24add7ddfff",
+        "b3:dce901213dac0e3dd9eb9af128da296fa3658c48bd65c6b2ca2ba48e841c1f82",
     ),
     (
         "order-independence-b",
-        "b3:170adbf0d27b6a4af061b37cc60736afa1d82746a2da451916a2e24add7ddfff",
+        "b3:dce901213dac0e3dd9eb9af128da296fa3658c48bd65c6b2ca2ba48e841c1f82",
     ),
     (
         "workstation",
-        "b3:09520e424ae83f48c2d2ab03795bef4a47167e17f8296dd2e05a8f0c2c952f32",
+        "b3:16f6363f65a3425f29b53c2c41606a8267bdd8bd83f9ba52c7cd5af58a9c389b",
     ),
 ];
 
 /// The epoch the values above were taken at. Changing `HASH_EPOCH` without
 /// changing this is the mistake this constant exists to catch.
-const FROZEN_AT_EPOCH: u32 = 3;
+const FROZEN_AT_EPOCH: u32 = 4;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

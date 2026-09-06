@@ -466,6 +466,7 @@ impl Validator<'_> {
             package: self.string(doc, "kernel.package", "linux"),
             headers: self.bool(doc, "kernel.headers", false),
             cmdline: self.str_set(doc, "kernel.cmdline"),
+            dracut_modules: self.str_set(doc, "kernel.dracut_modules"),
             modules: KernelModules {
                 load: self.str_set(doc, "kernel.modules.load"),
                 blacklist: self.str_set(doc, "kernel.modules.blacklist"),

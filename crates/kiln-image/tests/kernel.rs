@@ -8,6 +8,7 @@ mod scratch;
 
 use kiln_image::kernel::{self, Kernel};
 use kiln_sandbox::{Network, Sandbox};
+use std::collections::BTreeSet;
 
 fn image_with_kernel(name: &str, kver: &str) -> std::path::PathBuf {
     let root = scratch::root(name);
@@ -116,7 +117,7 @@ fn placing_vmlinuz_falls_back_to_boot() {
 fn dracut_is_reproducible_host_independent_and_offline() {
     let root = image_with_kernel("kernel-dracut", "6.19.2-arch1-1");
     let kernel = kernel::find(&root).unwrap();
-    let spec = kernel::dracut_spec(&root, &kernel);
+    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new());
 
     assert_eq!(spec.network, Network::Disabled);
     assert_eq!(
@@ -142,12 +143,33 @@ fn dracut_is_reproducible_host_independent_and_offline() {
 fn the_initramfs_path_is_image_absolute() {
     let root = image_with_kernel("kernel-paths", "6.19.2-arch1-1");
     let kernel = kernel::find(&root).unwrap();
-    let spec = kernel::dracut_spec(&root, &kernel);
+    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new());
     assert_eq!(
         spec.command.last().unwrap(),
         "/usr/lib/modules/6.19.2-arch1-1/initramfs.img"
     );
     assert_eq!(spec.root, root);
+}
+
+/// `kernel.dracut_modules` from the manifest becomes an extra `--add` each,
+/// alongside the always-requested `DRACUT_MODULE` — dracut's default,
+/// non-hostonly selection does not pull in every module whose package is
+/// present, so a module Kiln wants in the initramfs has to be named.
+#[test]
+fn extra_dracut_modules_are_each_added() {
+    let root = image_with_kernel("kernel-extra-modules", "6.19.2-arch1-1");
+    let kernel = kernel::find(&root).unwrap();
+    let extra: BTreeSet<String> = ["plymouth".to_string(), "resume".to_string()].into();
+    let spec = kernel::dracut_spec(&root, &kernel, &extra);
+
+    let adds: Vec<&str> = spec
+        .command
+        .iter()
+        .zip(spec.command.iter().skip(1))
+        .filter(|(a, _)| *a == "--add")
+        .map(|(_, m)| m.as_str())
+        .collect();
+    assert_eq!(adds, vec![kernel::DRACUT_MODULE, "plymouth", "resume"]);
 }
 
 /// The whole argv, once, so that a change to the isolation is visible in a
@@ -157,7 +179,9 @@ fn the_full_dracut_command_line() {
     let root = image_with_kernel("kernel-argv", "6.19.2-arch1-1");
     let kernel = kernel::find(&root).unwrap();
     let bwrap = kiln_sandbox::Bubblewrap::new(root.join("../scratch"));
-    let argv = bwrap.argv(&kernel::dracut_spec(&root, &kernel)).unwrap();
+    let argv = bwrap
+        .argv(&kernel::dracut_spec(&root, &kernel, &BTreeSet::new()))
+        .unwrap();
     // The staging root's path varies per machine; the rest must not.
     let rendered = argv.join(" ").replace(root.to_str().unwrap(), "<root>");
     insta::assert_snapshot!(rendered);

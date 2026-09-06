@@ -13,6 +13,7 @@
 
 use crate::tree::{self, Result};
 use kiln_sandbox::SandboxSpec;
+use std::collections::BTreeSet;
 use std::path::Path;
 
 /// The one string that decides whether an image boots. The
@@ -116,28 +117,37 @@ pub fn depmod_spec(root: &Path, kernel: &Kernel) -> SandboxSpec {
 /// modules the *builder* needs to boot, which is a different set from the ones
 /// the target needs, and the difference only shows up as a machine that does
 /// not come up.
-pub fn dracut_spec(root: &Path, kernel: &Kernel) -> SandboxSpec {
-    SandboxSpec::in_root(
-        root,
-        [
-            "dracut".to_string(),
-            "--force".into(),
-            "--no-hostonly".into(),
-            "--no-hostonly-cmdline".into(),
-            "--reproducible".into(),
-            "--kver".into(),
-            kernel.version.clone(),
-            "--add".into(),
-            DRACUT_MODULE.into(),
-            format!("/{}", kernel.initramfs()),
-        ],
-    )
-    // `in_root` already binds /dev, /proc and /sys, which dracut needs, and
-    // already refuses the network, which it does not. `SOURCE_DATE_EPOCH` is
-    // in `default_env` for the same reason; setting it here too is saying it
-    // twice, and names it explicitly enough that a reader should be able
-    // to find it in this function.
-    .with_env("SOURCE_DATE_EPOCH", "0")
+///
+/// `extra_modules` is `kernel.dracut_modules` from the manifest. Non-hostonly
+/// mode does not include every module whose package is present — a module can
+/// return "available but not automatic" from its own `check()`, as Plymouth's
+/// does — so a module wanted in the initramfs has to be named, the same way
+/// `DRACUT_MODULE` always is.
+pub fn dracut_spec(root: &Path, kernel: &Kernel, extra_modules: &BTreeSet<String>) -> SandboxSpec {
+    let mut argv = vec![
+        "dracut".to_string(),
+        "--force".into(),
+        "--no-hostonly".into(),
+        "--no-hostonly-cmdline".into(),
+        "--reproducible".into(),
+        "--kver".into(),
+        kernel.version.clone(),
+        "--add".into(),
+        DRACUT_MODULE.into(),
+    ];
+    for module in extra_modules {
+        argv.push("--add".into());
+        argv.push(module.clone());
+    }
+    argv.push(format!("/{}", kernel.initramfs()));
+
+    SandboxSpec::in_root(root, argv)
+        // `in_root` already binds /dev, /proc and /sys, which dracut needs, and
+        // already refuses the network, which it does not. `SOURCE_DATE_EPOCH` is
+        // in `default_env` for the same reason; setting it here too is saying it
+        // twice, and names it explicitly enough that a reader should be able
+        // to find it in this function.
+        .with_env("SOURCE_DATE_EPOCH", "0")
 }
 
 /// `lsinitrd`, inside the image, over the image's own initramfs.

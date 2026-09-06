@@ -32,7 +32,7 @@ use kiln_manifest::{Manifest, ScriptPhase};
 use kiln_record::Record;
 use kiln_resolve::{BuildPlan, EnableState, ResolvedInput};
 use kiln_sandbox::{Sandbox, SandboxSpec, Shim};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// Where Kiln describes itself inside the image. step 11.
@@ -237,7 +237,11 @@ pub fn assemble(
     drop(session);
 
     // 9 ─────────────────────────────────────────────────────────────────────
-    report.kernel = Some(build_kernel(root, sandbox)?);
+    report.kernel = Some(build_kernel(
+        root,
+        sandbox,
+        &manifest.kernel.dracut_modules,
+    )?);
 
     // 10 ────────────────────────────────────────────────────────────────────
     // Captured *before* normalization: this reads `etc/passwd`, and after step
@@ -355,12 +359,16 @@ pub fn unit_states(plan: &BuildPlan) -> BTreeMap<String, EnableState> {
 }
 
 /// Kernel assembly, steps 1–6.
-fn build_kernel(root: &Path, sandbox: &dyn Sandbox) -> Result<kernel::Kernel> {
+fn build_kernel(
+    root: &Path,
+    sandbox: &dyn Sandbox,
+    dracut_modules: &BTreeSet<String>,
+) -> Result<kernel::Kernel> {
     let found = kernel::find(root)?;
     kernel::place_vmlinuz(root, &found)?;
 
     run(sandbox, &kernel::depmod_spec(root, &found))?;
-    run(sandbox, &kernel::dracut_spec(root, &found))?;
+    run(sandbox, &kernel::dracut_spec(root, &found, dracut_modules))?;
 
     let listing = run(sandbox, &kernel::verify_spec(root, &found))?;
     kernel::initramfs_is_bootable(&listing).map_err(tree::shape)?;

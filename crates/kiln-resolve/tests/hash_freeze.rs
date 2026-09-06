@@ -16,10 +16,12 @@ use kiln_resolve::{
     UidMap, VolatileInput,
 };
 
-/// Frozen at hash epoch 3. `plan_id` embeds `HASH_EPOCH` directly, so an epoch
+/// Frozen at hash epoch 4. `plan_id` embeds `HASH_EPOCH` directly, so an epoch
 /// bump moves it whether or not anything about a *plan* changed — which is the
-/// intent: the epoch exists to invalidate every cached identity at once.
-const FROZEN_AT_EPOCH: u32 = 3;
+/// intent: the epoch exists to invalidate every cached identity at once. This
+/// bump was `kernel.dracut_modules` joining `Kernel`'s canonical encoding; see
+/// `kiln-config`'s `hash_freeze.rs` for why.
+const FROZEN_AT_EPOCH: u32 = 4;
 
 /// The plan as phase 2 could express it: repository packages, a file and a
 /// unit.
@@ -167,7 +169,7 @@ fn plan_id_is_frozen() {
     let got = specimen().plan_id();
     assert_eq!(
         got.to_string(),
-        "b3:171b3134f8cf9c80955e7fdea05e56a0f213524f1400e832cc18d1ec2823410d",
+        "b3:c6b275aad00fcb923c1b3fe96f74eba2b0809b676b85e141e0208d24962278b4",
         "\n\
          `plan_id` changed. There are exactly two legitimate causes:\n\
          \n\
@@ -196,7 +198,7 @@ fn plan_id_is_frozen() {
 fn the_phase_three_input_kinds_did_not_move_a_phase_two_plan() {
     assert_eq!(
         specimen().plan_id().to_string(),
-        "b3:171b3134f8cf9c80955e7fdea05e56a0f213524f1400e832cc18d1ec2823410d",
+        "b3:c6b275aad00fcb923c1b3fe96f74eba2b0809b676b85e141e0208d24962278b4",
         "\nthis is the value frozen at epoch 3 with the phase-3 kinds already present: adding an input kind must not \
          invalidate a plan that uses none of it\n"
     );
@@ -207,7 +209,7 @@ fn the_phase_three_input_kinds_are_frozen_too() {
     assert_eq!(HASH_EPOCH, FROZEN_AT_EPOCH);
     assert_eq!(
         phase_three_specimen().plan_id().to_string(),
-        "b3:25ce5f46138d3aa4e27a16ab46763951f318887706e1258e53b3f4510b99fe64",
+        "b3:2eb39da992b2ccadeaf3c3d970862ac1334b07b77cc5358ac12fe27f1e39a761",
         "\nsee `plan_id_is_frozen` for the two legitimate reasons this can change\n"
     );
 }
@@ -346,7 +348,7 @@ fn a_build_script_reaches_the_identity_by_text_and_by_phase() {
     let baseline = specimen().plan_id();
     assert_eq!(
         baseline.to_string(),
-        "b3:171b3134f8cf9c80955e7fdea05e56a0f213524f1400e832cc18d1ec2823410d",
+        "b3:c6b275aad00fcb923c1b3fe96f74eba2b0809b676b85e141e0208d24962278b4",
         "the specimen has no scripts, so adding the kind must not have moved it"
     );
 

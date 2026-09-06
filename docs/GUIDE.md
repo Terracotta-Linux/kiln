@@ -236,9 +236,10 @@ file    = [{ path = "packages/myapp-1.0-1-x86_64.pkg.tar.zst", sha256 = "9f2c…
 exclude = ["nano"]                        # must not appear, even as a dependency
 
 [kernel]
-package = "linux"
-headers = true
-cmdline = ["quiet", "amd_iommu=on"]
+package        = "linux"
+headers        = true
+cmdline        = ["quiet", "amd_iommu=on"]
+dracut_modules = ["plymouth"]              # dracut modules to --add beyond ostree
 
 [kernel.modules]
 load      = ["v4l2loopback"]
