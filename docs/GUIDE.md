@@ -288,12 +288,12 @@ one out, and why.
 
 ## The module library
 
-Kiln ships around forty modules in `/usr/share/kiln/modules`, included by name:
+Kiln ships around fifty modules in `/usr/share/kiln/modules`, included by name:
 
 ```
 @kiln/profiles/    minimal · workstation · server
 @kiln/kernel/      linux · linux-lts · linux-zen · linux-hardened · linux-rt
-@kiln/boot/        grub2
+@kiln/boot/        grub2 · plymouth
 @kiln/net/         networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale
 @kiln/gpu/         nvidia-open · nvidia-open-lts · nvidia-cuda · amd · amd-rocm · intel
 @kiln/desktop/     gnome-minimal · gnome · gnome-full
@@ -306,6 +306,7 @@ Kiln ships around forty modules in `/usr/share/kiln/modules`, included by name:
 @kiln/virt/        libvirt · podman · docker
 @kiln/dev/         base-devel · rust · go
 @kiln/security/    wheel-sudo · apparmor
+@kiln/terracotta/  kiln · installer · branding · branding-plymouth
 ```
 
 A module is a small TOML file with no magic in it. This is the whole of

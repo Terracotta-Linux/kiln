@@ -1,0 +1,6 @@
+# Plymouth, the boot splash. No theme here — that is a branding decision,
+# not a boot one; see @kiln/terracotta/branding-plymouth.
+kiln = 1
+
+[packages]
+repo = ["plymouth"]

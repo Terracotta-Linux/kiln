@@ -4,3 +4,7 @@ kiln = 1
 [[packages.file]]
 path = "https://github.com/Terracotta-Linux/terracotta-branding/releases/latest/download/terracotta-branding-any.pkg.tar.zst"
 sha256 = "https://github.com/Terracotta-Linux/terracotta-branding/releases/latest/download/terracotta-branding-any.pkg.tar.zst.sha256"
+
+[[packages.file]]
+path = "https://github.com/Terracotta-Linux/terracotta-branding/releases/latest/download/terracotta-branding-wallpapers-any.pkg.tar.zst"
+sha256 = "https://github.com/Terracotta-Linux/terracotta-branding/releases/latest/download/terracotta-branding-wallpapers-any.pkg.tar.zst.sha256"
