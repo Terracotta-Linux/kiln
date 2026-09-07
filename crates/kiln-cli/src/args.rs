@@ -128,6 +128,7 @@ Global
   --allow-external-sources        permit sources outside the config root
   --module-root <path>            override /usr/share/kiln/modules
   -v, --verbose
+  -V, --version                   print the version and exit
 ";
 
 pub fn parse(argv: &[String]) -> Result<Cli, String> {
@@ -159,6 +160,22 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
                     format!("`--keep {value}` is not a number of generations to keep")
                 })?;
             }
+            // `--version`/`-V` and `--help`/`-h` answer regardless of position,
+            // like every other CLI they'll be typed alongside — not just as the
+            // first word, which is all the `verb` match below would catch since
+            // anything starting with `-` never reaches `positional`.
+            "--version" | "-V" => {
+                return Ok(Cli {
+                    global,
+                    command: Command::Version,
+                })
+            }
+            "--help" | "-h" => {
+                return Ok(Cli {
+                    global,
+                    command: Command::Help,
+                })
+            }
             s if s.starts_with('-') => flags.push(s.to_string()),
             s => positional.push(s.to_string()),
         }
@@ -169,8 +186,7 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
 
     let command = match verb {
         "help" | "" => Command::Help,
-        "--help" | "-h" => Command::Help,
-        "version" | "--version" => Command::Version,
+        "version" => Command::Version,
         "check" => Command::Check {
             offline: has("--offline"),
             deep: has("--deep"),

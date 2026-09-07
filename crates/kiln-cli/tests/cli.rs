@@ -72,6 +72,29 @@ fn help_lists_every_command_the_design_promises() {
     }
 }
 
+#[test]
+fn version_answers_at_any_position_not_just_as_the_verb() {
+    // `--version`/`-V` start with `-`, so unlike the bare `version` verb they
+    // never land in `positional` — they have to be caught before that split.
+    let plain = kiln(&["version"]);
+    assert_eq!(code(&plain), 0);
+    let text = stdout(&plain);
+    assert!(
+        text.starts_with("kiln "),
+        "unexpected version output: {text}"
+    );
+
+    for args in [
+        vec!["--version"],
+        vec!["-V"],
+        vec!["--sysroot", "/tmp", "--version"],
+    ] {
+        let out = kiln(&args);
+        assert_eq!(code(&out), 0, "{args:?} exited nonzero");
+        assert_eq!(stdout(&out), text, "{args:?} did not match `kiln version`");
+    }
+}
+
 /// generations are the only IDs the CLI accepts, and it says why rather
 /// than just refusing. Someone who typed an OSTree index has a specific wrong
 /// model, and the message is the only chance to correct it.
