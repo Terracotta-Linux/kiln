@@ -28,10 +28,10 @@ target
 /tests/repo-fixture/repo/
 /tests/repo-fixture/.work/
 
-# makepkg build artifacts, and .SRCINFO (only needed for AUR, which this
-# is not). The PKGBUILD is the source; these are not.
-/packaging/pkg/
-/packaging/src/
-/packaging/*.pkg.tar.zst
-/packaging/*.pkg.tar.zst.sig
-/packaging/.SRCINFO
+# The PKGBUILD is the source; everything else that appears here is makepkg's
+# output — pkg/, src/, the built packages, and the git clone of the tag being
+# packaged, whose name follows $pkgname-$pkgver and so cannot be matched once
+# and for all. An allowlist, so a new kind of build artifact is ignored by
+# default and anything genuinely belonging to the package has to say so.
+/packaging/*
+!/packaging/PKGBUILD
