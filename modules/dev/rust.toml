@@ -6,4 +6,4 @@
 kiln = 1
 
 [packages]
-repo = ["rust"]
+repo = ["rust", "rust-src", "rust-analyzer", "rust-wasm"]

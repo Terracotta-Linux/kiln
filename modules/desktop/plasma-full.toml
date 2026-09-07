@@ -6,10 +6,10 @@ kiln = 1
 
 [packages]
 repo = [
-  "plasma-desktop", "sddm", "xdg-desktop-portal-kde",
+  "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
   "konsole", "kcalc", "korganizer",
   "plasma-meta",
 ]
 
 [systemd]
-enable = ["sddm.service"]
+enable = ["plasmalogin.service"]

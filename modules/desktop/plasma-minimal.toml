@@ -4,7 +4,7 @@
 kiln = 1
 
 [packages]
-repo = ["plasma-desktop", "sddm", "xdg-desktop-portal-kde"]
+repo = ["plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde"]
 
 [systemd]
-enable = ["sddm.service"]
+enable = ["plasmalogin.service"]
