@@ -55,11 +55,87 @@ impl Line {
                 mode,
                 user,
                 group,
-            } => format!("d {path} {mode:04o} {user} {group} -"),
-            Line::Copy { path } => format!("C {path} - - - -"),
-            Line::Link { path, target } => format!("L {path} - - - - {target}"),
+            } => format!("d {} {mode:04o} {user} {group} -", field(path)),
+            Line::Copy { path } => format!("C {} - - - -", field(path)),
+            Line::Link { path, target } => {
+                format!("L {} - - - - {}", field(path), argument(target))
+            }
         }
     }
+}
+
+/// One field of a `tmpfiles.d` line, escaped so systemd reads back exactly the
+/// bytes that are on disk.
+///
+/// This module used to refuse a path containing whitespace, on the belief that
+/// `tmpfiles.d` was whitespace-separated with no quoting. It is not:
+/// systemd extracts each field with unquoting and C-style unescaping, and
+/// **then** expands `%` specifiers in the result. Two passes, in that order,
+/// which is why `%` is doubled here rather than backslash-escaped — the
+/// specifier pass runs after the quotes are already gone, so a backslash would
+/// never reach it.
+///
+/// The refusal failed a real image: VSCodium ships
+/// `.../syntaxes/Regular Expressions (JavaScript).tmLanguage` into `/opt`,
+/// which on an OSTree system is `/var/opt`, and one file with a space in its
+/// name stopped the whole build after 697 packages had been fetched and an AUR
+/// package built.
+///
+/// Bare where it can be, quoted where it must: an unquoted path keeps the
+/// generated fragment readable, and the vast majority of `/var` needs nothing.
+fn field(value: &str) -> String {
+    let awkward = |c: char| c.is_whitespace() || c.is_control() || matches!(c, '"' | '\'' | '\\');
+    let quoted = value.is_empty() || value.contains(awkward);
+
+    let mut out = String::with_capacity(value.len() + 2);
+    if quoted {
+        out.push('"');
+    }
+    for c in value.chars() {
+        match c {
+            // Doubled for the specifier pass, quoted or not.
+            '%' => out.push_str("%%"),
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\x{:02x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    if quoted {
+        out.push('"');
+    }
+    out
+}
+
+/// The *trailing* field — a symlink's target — which systemd parses by a
+/// different rule, discovered by handing it one and reading back what it made.
+///
+/// It is the rest of the line, so it is never unquoted: a target written
+/// `"a b"` becomes a link to a name with the quotes in it. C-style escapes are
+/// still applied (`back\slash` links to `back lash`, because `\s` is a space)
+/// and `%` specifiers are still expanded, so both still have to be escaped —
+/// and whitespace goes through the escapes rather than the quotes, which also
+/// settles a leading or trailing space that being "the rest of the line" would
+/// otherwise trim away.
+fn argument(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '%' => out.push_str("%%"),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_whitespace() || c.is_control() => {
+                out.push_str(&format!("\\x{:02x}", c as u32))
+            }
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone)]
@@ -202,16 +278,6 @@ fn walk(
             .map_err(tree::io("inspecting", &entry))?;
         let rel = entry.strip_prefix(var).expect("walking inside /var");
         let image_path = format!("/var/{}", rel.to_string_lossy());
-
-        // tmpfiles.d is whitespace-separated with no quoting that helps here,
-        // so a path containing a space cannot be expressed. Failing is right:
-        // silently omitting it would lose the directory at boot.
-        if image_path.contains(char::is_whitespace) {
-            return Err(tree::shape(format!(
-                "`{image_path}` contains whitespace and cannot be expressed in \
-                 tmpfiles.d, so /var could not be recreated at boot"
-            )));
-        }
 
         if let Some((_, why)) = DROP_ENTIRELY.iter().find(|(p, _)| *p == image_path) {
             plan.dropped.push((image_path, why));

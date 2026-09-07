@@ -176,18 +176,111 @@ fn a_package_that_ships_a_default_directory_wins_over_the_default() {
     );
 }
 
-/// tmpfiles.d is whitespace-separated. Failing is right: silently omitting the
-/// path would lose the directory at boot, which is the failure mode this whole
-/// module exists to avoid.
+/// Regression test: VSCodium ships
+/// `.../syntaxes/Regular Expressions (JavaScript).tmLanguage` into `/opt`,
+/// which on an OSTree system is `/var/opt`. The drain refused any path
+/// containing whitespace, on the belief that `tmpfiles.d` could not express
+/// one — so a single file name stopped a build dead after 697 packages had
+/// been fetched and an AUR package built. It can: systemd unquotes and
+/// unescapes each field.
 #[test]
-fn a_path_that_cannot_be_expressed_fails_rather_than_being_skipped() {
+fn a_path_with_whitespace_is_quoted_rather_than_refused() {
     let root = root("drain-whitespace");
     account_files(&root);
     dir(&root, "var/lib/bad name", 0o755);
+    file(
+        &root,
+        "var/lib/bad name/Regular Expressions (JavaScript).tmLanguage",
+        "{}\n",
+        0o644,
+    );
 
-    let err = drain::plan(&root).unwrap_err().to_string();
-    assert!(err.contains("whitespace"), "got: {err}");
-    assert!(err.contains("bad name"), "got: {err}");
+    let rendered = drain::plan(&root).unwrap().render();
+    assert!(
+        rendered.contains(r#"d "/var/lib/bad name" 0755 root root -"#),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains(
+            r#"C "/var/lib/bad name/Regular Expressions (JavaScript).tmLanguage" - - - -"#
+        ),
+        "{rendered}"
+    );
+    // Quoted only where it has to be: an unquoted path keeps the fragment
+    // readable, and almost nothing in /var needs the quotes.
+    assert!(
+        rendered.contains("d /var/home 0755 root root -"),
+        "{rendered}"
+    );
+}
+
+/// The escaping is only correct if *systemd* agrees, so this asks it rather
+/// than asserting on a string a human reasoned about: drain a root full of
+/// awkward names, hand the fragment to the real `systemd-tmpfiles`, and check
+/// every path comes back byte for byte.
+///
+/// The exit status is deliberately not the assertion. Chowning to `root` needs
+/// root, and that failure says nothing about the escaping — while a field
+/// systemd cannot parse creates nothing at all, so the names are the evidence
+/// either way.
+#[test]
+fn systemd_tmpfiles_recreates_the_awkward_names_exactly() {
+    if std::process::Command::new("systemd-tmpfiles")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        eprintln!("skipped: systemd-tmpfiles is not installed");
+        return;
+    }
+    let root = root("drain-tmpfiles-roundtrip");
+    account_files(&root);
+
+    // Whitespace, and then the three that quoting alone does not settle: `%`
+    // is expanded *after* unquoting, and a backslash or a quote inside quotes
+    // has to survive the unescaping pass intact.
+    let dirs = [
+        "Regular Expressions (JavaScript).tmLanguage",
+        "100% done",
+        // No whitespace, so it stays unquoted — and still has to be doubled,
+        // because the specifier pass does not care about quotes.
+        "pct%only",
+        "back\\slash",
+        "double\"quote",
+        "single'quote",
+        "tab\there",
+        "new\nline",
+    ];
+    for name in dirs {
+        dir(&root, &format!("var/lib/{name}"), 0o755);
+    }
+    file(&root, "var/lib/a file.db", "seed\n", 0o644);
+    link(&root, "var/a link", "../run/some place");
+
+    let plan = drain::plan(&root).unwrap();
+    drain::apply(&root, &plan).unwrap();
+    let out = std::process::Command::new("systemd-tmpfiles")
+        .arg("--create")
+        .arg(format!("--root={}", root.display()))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("Failed to parse") && !stderr.contains("Invalid argument"),
+        "systemd could not parse what the drain wrote:\n{stderr}\n\n{}",
+        plan.render()
+    );
+
+    for name in dirs {
+        let at = root.join("var/lib").join(name);
+        assert!(at.is_dir(), "{name:?} was not recreated\n{stderr}");
+    }
+    assert!(root.join("var/lib/a file.db").is_file(), "{stderr}");
+    assert_eq!(
+        std::fs::read_link(root.join("var/a link")).unwrap(),
+        std::path::Path::new("../run/some place"),
+        "{stderr}"
+    );
 }
 
 /// anything large going into the factory means a package is shipping
