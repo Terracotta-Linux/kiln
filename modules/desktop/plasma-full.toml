@@ -8,7 +8,7 @@ kiln = 1
 repo = [
   "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
   "konsole", "kcalc", "korganizer",
-  "plasma-meta",
+  "plasma-meta", "plasma-workspace-wallpapers", "breeze-gtk",
 ]
 
 [systemd]

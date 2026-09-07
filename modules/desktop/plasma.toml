@@ -10,7 +10,7 @@ repo = [
   "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
   "konsole", "kcalc", "kinfocenter", "dolphin",
   "kscreen", "plasma-nm", "plasma-pa", "bluedevil", "kpipewire",
-  "kdeplasma-addons",
+  "kdeplasma-addons", "plasma-workspace-wallpapers", "breeze-gtk",
 ]
 
 [systemd]
