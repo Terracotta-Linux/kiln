@@ -1,0 +1,7 @@
+# Distrobox: containers that feel like the host, not a shell into one. It is
+# a wrapper, not a runtime — it needs @kiln/virt/podman or @kiln/virt/docker
+# (or @kiln/virt/lilipod) already on the machine to actually launch anything.
+kiln = 1
+
+[packages]
+repo = ["distrobox"]

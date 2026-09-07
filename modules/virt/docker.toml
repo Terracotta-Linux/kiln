@@ -4,7 +4,7 @@
 kiln = 1
 
 [packages]
-repo = ["docker", "docker-buildx"]
+repo = ["docker", "docker-buildx", "docker-compose"]
 
 [systemd]
 enable = ["docker.service"]

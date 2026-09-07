@@ -1,0 +1,6 @@
+# A single static binary standing in for @kiln/virt/podman: no daemon, no
+# libpod, just enough OCI runtime for @kiln/virt/distrobox to drive. AUR-only.
+kiln = 1
+
+[packages]
+aur = ["lilipod"]
