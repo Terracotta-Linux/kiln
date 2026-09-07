@@ -58,6 +58,13 @@ pub const WORK_DIR: &str = "/build/work";
 /// `Bind::kernel_filesystems` default already remounts it as a private,
 /// writable tmpfs before any of these binds are processed, so phase 1 nests
 /// its mountpoints there instead of inventing a new top-level directory.
+///
+/// `LIVE_ROOT_BUILD_DIR` needs the same bind-mounted-real-directory treatment
+/// as `LIVE_ROOT_SOURCE_DIR`, not just an env var: bubblewrap only creates the
+/// *targets* of binds it is given, so a bare `--tmpfs /tmp` never produces
+/// `/tmp/kiln-live/work` on its own, and `makepkg` refuses to start with
+/// "Failed to create the directory $BUILDDIR" before it ever reaches a
+/// PKGBUILD. `Builder::fetch_work_dir` is that real directory.
 pub const LIVE_ROOT_RECIPE_DIR: &str = "/tmp/kiln-live/recipe";
 pub const LIVE_ROOT_SOURCE_DIR: &str = "/tmp/kiln-live/sources";
 pub const LIVE_ROOT_BUILD_DIR: &str = "/tmp/kiln-live/work";
@@ -108,6 +115,7 @@ impl Builder {
         .with_network(Network::Enabled)
         .with_bind(Bind::ro(&recipe.dir, LIVE_ROOT_RECIPE_DIR))
         .with_bind(Bind::rw(&self.source_cache, LIVE_ROOT_SOURCE_DIR))
+        .with_bind(Bind::rw(self.fetch_work_dir(recipe), LIVE_ROOT_BUILD_DIR))
         .with_user(SandboxUser::Unprivileged {
             uid: BUILD_UID,
             gid: BUILD_GID,
@@ -177,6 +185,13 @@ impl Builder {
         self.work_dir.join(&recipe.meta.pkgbase).join("out")
     }
 
+    /// `BUILDDIR`'s real backing directory for phase 1 — see
+    /// `LIVE_ROOT_BUILD_DIR`. Per-recipe, like `output_dir`, so two recipes
+    /// realized one after another never share scratch state.
+    fn fetch_work_dir(&self, recipe: &Recipe) -> PathBuf {
+        self.work_dir.join(&recipe.meta.pkgbase).join("fetch-work")
+    }
+
     /// Put one symlink per fetched source into the build root's `SRCDEST`,
     /// pointing into the read-only cache.
     ///
@@ -229,12 +244,14 @@ impl Builder {
             });
         }
 
-        // Both belong to the build user: it writes the finished packages into
-        // one and the fetched sources into the other, as itself — the one
+        // All three belong to the build user: it writes the finished packages
+        // into the first, the fetched sources into the second, and phase 1's
+        // `$BUILDDIR`/`$HOME` scratch into the third, as itself — the one
         // exception — through a bind mount that carries the host's ownership
         // straight through.
         let output = self.output_dir(recipe);
-        for dir in [&output, &self.source_cache] {
+        let fetch_work = self.fetch_work_dir(recipe);
+        for dir in [&output, &self.source_cache, &fetch_work] {
             std::fs::create_dir_all(dir).map_err(|source| Error::Io {
                 doing: "preparing a build directory",
                 path: dir.clone(),

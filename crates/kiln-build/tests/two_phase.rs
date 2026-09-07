@@ -7,7 +7,8 @@
 //! without root, a network, or a real PKGBUILD taking four minutes to compile.
 
 use kiln_build::build::{
-    Builder, LIVE_ROOT_SOURCE_DIR, OUTPUT_DIR, RECIPE_DIR, SOURCE_CACHE_DIR, SOURCE_DIR,
+    Builder, LIVE_ROOT_BUILD_DIR, LIVE_ROOT_SOURCE_DIR, OUTPUT_DIR, RECIPE_DIR, SOURCE_CACHE_DIR,
+    SOURCE_DIR,
 };
 use kiln_build::{srcinfo, Recipe};
 use kiln_manifest::Hash;
@@ -138,6 +139,77 @@ fn the_source_cache_is_writable_while_fetching_and_read_only_while_building() {
     assert_eq!(
         mode_of(&builder.build_spec(&recipe, &dir.join("root")), OUTPUT_DIR),
         BindMode::ReadWrite
+    );
+}
+
+/// Regression test: `BUILDDIR` was set as an env var but, unlike `SRCDEST`,
+/// never bound to a real directory, so on an OSTree-deployed live root
+/// nothing ever created `/tmp/kiln-live/work` and `makepkg --verifysource`
+/// failed with "Failed to create the directory $BUILDDIR" before touching a
+/// single source.
+#[test]
+fn fetching_gives_builddir_a_real_writable_directory() {
+    let dir = scratch("build-fetch-builddir");
+    let builder = Builder::new(&dir);
+    let recipe = recipe(&dir);
+
+    let spec = builder.fetch_spec(&recipe);
+    let bind = spec
+        .binds
+        .iter()
+        .find(|b| b.target == Path::new(LIVE_ROOT_BUILD_DIR))
+        .expect("BUILDDIR must be backed by a bind mount, not just an env var");
+    assert_eq!(bind.mode, BindMode::ReadWrite);
+}
+
+/// The directory phase 1's `BUILDDIR` bind points at has to exist, and belong
+/// to the build user, before the sandbox ever runs — bubblewrap only creates
+/// the *targets* of binds, not the host-side sources.
+#[test]
+fn realizing_creates_the_builddir_before_fetching() {
+    let dir = scratch("build-builddir-created");
+    let builder = Builder::new(&dir);
+    let recipe = recipe(&dir);
+
+    struct AlwaysFails;
+    impl kiln_sandbox::Sandbox for AlwaysFails {
+        fn name(&self) -> &'static str {
+            "always-fails"
+        }
+        fn argv(&self, _: &kiln_sandbox::SandboxSpec) -> kiln_sandbox::Result<Vec<String>> {
+            Ok(Vec::new())
+        }
+        fn run(
+            &self,
+            spec: &kiln_sandbox::SandboxSpec,
+        ) -> kiln_sandbox::Result<kiln_sandbox::Outcome> {
+            Err(kiln_sandbox::Error::Failed {
+                command: spec.command.join(" "),
+                status: 1,
+                stderr: String::new(),
+            })
+        }
+    }
+
+    let _ = builder.realize(
+        &recipe,
+        &Hash("b3:cafe".into()),
+        &dir.join("root"),
+        &AlwaysFails,
+    );
+
+    let backing = builder
+        .fetch_spec(&recipe)
+        .binds
+        .iter()
+        .find(|b| b.target == Path::new(LIVE_ROOT_BUILD_DIR))
+        .unwrap()
+        .source
+        .clone();
+    assert!(
+        backing.is_dir(),
+        "BUILDDIR's backing directory must exist before the sandbox runs: {}",
+        backing.display()
     );
 }
 
