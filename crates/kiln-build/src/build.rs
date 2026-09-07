@@ -25,24 +25,42 @@ use kiln_sandbox::{Bind, Network, Sandbox, SandboxSpec, SandboxUser};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-/// Where things live inside a build sandbox. Fixed paths rather than generated
-/// ones, so a build log is the same on every machine and a `--keep-failed`
-/// sandbox is navigable without a map.
+/// Where phase 2 lives inside its build root. Fixed paths rather than
+/// generated ones, so a build log is the same on every machine and a
+/// `--keep-failed` sandbox is navigable without a map. Safe to invent
+/// unconditionally here because `BuildRoot::assemble` creates them itself
+/// before bubblewrap is asked to mount over them (see `root::INSIDE`) — the
+/// root is a directory Kiln owns.
 pub const RECIPE_DIR: &str = "/build/recipe";
-/// `SRCDEST`. In phase 1 this *is* the shared source cache, mounted writable,
-/// because fetching is what fills it. In phase 2 it is a directory of the build
-/// root's own, holding a symlink per source into `SOURCE_CACHE_DIR`.
+/// `SRCDEST` in phase 2: a directory of the build root's own, holding a
+/// symlink per source into `SOURCE_CACHE_DIR`.
 ///
-/// The two-step exists because `makepkg` refuses to start when `$SRCDEST` is
-/// not writable — it checks before it looks at whether there is anything to
-/// write — and a writable shared cache in phase 2 is a build that can poison
-/// every later build on the machine. Symlinks satisfy the check without
-/// handing over the bytes: the directory is the build's, the sources are not.
+/// Read-only would be simpler, but `makepkg` refuses to start when `$SRCDEST`
+/// is not writable — it checks before it looks at whether there is anything
+/// to write — and a writable shared cache in phase 2 is a build that can
+/// poison every later build on the machine. Symlinks satisfy the check
+/// without handing over the bytes: the directory is the build's, the sources
+/// are not.
 pub const SOURCE_DIR: &str = "/build/sources";
 /// The shared source cache, read-only, phase 2 only.
 pub const SOURCE_CACHE_DIR: &str = "/build/source-cache";
 pub const OUTPUT_DIR: &str = "/build/out";
 pub const WORK_DIR: &str = "/build/work";
+
+/// Where phase 1 mounts things, inside the *live* root rather than a build
+/// root Kiln owns — see `fetch_spec`. `/build` cannot be reused here: unlike
+/// `BuildRoot::assemble`, nothing pre-creates a `/build` on the live root, and
+/// on an OSTree-deployed system that root is immutable (`chattr +i`), so
+/// bubblewrap's own attempt to create the mountpoint fails with `Can't mkdir
+/// parents for /build/recipe: Operation not permitted` — not a permissions
+/// problem `sudo` can fix, since the flag rejects the write regardless of
+/// privilege. `/tmp` always exists on the live root, and `with_bind`'s
+/// `Bind::kernel_filesystems` default already remounts it as a private,
+/// writable tmpfs before any of these binds are processed, so phase 1 nests
+/// its mountpoints there instead of inventing a new top-level directory.
+pub const LIVE_ROOT_RECIPE_DIR: &str = "/tmp/kiln-live/recipe";
+pub const LIVE_ROOT_SOURCE_DIR: &str = "/tmp/kiln-live/sources";
+pub const LIVE_ROOT_BUILD_DIR: &str = "/tmp/kiln-live/work";
 
 /// The unprivileged user a build runs as.
 ///
@@ -88,20 +106,20 @@ impl Builder {
             ],
         )
         .with_network(Network::Enabled)
-        .with_bind(Bind::ro(&recipe.dir, RECIPE_DIR))
-        .with_bind(Bind::rw(&self.source_cache, SOURCE_DIR))
+        .with_bind(Bind::ro(&recipe.dir, LIVE_ROOT_RECIPE_DIR))
+        .with_bind(Bind::rw(&self.source_cache, LIVE_ROOT_SOURCE_DIR))
         .with_user(SandboxUser::Unprivileged {
             uid: BUILD_UID,
             gid: BUILD_GID,
         })
-        .with_env("SRCDEST", SOURCE_DIR)
-        .with_env("BUILDDIR", WORK_DIR)
+        .with_env("SRCDEST", LIVE_ROOT_SOURCE_DIR)
+        .with_env("BUILDDIR", LIVE_ROOT_BUILD_DIR)
         // The default is `/root`, which the build user cannot write to now that
         // it is a real unprivileged user rather than a remapped root. `makepkg`
         // and the tools it calls treat `$HOME` as scratch.
-        .with_env("HOME", WORK_DIR);
+        .with_env("HOME", LIVE_ROOT_BUILD_DIR);
         SandboxSpec {
-            workdir: Some(PathBuf::from(RECIPE_DIR)),
+            workdir: Some(PathBuf::from(LIVE_ROOT_RECIPE_DIR)),
             ..spec
         }
     }

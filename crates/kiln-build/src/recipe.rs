@@ -92,14 +92,18 @@ impl Recipe {
 /// and as an unprivileged user — `makepkg` refuses to run as root anyway, which
 /// for once is the behaviour we want.
 fn generate_srcinfo(dir: &Path, sandbox: &dyn Sandbox) -> Result<String, Error> {
+    // `/recipe` would need bubblewrap to create it fresh on the live root,
+    // which an OSTree-deployed system refuses (see
+    // `crate::build::LIVE_ROOT_RECIPE_DIR`) — so this reuses that same
+    // already-existing mountpoint under `/tmp` rather than inventing its own.
     let spec = SandboxSpec::in_root("/", ["makepkg".to_string(), "--printsrcinfo".to_string()])
-        .with_bind(Bind::ro(dir, "/recipe"))
+        .with_bind(Bind::ro(dir, crate::build::LIVE_ROOT_RECIPE_DIR))
         .with_user(SandboxUser::Unprivileged {
             uid: 1000,
             gid: 1000,
         });
     let spec = SandboxSpec {
-        workdir: Some(PathBuf::from("/recipe")),
+        workdir: Some(PathBuf::from(crate::build::LIVE_ROOT_RECIPE_DIR)),
         ..spec
     };
 

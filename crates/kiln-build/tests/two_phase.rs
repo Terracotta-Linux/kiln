@@ -6,7 +6,9 @@
 //! phase has the network*, and that is a property of the specs — checkable
 //! without root, a network, or a real PKGBUILD taking four minutes to compile.
 
-use kiln_build::build::{Builder, OUTPUT_DIR, RECIPE_DIR, SOURCE_CACHE_DIR, SOURCE_DIR};
+use kiln_build::build::{
+    Builder, LIVE_ROOT_SOURCE_DIR, OUTPUT_DIR, RECIPE_DIR, SOURCE_CACHE_DIR, SOURCE_DIR,
+};
 use kiln_build::{srcinfo, Recipe};
 use kiln_manifest::Hash;
 use kiln_sandbox::{BindMode, Network, SandboxUser};
@@ -101,7 +103,7 @@ fn the_source_cache_is_writable_while_fetching_and_read_only_while_building() {
     };
 
     assert_eq!(
-        mode_of(&builder.fetch_spec(&recipe), SOURCE_DIR),
+        mode_of(&builder.fetch_spec(&recipe), LIVE_ROOT_SOURCE_DIR),
         BindMode::ReadWrite,
         "phase 1 fills the cache, so SRCDEST is the cache itself"
     );
