@@ -48,26 +48,42 @@ pub const OUTPUT_DIR: &str = "/build/out";
 pub const WORK_DIR: &str = "/build/work";
 
 /// Where phase 1 mounts things, inside the *live* root rather than a build
-/// root Kiln owns — see `fetch_spec`. `/build` cannot be reused here: unlike
-/// `BuildRoot::assemble`, nothing pre-creates a `/build` on the live root, and
-/// on an OSTree-deployed system that root is immutable (`chattr +i`), so
-/// bubblewrap's own attempt to create the mountpoint fails with `Can't mkdir
-/// parents for /build/recipe: Operation not permitted` — not a permissions
-/// problem `sudo` can fix, since the flag rejects the write regardless of
-/// privilege. `/tmp` always exists on the live root, and `with_bind`'s
-/// `Bind::kernel_filesystems` default already remounts it as a private,
-/// writable tmpfs before any of these binds are processed, so phase 1 nests
-/// its mountpoints there instead of inventing a new top-level directory.
+/// root Kiln owns — see `fetch_spec`. Two constraints shape these paths, and
+/// each of them has been a shipped bug.
 ///
-/// `LIVE_ROOT_BUILD_DIR` needs the same bind-mounted-real-directory treatment
-/// as `LIVE_ROOT_SOURCE_DIR`, not just an env var: bubblewrap only creates the
-/// *targets* of binds it is given, so a bare `--tmpfs /tmp` never produces
-/// `/tmp/kiln-live/work` on its own, and `makepkg` refuses to start with
-/// "Failed to create the directory $BUILDDIR" before it ever reaches a
-/// PKGBUILD. `Builder::fetch_work_dir` is that real directory.
-pub const LIVE_ROOT_RECIPE_DIR: &str = "/tmp/kiln-live/recipe";
-pub const LIVE_ROOT_SOURCE_DIR: &str = "/tmp/kiln-live/sources";
-pub const LIVE_ROOT_BUILD_DIR: &str = "/tmp/kiln-live/work";
+/// `/build` cannot be reused here: unlike `BuildRoot::assemble`, nothing
+/// pre-creates a `/build` on the live root, and on an OSTree-deployed system
+/// that root is immutable (`chattr +i`), so bubblewrap's own attempt to create
+/// the mountpoint fails with `Can't mkdir parents for /build/recipe: Operation
+/// not permitted` — not a permissions problem `sudo` can fix, since the flag
+/// rejects the write regardless of privilege. `/tmp` always exists on the live
+/// root, and `with_bind`'s `Bind::kernel_filesystems` default already remounts
+/// it as a private tmpfs — 1777, for an unprivileged command — before any of
+/// these binds are processed.
+///
+/// **And they are flat: exactly one component under `/tmp`, never
+/// `/tmp/kiln-live/work`.** Bubblewrap creates the *target* of a bind, but it
+/// creates that target's missing *parents* as mode 0700 owned by whoever runs
+/// bubblewrap — root. Phase 1 then drops to `BUILD_UID`, which cannot traverse
+/// a 0700 root-owned directory, so every absolute path underneath is
+/// unreachable however the bind mount itself is set up: `makepkg` stops at
+/// "Failed to create the directory $BUILDDIR" — its `mkdir -p` gets `EACCES`,
+/// so the message names creation but the fault is the parent — before it ever
+/// reaches a PKGBUILD. A bind mounted straight onto a child of the 1777 tmpfs
+/// has no such parent, and takes its *source's* ownership.
+///
+/// `--chdir` is why this hid behind two other fixes: bubblewrap chdirs while
+/// still root, so a command that only uses paths relative to its workdir —
+/// `makepkg --printsrcinfo` in `recipe::generate_srcinfo` — runs happily from
+/// inside a directory it could not have reached by name.
+///
+/// `LIVE_ROOT_BUILD_DIR` also needs a real bind mount, not just an env var:
+/// bubblewrap creates the targets of the binds it is given and nothing else,
+/// so a bare `--tmpfs /tmp` never produces a `$BUILDDIR` at all.
+/// `Builder::fetch_work_dir` is the directory behind it.
+pub const LIVE_ROOT_RECIPE_DIR: &str = "/tmp/kiln-live-recipe";
+pub const LIVE_ROOT_SOURCE_DIR: &str = "/tmp/kiln-live-sources";
+pub const LIVE_ROOT_BUILD_DIR: &str = "/tmp/kiln-live-work";
 
 /// The unprivileged user a build runs as.
 ///
@@ -122,6 +138,25 @@ impl Builder {
         })
         .with_env("SRCDEST", LIVE_ROOT_SOURCE_DIR)
         .with_env("BUILDDIR", LIVE_ROOT_BUILD_DIR)
+        // Every directory makepkg might write to is named here, and the
+        // invariant is what matters more than any one of them: nothing in
+        // phase 1 may be left to default, because the default is `$startdir` —
+        // the recipe directory, bound read-only precisely so that a fetch
+        // cannot edit the PKGBUILD its `build_key` was computed from.
+        //
+        // `PKGDEST` is the one that bites: makepkg checks it for writability
+        // up front, before it works out that this run will not produce a
+        // package, so `--verifysource` stops at "You do not have write
+        // permission for the directory $PKGDEST" without fetching anything.
+        // `SRCPKGDEST` and `LOGDEST` are only checked under `--source` and
+        // `-L`, which phase 1 does not pass — they are set so that stays a
+        // fact about makepkg's flags rather than something this spec depends
+        // on. All three point at the scratch phase 1 is allowed to dirty; the
+        // real artifacts are phase 2's `OUTPUT_DIR`, which phase 1 must not be
+        // able to write into at all.
+        .with_env("PKGDEST", LIVE_ROOT_BUILD_DIR)
+        .with_env("SRCPKGDEST", LIVE_ROOT_BUILD_DIR)
+        .with_env("LOGDEST", LIVE_ROOT_BUILD_DIR)
         // The default is `/root`, which the build user cannot write to now that
         // it is a real unprivileged user rather than a remapped root. `makepkg`
         // and the tools it calls treat `$HOME` as scratch.

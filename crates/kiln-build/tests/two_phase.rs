@@ -144,7 +144,7 @@ fn the_source_cache_is_writable_while_fetching_and_read_only_while_building() {
 
 /// Regression test: `BUILDDIR` was set as an env var but, unlike `SRCDEST`,
 /// never bound to a real directory, so on an OSTree-deployed live root
-/// nothing ever created `/tmp/kiln-live/work` and `makepkg --verifysource`
+/// nothing ever created a `$BUILDDIR` on it and `makepkg --verifysource`
 /// failed with "Failed to create the directory $BUILDDIR" before touching a
 /// single source.
 #[test]
@@ -160,6 +160,67 @@ fn fetching_gives_builddir_a_real_writable_directory() {
         .find(|b| b.target == Path::new(LIVE_ROOT_BUILD_DIR))
         .expect("BUILDDIR must be backed by a bind mount, not just an env var");
     assert_eq!(bind.mode, BindMode::ReadWrite);
+}
+
+/// Regression test: every directory `makepkg` might write to has to be named
+/// in phase 1, not left to default.
+///
+/// The default for all of them is `$startdir` — the recipe directory, bound
+/// read-only so that a fetch cannot edit the PKGBUILD its `build_key` was
+/// computed from. `makepkg` checks `PKGDEST` for writability up front, before
+/// it works out that `--verifysource` is not going to write a package, so
+/// leaving it unset failed the run before a single source was fetched.
+#[test]
+fn fetching_never_lets_makepkg_write_to_the_recipe() {
+    let dir = scratch("build-fetch-dests");
+    let builder = Builder::new(&dir);
+    let spec = builder.fetch_spec(&recipe(&dir));
+
+    for var in ["BUILDDIR", "SRCDEST", "PKGDEST", "SRCPKGDEST", "LOGDEST"] {
+        let value = spec.env.get(var).unwrap_or_else(|| {
+            panic!("phase 1 must set ${var}, or makepkg defaults it to the read-only recipe")
+        });
+        assert!(
+            spec.binds
+                .iter()
+                .any(|b| b.target == Path::new(value) && b.mode == BindMode::ReadWrite),
+            "${var} is {value}, which is not a writable bind target"
+        );
+    }
+    assert!(
+        !spec.env.values().any(|v| v == OUTPUT_DIR),
+        "phase 1 builds nothing, so nothing in it may point at the artifact output"
+    );
+}
+
+/// Regression test: phase 1's mountpoints must sit *directly* under `/tmp`.
+///
+/// Bubblewrap creates a bind target's missing parents as mode 0700 owned by
+/// the user running bubblewrap — root — and phase 1 then drops to
+/// `BUILD_UID`. Nesting them (`/tmp/kiln-live/work`) therefore left every
+/// phase-1 path unreachable by name from inside the sandbox, whatever the
+/// binds themselves said, and `makepkg` failed at "Failed to create the
+/// directory $BUILDDIR" with the directory sitting right there. A child of
+/// the 1777 tmpfs has no parent to be blocked by.
+#[test]
+fn fetching_mounts_directly_under_tmp() {
+    let dir = scratch("build-fetch-flat");
+    let builder = Builder::new(&dir);
+    let recipe = recipe(&dir);
+
+    for bind in builder
+        .fetch_spec(&recipe)
+        .binds
+        .iter()
+        .filter(|b| matches!(b.mode, BindMode::ReadOnly | BindMode::ReadWrite))
+    {
+        assert_eq!(
+            bind.target.parent(),
+            Some(Path::new("/tmp")),
+            "phase 1 may not mount below a directory bubblewrap has to invent: {}",
+            bind.target.display()
+        );
+    }
 }
 
 /// The directory phase 1's `BUILDDIR` bind points at has to exist, and belong
