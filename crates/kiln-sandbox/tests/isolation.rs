@@ -29,6 +29,19 @@ fn render(argv: &[String]) -> String {
     argv.join(" ")
 }
 
+fn scratch(name: &str) -> std::path::PathBuf {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("target/test-roots")
+        .join(name);
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 /// The network constraint the rest of the model rests on: *a script runs with
 /// `CLONE_NEWNET` and no interfaces. Not configurable.* With the network off, a
 /// build step's output is a pure function of things Kiln already hashes.
@@ -95,6 +108,90 @@ fn a_shim_records_the_call_and_succeeds() {
     assert!(
         script.contains(r"printf '%s\n'"),
         "the newline must not be double-escaped:\n{script}"
+    );
+}
+
+/// Regression test, and the reason this file runs a script instead of
+/// grepping one: `systemctl --global enable` is a filesystem edit —
+/// `/etc/systemd/user/<target>.wants/<unit>`, no bus, no running systemd —
+/// and it is how every Arch package enables a *user* unit. `pipewire`,
+/// `pipewire-pulse`, `wireplumber` and `xdg-user-dirs` all call it from
+/// `post_install` and none of them ships the symlink, so neutralizing it
+/// shipped an image with PipeWire installed and nothing enabled: silence, on
+/// a machine with three working cards and every driver loaded.
+///
+/// System scope must stay neutralized in the same script — step 7's
+/// `preset-all` is what decides that, and it is what puts `getty@tty1.service`
+/// in the image.
+#[test]
+fn a_global_unit_install_runs_and_everything_else_is_neutralized() {
+    let dir = scratch("shim-systemctl");
+    let shim = dir.join("systemctl");
+    let bin = dir.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(&shim, Shim::new("systemctl").script()).unwrap();
+
+    // Stands in for the image's own systemctl. It records its argv, so the
+    // test can tell "ran for real" from "recorded and exited 0".
+    let seen = dir.join("seen");
+    std::fs::write(
+        bin.join("systemctl"),
+        format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n", seen.display()),
+    )
+    .unwrap();
+    for f in [&shim, &bin.join("systemctl")] {
+        std::fs::set_permissions(f, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    }
+
+    let run = |args: &[&str], path: &str| {
+        let status = std::process::Command::new(&shim)
+            .args(args)
+            .env("PATH", path)
+            .status()
+            .unwrap();
+        // A scriptlet that fails fails the transaction: every path exits 0.
+        assert!(status.success(), "systemctl {args:?} exited {status}");
+    };
+    let recorded = || std::fs::read_to_string(&seen).unwrap_or_default();
+    // The shim's own directory is on PATH ahead of the real binary — that is
+    // the arrangement in a real build, where pacman's PATH finds
+    // `/usr/local/bin/systemctl` before `/usr/bin/systemctl`. The script has
+    // to skip itself and keep looking.
+    let path = format!("{}:{}", dir.display(), bin.display());
+
+    run(&["--global", "enable", "pipewire.socket"], &path);
+    run(&["--global", "reenable", "wireplumber.service"], &path);
+    assert_eq!(
+        recorded(),
+        "--global enable pipewire.socket\n--global reenable wireplumber.service\n",
+        "a --global unit install must reach the real systemctl, argv intact"
+    );
+
+    for hostile in [
+        // The build host's running systemd, none of the image's business.
+        vec!["daemon-reload"],
+        vec!["--system", "daemon-reexec"],
+        // System scope: `20-kiln.preset` and step 7 decide this, not a
+        // scriptlet writing .wants symlinks behind the config's back.
+        vec!["enable", "getty@.service"],
+        vec!["disable", "polkit-agent-helper.socket"],
+        // --global, but not an install: a query the shim cannot answer offline.
+        vec!["--global", "is-enabled", "foo.service"],
+    ] {
+        let before = recorded();
+        run(&hostile, &path);
+        assert_eq!(recorded(), before, "`systemctl {hostile:?}` must not run");
+    }
+
+    // Two copies of the shim and no real systemctl anywhere: `$0` only excuses
+    // one of them, so this is the case the re-entry marker exists for. It must
+    // end, and end at 0.
+    let second = dir.join("elsewhere");
+    std::fs::create_dir_all(&second).unwrap();
+    std::fs::copy(&shim, second.join("systemctl")).unwrap();
+    run(
+        &["--global", "enable", "pipewire.socket"],
+        &format!("{}:{}", dir.display(), second.display()),
     );
 }
 
