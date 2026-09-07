@@ -117,8 +117,10 @@ impl Report {
 /// cannot go missing from the other.
 #[derive(Debug, Default)]
 pub struct Side {
-    /// name → epoch:version-rel.
-    repo: BTreeMap<String, String>,
+    /// name → (evr, sha256). identity is the pair: a repo can rebuild or
+    /// resign a package at an unchanged epoch:version-rel, and that still
+    /// has to be visible.
+    repo: BTreeMap<String, (String, String)>,
     /// name → (evr, aur commit). identity is the commit.
     aur: BTreeMap<String, (String, String)>,
     /// name → (build key, kernel evr for a module).
@@ -148,7 +150,7 @@ impl Side {
             repo: record
                 .repo_packages
                 .iter()
-                .map(|p| (p.name.clone(), p.evr.clone()))
+                .map(|p| (p.name.clone(), (p.evr.clone(), p.sha256.clone())))
                 .collect(),
             aur: record
                 .aur_packages
@@ -180,10 +182,16 @@ impl Side {
     /// A plan, as resolution produced it. Nothing here has been built.
     pub fn of_plan(plan: &BuildPlan) -> Side {
         Side {
-            repo: collect(plan, |i| match i {
-                ResolvedInput::RepoPackage { name, evr, .. } => Some((name.clone(), evr.clone())),
-                _ => None,
-            }),
+            repo: plan
+                .inputs
+                .iter()
+                .filter_map(|i| match i {
+                    ResolvedInput::RepoPackage {
+                        name, evr, sha256, ..
+                    } => Some((name.clone(), (evr.clone(), sha256.clone()))),
+                    _ => None,
+                })
+                .collect(),
             aur: plan
                 .inputs
                 .iter()
@@ -285,7 +293,7 @@ pub fn compare_sides(was: &Side, now: &Side) -> Report {
 
     report
         .categories
-        .push(("repo packages", compare(&was.repo, &now.repo)));
+        .push(("repo packages", compare_repo(&was.repo, &now.repo)));
 
     // an AUR package's identity is its git commit, so a maintainer
     // force-pushing a different PKGBUILD at the same `pkgver` is a change. The
@@ -399,6 +407,53 @@ fn compare(was: &BTreeMap<String, String>, now: &BTreeMap<String, String>) -> Ve
             out.push(Change::Removed {
                 name: name.clone(),
                 from: short(from),
+            });
+        }
+    }
+    out.sort_by(|a, b| a.name().cmp(b.name()));
+    out
+}
+
+/// a repo package's identity is `(evr, sha256)`: a repo can rebuild or resign
+/// a package at an unchanged epoch:version-rel, which still moves `plan_id`
+/// (`RepoPackage::canon` hashes `sha256` too) and has to be named here —
+/// otherwise it is invisible to `kiln diff`/`kiln check` even though it is
+/// exactly why a build stopped being a no-op.
+fn compare_repo(
+    was: &BTreeMap<String, (String, String)>,
+    now: &BTreeMap<String, (String, String)>,
+) -> Vec<Change> {
+    let mut out = Vec::new();
+    for (name, (evr, sha256)) in now {
+        match was.get(name) {
+            None => out.push(Change::Added {
+                name: name.clone(),
+                to: evr.clone(),
+            }),
+            Some((old_evr, _)) if old_evr != evr => out.push(Change::Updated {
+                name: name.clone(),
+                from: old_evr.clone(),
+                to: evr.clone(),
+                note: None,
+            }),
+            Some((_, old_sha256)) if old_sha256 != sha256 => out.push(Change::Updated {
+                name: name.clone(),
+                from: evr.clone(),
+                to: evr.clone(),
+                note: Some(format!(
+                    "same version, rebuilt: {} → {}",
+                    short(old_sha256),
+                    short(sha256)
+                )),
+            }),
+            Some(_) => {}
+        }
+    }
+    for (name, (evr, _)) in was {
+        if !now.contains_key(name) {
+            out.push(Change::Removed {
+                name: name.clone(),
+                from: evr.clone(),
             });
         }
     }
@@ -569,11 +624,13 @@ mod tests {
     }
 
     fn repo(name: &str, evr: &str) -> ResolvedInput {
+        // Matches `entry()`'s sha256 so a package that only moved version
+        // (the common case these tests exercise) doesn't also look rebuilt.
         ResolvedInput::RepoPackage {
             name: name.into(),
             evr: evr.into(),
             filename: String::new(),
-            sha256: String::new(),
+            sha256: "abcd".into(),
             repo: "extra".into(),
             explicit: true,
         }
@@ -645,6 +702,37 @@ mod tests {
         assert!(matches!(
             &aur[0],
             Change::Updated { note: Some(n), .. } if n == "commit 3f1a9c → 88bd02"
+        ));
+    }
+
+    /// A repo can rebuild or resign a package at an unchanged
+    /// epoch:version-rel — a mirror repack, an infra fix pushed without a
+    /// pkgrel bump. `plan_id` moves because `RepoPackage::canon` hashes
+    /// `sha256`, so the report has to name it, or a build that genuinely
+    /// differs shows as "no difference in any input category".
+    #[test]
+    fn a_repo_package_rebuilt_at_an_unchanged_version_is_still_reported() {
+        let report = diff(
+            &record(),
+            &plan(vec![ResolvedInput::RepoPackage {
+                name: "linux".into(),
+                evr: "6.19.2-1".into(),
+                filename: "linux-6.19.2-1-x86_64.pkg.tar.zst".into(),
+                sha256: "ffff".into(),
+                repo: "extra".into(),
+                explicit: true,
+            }]),
+        );
+        let repo = &report
+            .categories
+            .iter()
+            .find(|(c, _)| *c == "repo packages")
+            .unwrap()
+            .1;
+        let linux = repo.iter().find(|c| c.name() == "linux").unwrap();
+        assert!(matches!(
+            linux,
+            Change::Updated { note: Some(n), .. } if n == "same version, rebuilt: abcd → ffff"
         ));
     }
 
