@@ -25,6 +25,18 @@ $ kiln rollback       # if it was a mistake
 **New here?** [`docs/GUIDE.md`](docs/GUIDE.md) is the user guide — the loop, the language,
 the module library, every command, and what to do when something goes wrong.
 
+## How to install
+
+Kiln itself has no `install` verb — see [No installation](#what-it-is) below for why. To put
+a Kiln-built system like Terracotta Linux on real hardware:
+
+- **[terracotta-installer](https://github.com/Terracotta-Linux/terracotta-installer)** — the
+  installer that partitions the disk and builds the image onto it.
+- **[terracotta-iso](https://github.com/Terracotta-Linux/terracotta-iso)** — the live ISO that
+  boots the installer. Prebuilt images are on its
+  [releases page](https://github.com/Terracotta-Linux/terracotta-iso/releases); a project
+  website is coming soon.
+
 ## What it is
 
 Kiln is **a distribution's build tool, not an image-shipping pipeline.** The loop is: write

@@ -52,7 +52,9 @@ in systems like this one.
 You need an OSTree-capable machine — either one already running a Kiln image, or a mounted
 target you are building into directly (see
 [building into an unmounted target](#building-into-an-unmounted-target)). Kiln does not
-install anything itself.
+install anything itself; if you don't have a machine yet,
+[terracotta-installer](https://github.com/Terracotta-Linux/terracotta-installer) and
+[terracotta-iso](https://github.com/Terracotta-Linux/terracotta-iso) are the way to get one.
 
 ```console
 $ sudo kiln init
