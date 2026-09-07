@@ -12,6 +12,7 @@ mod harness;
 use kiln_ostree::commit::{self, CommitOptions};
 use kiln_ostree::generation::{self, Metadata};
 use kiln_record::Record;
+use ostree::gio;
 use std::path::Path;
 
 #[test]
@@ -88,6 +89,92 @@ fn generations_increment_from_the_parent_commit() {
     let history = commit::history(&repo, &first.reference).unwrap();
     let numbers: Vec<u64> = history.iter().map(|(_, m)| m.generation).collect();
     assert_eq!(numbers, [2, 1], "newest first");
+}
+
+/// Regression test: a generation removed from the *middle* must not take the
+/// rest of the history with it.
+///
+/// `kiln clean` keeps the newest few and the baseline, so gen 1 stays while
+/// 2..n-1 go, and the prune deletes their commit objects — leaving the
+/// surviving newer commit naming a parent that is no longer stored. Walking
+/// the parent chain from the tip then died at that hole, and `kiln show`,
+/// `kiln diff` and `kiln rebuild` failed *for every generation*, including
+/// ones sitting right there in the repository, with a `No such metadata
+/// object` naming a commit the user never asked about.
+#[test]
+#[ignore = "privileged: a bare OSTree repository stores real ownership"]
+fn a_pruned_generation_does_not_hide_the_ones_that_are_left() {
+    if !harness::require_root("committing to a bare repository") {
+        return;
+    }
+    let base = harness::scratch("ostree-pruned-middle");
+    let tree = harness::image_tree(&base.join("tree"));
+    let plan = harness::plan();
+    let record = Record::of(&plan, 1, kiln_resolve::UidMap::new());
+    let reference = plan.image.ostree_ref();
+
+    let mut checksums = Vec::new();
+    for generation in 1..=3 {
+        std::fs::write(
+            tree.join("usr/lib/os-release"),
+            format!("NAME=Kiln\nID=kiln\nVERSION={generation}\n"),
+        )
+        .unwrap();
+        let committed = commit::commit(
+            &tree,
+            &plan,
+            &record,
+            &harness::manifest(),
+            &CommitOptions {
+                generation,
+                ..options(&base)
+            },
+        )
+        .unwrap();
+        checksums.push(committed.checksum);
+    }
+
+    let repo = commit::open_or_create(&base.join("repo")).unwrap();
+    // What libostree does for a deployment it is keeping: a ref of its own, so
+    // the commit survives the prune even once nothing else points at it. This
+    // is why gen 1 is still readable on a machine whose gen 2 is long gone.
+    repo.set_ref_immediate(
+        None,
+        "ostree/1/1/2",
+        Some(&checksums[0]),
+        gio::Cancellable::NONE,
+    )
+    .unwrap();
+    drop(repo);
+
+    // Prune generation 2 out of the middle, exactly as `kiln rm 2` would.
+    let object = base
+        .join("repo/objects")
+        .join(&checksums[1][..2])
+        .join(format!("{}.commit", &checksums[1][2..]));
+    assert!(
+        object.is_file(),
+        "{} should exist to be pruned",
+        object.display()
+    );
+    std::fs::remove_file(&object).unwrap();
+
+    let repo = commit::open_or_create(&base.join("repo")).unwrap();
+    let numbers: Vec<u64> = commit::history(&repo, &reference)
+        .unwrap()
+        .iter()
+        .map(|(_, m)| m.generation)
+        .collect();
+    assert_eq!(
+        numbers,
+        [3, 1],
+        "the hole ends a chain, it does not end the history"
+    );
+    let (checksum, _) = commit::find_generation(&repo, 1).unwrap();
+    assert_eq!(
+        checksum, checksums[0],
+        "a generation a ref still holds open is findable with its chain broken"
+    );
 }
 
 /// the commit filter rejects `/var` and `/boot`. Normalization already

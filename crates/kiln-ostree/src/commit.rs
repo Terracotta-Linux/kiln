@@ -7,7 +7,10 @@ use kiln_record::Record;
 use kiln_resolve::BuildPlan;
 use ostree::gio;
 use ostree::prelude::*;
-use ostree::{Repo, RepoCommitFilterResult, RepoCommitModifier, RepoCommitModifierFlags, RepoMode};
+use ostree::{
+    ObjectType, Repo, RepoCommitFilterResult, RepoCommitModifier, RepoCommitModifierFlags, RepoMode,
+};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// Paths that must not be in a commit, checked at the moment of commit.
@@ -259,21 +262,77 @@ pub fn find_generation(repo: &Repo, generation: u64) -> Result<(String, Metadata
     })
 }
 
-/// Every commit on `kiln/<image>/<arch>`, newest first, with its metadata.
+/// Every commit this repository still holds for `reference`'s image, newest
+/// generation first.
+///
+/// **Not simply the parent chain from the tip.** `kiln rm` and `kiln clean`
+/// remove generations from the *middle* of that chain — `Removal::budget`
+/// keeps the newest few and the baseline — and the prune that follows deletes
+/// those commit objects while the surviving newer commit still names one of
+/// them as its parent. So a walk from the tip both dead-ends early, at the
+/// first pruned ancestor, and skips generations that are still here: on a
+/// machine holding generations 8, 7 and a pinned 1, gen 7's parent is gone, so
+/// the walk died before it ever reached gen 1 and *every* `kiln show`, `kiln
+/// diff` and `kiln rebuild` failed with `No such metadata object` — naming a
+/// commit the user never asked about, for generations that were sitting right
+/// there.
+///
+/// What survives a prune is exactly what a ref keeps alive: Kiln's own
+/// `kiln/<image>/<arch>`, plus the `ostree/<n>/<n>/<n>` ref libostree writes
+/// for each deployment. Walking from all of them, and stopping wherever a
+/// chain runs off the edge of what is still stored, is the whole set — and
+/// then generation order, not chain order, is what puts it in sequence.
 pub fn history(repo: &Repo, reference: &str) -> Result<Vec<(String, Metadata)>> {
-    let mut out = Vec::new();
-    let mut at = match repo.resolve_rev(reference, true) {
-        Ok(Some(rev)) => Some(rev.to_string()),
-        _ => None,
-    };
-    while let Some(checksum) = at {
-        let metadata = read_metadata(repo, &checksum)?;
-        at = repo
-            .load_commit(&checksum)
-            .ok()
-            .and_then(|(c, _)| ostree::commit_get_parent(&c))
-            .map(|p| p.to_string());
-        out.push((checksum, metadata));
+    let mut refs: Vec<String> = repo
+        .list_refs(None, gio::Cancellable::NONE)
+        .map_err(Error::of("listing the repository's refs"))?
+        .into_keys()
+        .map(|k| k.to_string())
+        .filter(|r| r != reference)
+        .collect();
+    refs.sort();
+    refs.insert(0, reference.to_string());
+
+    let mut visited = BTreeSet::new();
+    let mut found: Vec<(String, Metadata)> = Vec::new();
+    for reference_to_walk in refs {
+        let mut at = match repo.resolve_rev(&reference_to_walk, true) {
+            Ok(Some(rev)) => Some(rev.to_string()),
+            _ => continue,
+        };
+        while let Some(checksum) = at {
+            if !visited.insert(checksum.clone()) {
+                // Already walked, and so was everything behind it.
+                break;
+            }
+            // The edge of the repository, not a corrupt one: ask before
+            // loading, because `load_commit` on a pruned parent is an error
+            // that would fail the whole command.
+            let present = repo
+                .has_object(ObjectType::Commit, &checksum, gio::Cancellable::NONE)
+                .map_err(Error::of("looking for a commit in the repository"))?;
+            if !present {
+                break;
+            }
+            let (commit, _) = repo
+                .load_commit(&checksum)
+                .map_err(Error::of("loading the commit"))?;
+            at = ostree::commit_get_parent(&commit).map(|p| p.to_string());
+            match Metadata::from_variant(&commit.child_value(0), &checksum) {
+                Ok(metadata) => {
+                    if format!("kiln/{}/{}", metadata.image, metadata.arch) == reference {
+                        found.push((checksum, metadata));
+                    }
+                }
+                // A commit another tool wrote — a repository can hold
+                // rpm-ostree's beside Kiln's — or one whose metadata version
+                // this Kiln cannot read. Neither is this image's history, and
+                // neither is a reason to fail a command about it.
+                Err(Error::NotOurs { .. }) => {}
+                Err(e) => return Err(e),
+            }
+        }
     }
-    Ok(out)
+    found.sort_by_key(|(_, m)| std::cmp::Reverse(m.generation));
+    Ok(found)
 }
