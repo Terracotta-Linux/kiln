@@ -7,6 +7,7 @@
 mod args;
 mod build;
 mod check;
+mod completions;
 mod deep;
 mod deployments;
 mod disk;
@@ -52,6 +53,16 @@ fn run(argv: &[String]) -> ExitCode {
             );
             ExitCode::Ok
         }
+        // `args::parse` already validated the shell name, so this cannot fail —
+        // it exists to keep the printing next to the rest of the dispatch.
+        Command::Completions { shell } => {
+            print!(
+                "{}",
+                completions::script(shell).expect("validated by args::parse")
+            );
+            ExitCode::Ok
+        }
+
         Command::Init => init::run(cli.global.config.as_deref()),
 
         Command::List => deployments::list(cli.global.sysroot.as_deref()),

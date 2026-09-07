@@ -64,6 +64,7 @@ fn help_lists_every_command_the_design_promises() {
         "clean",
         "init",
         "sysroot init",
+        "completions",
     ] {
         assert!(
             text.contains(verb),
@@ -93,6 +94,38 @@ fn version_answers_at_any_position_not_just_as_the_verb() {
         assert_eq!(code(&out), 0, "{args:?} exited nonzero");
         assert_eq!(stdout(&out), text, "{args:?} did not match `kiln version`");
     }
+}
+
+#[test]
+fn completions_prints_a_script_naming_the_command_for_each_known_shell() {
+    for shell in ["bash", "zsh", "fish"] {
+        let out = kiln(&["completions", shell]);
+        assert_eq!(code(&out), 0, "`kiln completions {shell}` exited nonzero");
+        let text = stdout(&out);
+        assert!(
+            text.contains("kiln"),
+            "`kiln completions {shell}` did not mention kiln:\n{text}"
+        );
+    }
+}
+
+#[test]
+fn completions_without_or_with_an_unknown_shell_says_what_is_supported() {
+    let missing = kiln(&["completions"]);
+    assert_eq!(code(&missing), 1);
+    assert!(
+        stderr(&missing).contains("needs a shell"),
+        "{}",
+        stderr(&missing)
+    );
+
+    let unknown = kiln(&["completions", "powershell"]);
+    assert_eq!(code(&unknown), 1);
+    let text = stderr(&unknown);
+    assert!(text.contains("unknown shell"), "{text}");
+    assert!(text.contains("bash"), "{text}");
+    assert!(text.contains("zsh"), "{text}");
+    assert!(text.contains("fish"), "{text}");
 }
 
 /// generations are the only IDs the CLI accepts, and it says why rather

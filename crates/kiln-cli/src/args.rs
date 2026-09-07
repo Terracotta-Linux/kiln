@@ -83,6 +83,9 @@ pub enum Command {
     },
     Help,
     Version,
+    Completions {
+        shell: String,
+    },
 }
 
 pub struct Cli {
@@ -121,6 +124,9 @@ Deployments (by generation, never by OSTree index)
 Storage
   kiln init                           scaffold /etc/kiln
   kiln sysroot init <path>            create an OSTree sysroot to build into
+
+Shell
+  kiln completions <bash|zsh|fish>    print a completion script
 
 Global
   --config <path>                 entry point, or a directory containing system.toml
@@ -328,11 +334,39 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
             generation: generation(&positional, "rebuild")?,
         },
 
+        "completions" => {
+            let shell = named(
+                &positional,
+                "completions",
+                "a shell",
+                "kiln completions bash",
+            )?;
+            crate::completions::script(&shell)?;
+            Command::Completions { shell }
+        }
+
         other => {
             let known = [
-                "check", "build", "apply", "rebuild", "explain", "show", "init", "list", "status",
-                "rollback", "deploy", "diff", "why", "owns", "pin", "unpin", "rm", "clean",
+                "check",
+                "build",
+                "apply",
+                "rebuild",
+                "explain",
+                "show",
+                "init",
+                "list",
+                "status",
+                "rollback",
+                "deploy",
+                "diff",
+                "why",
+                "owns",
+                "pin",
+                "unpin",
+                "rm",
+                "clean",
                 "sysroot",
+                "completions",
             ];
             let hint = kiln_diag::did_you_mean(other, known)
                 .map(|h| format!(" — {h}"))

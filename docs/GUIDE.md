@@ -875,6 +875,17 @@ Always by generation, never by OSTree index.
 | `kiln init` | scaffold `/etc/kiln` |
 | `kiln sysroot init <path>` | create an OSTree sysroot to build into |
 
+### Shell
+
+| Command | |
+|---|---|
+| `kiln completions <bash\|zsh\|fish>` | print a completion script for that shell, to stdout |
+
+Source it directly to try it for the current session — `source <(kiln completions bash)` — or
+install it where the shell's completion loader already looks: `/usr/share/bash-completion/completions/kiln`,
+`/usr/share/zsh/site-functions/_kiln`, or `/usr/share/fish/vendor_completions.d/kiln.fish`. The
+Arch package installs all three.
+
 ### Global flags
 
 | Flag | |
@@ -884,5 +895,6 @@ Always by generation, never by OSTree index.
 | `--allow-external-sources` | permit sources outside the config root, with a warning |
 | `--module-root <path>` | override `/usr/share/kiln/modules` |
 | `-v`, `--verbose` | more detail, including OSTree checksums |
+| `-V`, `--version` | print the version and exit |
 
 `KILN_CONFIG_DIR` and `KILN_MODULE_DIR` do the same job as `--config` and `--module-root`.
