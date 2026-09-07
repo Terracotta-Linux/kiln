@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:16f6363f65a3425f29b53c2c41606a8267bdd8bd83f9ba52c7cd5af58a9c389b
+config_id: b3:b3cb36947f7b99d6c552c8709e5783e552a9cb3045dec637c3d57cbd83c444d7
 
 
   boot: 
@@ -29,7 +29,7 @@ config_id: b3:16f6363f65a3425f29b53c2c41606a8267bdd8bd83f9ba52c7cd5af58a9c389b
       mode: []
       source: []
       target: "/usr/lib/tmpfiles.d/scratch.conf"
-  hash_epoch: 4
+  hash_epoch: 5
   image: 
     arch: "[ARCH]"
     name: "workstation"
@@ -45,6 +45,7 @@ config_id: b3:16f6363f65a3425f29b53c2c41606a8267bdd8bd83f9ba52c7cd5af58a9c389b
     modules: 
       blacklist: 
         - "nouveau"
+      initramfs: []
       load: 
         - "kvm_intel"
       options: 

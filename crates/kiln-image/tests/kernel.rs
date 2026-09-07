@@ -117,7 +117,7 @@ fn placing_vmlinuz_falls_back_to_boot() {
 fn dracut_is_reproducible_host_independent_and_offline() {
     let root = image_with_kernel("kernel-dracut", "6.19.2-arch1-1");
     let kernel = kernel::find(&root).unwrap();
-    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new());
+    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new(), &BTreeSet::new());
 
     assert_eq!(spec.network, Network::Disabled);
     assert_eq!(
@@ -143,7 +143,7 @@ fn dracut_is_reproducible_host_independent_and_offline() {
 fn the_initramfs_path_is_image_absolute() {
     let root = image_with_kernel("kernel-paths", "6.19.2-arch1-1");
     let kernel = kernel::find(&root).unwrap();
-    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new());
+    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new(), &BTreeSet::new());
     assert_eq!(
         spec.command.last().unwrap(),
         "/usr/lib/modules/6.19.2-arch1-1/initramfs.img"
@@ -160,7 +160,7 @@ fn extra_dracut_modules_are_each_added() {
     let root = image_with_kernel("kernel-extra-modules", "6.19.2-arch1-1");
     let kernel = kernel::find(&root).unwrap();
     let extra: BTreeSet<String> = ["plymouth".to_string(), "resume".to_string()].into();
-    let spec = kernel::dracut_spec(&root, &kernel, &extra);
+    let spec = kernel::dracut_spec(&root, &kernel, &extra, &BTreeSet::new());
 
     let adds: Vec<&str> = spec
         .command
@@ -172,6 +172,72 @@ fn extra_dracut_modules_are_each_added() {
     assert_eq!(adds, vec![kernel::DRACUT_MODULE, "plymouth", "resume"]);
 }
 
+/// A driver is not a dracut module: `--add` takes the one, `--add-drivers`
+/// the other, and the initramfs needs both kinds named. dracut's non-hostonly
+/// selection carries what is needed to reach the root filesystem, which does
+/// not include a GPU — so without this the boot splash starts with no device
+/// it will draw on and waits out its device timeout while the firmware
+/// framebuffer sits there unused.
+#[test]
+fn initramfs_drivers_are_one_space_separated_argument() {
+    let root = image_with_kernel("kernel-initramfs-drivers", "6.19.2-arch1-1");
+    let kernel = kernel::find(&root).unwrap();
+    let drivers: BTreeSet<String> = ["i915".to_string(), "xe".to_string()].into();
+    let spec = kernel::dracut_spec(&root, &kernel, &BTreeSet::new(), &drivers);
+
+    let at = spec
+        .command
+        .iter()
+        .position(|a| a == "--add-drivers")
+        .unwrap_or_else(|| panic!("no --add-drivers in {:?}", spec.command));
+    assert_eq!(
+        spec.command[at + 1],
+        "i915 xe",
+        "dracut takes the drivers as one argument, not a repeated flag"
+    );
+
+    // Absent, not present and empty: `--add-drivers ""` is a different thing
+    // to say, and an image that asked for no drivers should produce the argv
+    // it produced before this key existed.
+    let none = kernel::dracut_spec(&root, &kernel, &BTreeSet::new(), &BTreeSet::new());
+    assert!(
+        !none.command.iter().any(|a| a == "--add-drivers"),
+        "{:?}",
+        none.command
+    );
+}
+
+/// dracut logs `Failed to find module 'x'` and then exits 0, so a driver that
+/// never made it into the initramfs has to be caught by looking at the image
+/// rather than at the exit code — otherwise a typo arrives as the symptom the
+/// key exists to prevent, and nothing in the build says why.
+#[test]
+fn a_driver_that_did_not_make_it_into_the_initramfs_is_named() {
+    let listing = "usr/lib/modules/6.19.2-arch1-1/kernel/drivers/gpu/drm/i915/i915.ko.zst\n\
+                   usr/lib/modules/6.19.2-arch1-1/kernel/sound/pci/hda/snd_hda_intel.ko.zst\n\
+                   usr/lib/modules/6.19.2-arch1-1/kernel/drivers/nvme/host/nvme.ko.zst\n";
+    let builtin = "kernel/drivers/gpu/drm/simpledrm.ko\n";
+
+    let asked: BTreeSet<String> = ["i915".into(), "nvme".into()].into();
+    assert!(kernel::drivers_missing(listing, builtin, &asked).is_empty());
+
+    // A driver compiled into the kernel cannot be added to an initramfs and is
+    // there anyway. Redundant, not wrong: it must not fail a build.
+    let builtin_driver: BTreeSet<String> = ["simpledrm".into()].into();
+    assert!(kernel::drivers_missing(listing, builtin, &builtin_driver).is_empty());
+
+    // dracut folds `-` to `_`, so the check has to as well: the file on disk
+    // is `snd_hda_intel.ko`, and nobody writes the driver's name that way.
+    let dashed: BTreeSet<String> = ["snd-hda-intel".into()].into();
+    assert!(kernel::drivers_missing(listing, builtin, &dashed).is_empty());
+
+    let typo: BTreeSet<String> = ["i915".into(), "i915x".into(), "amdgpu".into()].into();
+    assert_eq!(
+        kernel::drivers_missing(listing, builtin, &typo),
+        vec!["amdgpu".to_string(), "i915x".to_string()]
+    );
+}
+
 /// The whole argv, once, so that a change to the isolation is visible in a
 /// review rather than at boot.
 #[test]
@@ -180,7 +246,7 @@ fn the_full_dracut_command_line() {
     let kernel = kernel::find(&root).unwrap();
     let bwrap = kiln_sandbox::Bubblewrap::new(root.join("../scratch"));
     let argv = bwrap
-        .argv(&kernel::dracut_spec(&root, &kernel, &BTreeSet::new()))
+        .argv(&kernel::dracut_spec(&root, &kernel, &BTreeSet::new(), &BTreeSet::new()))
         .unwrap();
     // The staging root's path varies per machine; the rest must not.
     let rendered = argv.join(" ").replace(root.to_str().unwrap(), "<root>");

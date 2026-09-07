@@ -26,8 +26,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// | 1 | the first frozen encoding |
 /// | 2 | `boot.loader` defaults to `grub2` rather than `systemd-boot`. A different bootloader is a genuinely different image, so every identity moving is correct rather than incidental. |
 /// | 3 | the UID seed became a users/groups pair carrying `home` and `shell`, not a flat map of numbers. Writing the assembler showed that the flat shape cannot say whether a user owns a group of its own name, and that a seed omitting home and shell decides them by omission. |
+/// | 5 | `kernel.modules.initramfs` joined `KernelModules`' canonical encoding. Which drivers are *in* the initramfs decides what the machine can do before it has a root filesystem — whether the panel has a KMS driver for the splash, most visibly — and dracut's non-hostonly selection does not put a GPU driver there on its own. |
 /// | 4 | `kernel.dracut_modules` joined `Kernel`'s canonical encoding. dracut's default, non-hostonly module selection does not include every module whose package is installed — a module can be present but excluded unless named — so which dracut modules are requested is genuinely part of what is inside the image, not incidental to it. |
-pub const HASH_EPOCH: u32 = 4;
+pub const HASH_EPOCH: u32 = 5;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -209,6 +210,16 @@ pub struct KernelModules {
     pub load: BTreeSet<String>,
     pub blacklist: BTreeSet<String>,
     pub options: BTreeMap<String, String>,
+    /// Drivers to put *in the initramfs* — dracut's `--add-drivers`.
+    ///
+    /// Not `load`: that one writes `modules-load.d` for the booted system,
+    /// which is far too late for anything the initrd needs. A non-hostonly
+    /// initramfs carries the drivers needed to *reach the root filesystem*
+    /// and little else, so a GPU driver is absent unless it is named here —
+    /// and without one the boot splash has no device to draw on until some
+    /// unrelated DRM driver happens to register, or until udev gets to it
+    /// after the switch-root.
+    pub initramfs: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -457,6 +468,7 @@ impl Canonical for KernelModules {
             ("load", self.load.canon()),
             ("blacklist", self.blacklist.canon()),
             ("options", self.options.canon()),
+            ("initramfs", self.initramfs.canon()),
         ])
     }
 }

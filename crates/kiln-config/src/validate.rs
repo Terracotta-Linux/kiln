@@ -470,6 +470,7 @@ impl Validator<'_> {
             modules: KernelModules {
                 load: self.str_set(doc, "kernel.modules.load"),
                 blacklist: self.str_set(doc, "kernel.modules.blacklist"),
+                initramfs: self.str_set(doc, "kernel.modules.initramfs"),
                 options,
             },
             out_of_tree,

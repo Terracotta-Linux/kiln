@@ -241,6 +241,7 @@ pub fn assemble(
         root,
         sandbox,
         &manifest.kernel.dracut_modules,
+        &manifest.kernel.modules.initramfs,
     )?);
 
     // 10 ────────────────────────────────────────────────────────────────────
@@ -363,15 +364,38 @@ fn build_kernel(
     root: &Path,
     sandbox: &dyn Sandbox,
     dracut_modules: &BTreeSet<String>,
+    drivers: &BTreeSet<String>,
 ) -> Result<kernel::Kernel> {
     let found = kernel::find(root)?;
     kernel::place_vmlinuz(root, &found)?;
 
     run(sandbox, &kernel::depmod_spec(root, &found))?;
-    run(sandbox, &kernel::dracut_spec(root, &found, dracut_modules))?;
+    run(
+        sandbox,
+        &kernel::dracut_spec(root, &found, dracut_modules, drivers),
+    )?;
 
     let listing = run(sandbox, &kernel::verify_spec(root, &found))?;
     kernel::initramfs_is_bootable(&listing).map_err(tree::shape)?;
+
+    // dracut exits 0 having logged that it could not find a driver, so the
+    // only way to know a requested one is really there is to look.
+    let builtin = std::fs::read_to_string(
+        root.join(format!("usr/lib/modules/{}/modules.builtin", found.version)),
+    )
+    .unwrap_or_default();
+    let missing = kernel::drivers_missing(&listing, &builtin, drivers);
+    if !missing.is_empty() {
+        return Err(tree::shape(format!(
+            "the initramfs is missing {}, named in `kernel.modules.initramfs`. \
+             dracut logs `Failed to find module` for a driver it cannot place and \
+             still exits 0, so check the spelling against \
+             /usr/lib/modules/{}/kernel — a driver built into the kernel is \
+             already there and does not belong in this list",
+            missing.join(", "),
+            found.version
+        )));
+    }
 
     kernel::clear_boot(root)?;
     Ok(found)

@@ -1,9 +1,19 @@
-# Intel graphics: the kernel driver is in-tree, so this is only userspace.
+# Intel graphics: userspace, plus the KMS driver in the initramfs.
 #
 # `intel-media-driver` is the VA-API driver for Broadwell and later. Older parts
 # want `libva-intel-driver` instead, which is a different decision and so not
 # this file.
+#
+# `i915` is in-tree, but a non-hostonly initramfs carries what is needed to
+# reach the root filesystem and no GPU driver at all — so on a laptop whose
+# panel is wired to the Intel part, nothing can drive it until udev gets round
+# to it after the switch-root, and the boot splash waits with the firmware
+# framebuffer sitting unused in front of it. `xe` is the same decision for
+# Lunar Lake and later, where it replaces i915.
 kiln = 1
 
 [packages]
 repo = ["mesa", "vulkan-intel", "intel-media-driver"]
+
+[kernel.modules]
+initramfs = ["i915", "xe"]

@@ -244,6 +244,7 @@ dracut_modules = ["plymouth"]              # dracut modules to --add beyond ostr
 [kernel.modules]
 load      = ["v4l2loopback"]
 blacklist = ["nouveau"]
+initramfs = ["i915"]                      # drivers to put *in* the initramfs
 options   = { v4l2loopback = "devices=2 exclusive_caps=1" }
 
 [[kernel.module]]                         # built from source, out of tree
@@ -477,6 +478,7 @@ headers = false                           # build-time only; see below
 [kernel.modules]                          # in-tree modules, just configured
 load      = ["v4l2loopback"]
 blacklist = ["nouveau"]
+initramfs = ["i915"]                      # put these in the initramfs
 options   = { v4l2loopback = "devices=2 exclusive_caps=1" }
 
 [[kernel.module]]                         # out-of-tree, built from source

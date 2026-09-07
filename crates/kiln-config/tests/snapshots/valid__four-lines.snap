@@ -1,8 +1,9 @@
 ---
 source: crates/kiln-config/tests/corpus.rs
+assertion_line: 120
 expression: rendered
 ---
-config_id: b3:a33a09bf16a2108e5a57ec0f527101162a4da6cfc530b19292237a3cffa88fb6
+config_id: b3:51b23d2728515a6358269ec5374697389c3268c89290e39b9a7dcf95e9686991
 
 
   boot: 
@@ -10,7 +11,7 @@ config_id: b3:a33a09bf16a2108e5a57ec0f527101162a4da6cfc530b19292237a3cffa88fb6
     loader: "grub2"
     timeout: 5
   files: {}
-  hash_epoch: 4
+  hash_epoch: 5
   image: 
     arch: "[ARCH]"
     name: "system"
@@ -21,6 +22,7 @@ config_id: b3:a33a09bf16a2108e5a57ec0f527101162a4da6cfc530b19292237a3cffa88fb6
     headers: false
     modules: 
       blacklist: []
+      initramfs: []
       load: []
       options: {}
     out_of_tree: {}

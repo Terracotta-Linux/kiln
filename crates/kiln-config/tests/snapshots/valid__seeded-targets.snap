@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:fc933c4312b36c5ccbf3816e4e56d1d9de3a5ef9e6811de9875dc6dad80c3546
+config_id: b3:7ecbf1dfcdefb1cdb9516ca84118b04e84b6c3615eb3d1d040cbee14ee77b362
 
 kiln::semantic
 
@@ -74,7 +74,7 @@ kiln::semantic
       mode: []
       source: []
       target: "/var/lib/myapp/state.db"
-  hash_epoch: 4
+  hash_epoch: 5
   image: 
     arch: "[ARCH]"
     name: "system"
@@ -84,6 +84,7 @@ kiln::semantic
     headers: false
     modules: 
       blacklist: []
+      initramfs: []
       load: []
       options: {}
     out_of_tree: {}

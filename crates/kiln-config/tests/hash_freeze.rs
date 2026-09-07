@@ -12,12 +12,18 @@
 use kiln_config::Options;
 use std::path::{Path, PathBuf};
 
-/// Frozen at hash epoch 4 — `kernel.dracut_modules` joined `Kernel`'s
-/// canonical encoding. dracut's default, non-hostonly module selection does
-/// not include every module whose package is installed, so which dracut
-/// modules a build requests is genuinely part of the image; that moved all
-/// five fixtures together, which is what says it was a schema change rather
-/// than a module content change (see cause (c) below).
+/// Frozen at hash epoch 5 — `kernel.modules.initramfs` joined
+/// `KernelModules`' canonical encoding. Which *drivers* are in the initramfs
+/// decides what the machine can do before it has a root filesystem, and
+/// dracut's non-hostonly selection does not put a GPU driver there on its
+/// own; so a boot splash had no device to draw on until some unrelated DRM
+/// driver registered. All five fixtures moved together — none of them names a
+/// driver — which is what says it was a schema change rather than a module
+/// content change (see cause (c) below).
+///
+/// Epoch 4 was the same shape of change: `kernel.dracut_modules` joining
+/// `Kernel`'s canonical encoding, because dracut's default selection does not
+/// include every module whose package is installed.
 /// Do not "fix" these by pasting new values.
 ///
 /// Three of these fixtures include shipped modules, so their identity depends on
@@ -56,29 +62,29 @@ use std::path::{Path, PathBuf};
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
-        "b3:a33a09bf16a2108e5a57ec0f527101162a4da6cfc530b19292237a3cffa88fb6",
+        "b3:51b23d2728515a6358269ec5374697389c3268c89290e39b9a7dcf95e9686991",
     ),
     (
         "minimal",
-        "b3:7aef83aed85a842a86412e1a039f4d9725d43597dfed99ca5fca4133c34a364d",
+        "b3:d4366912983cf3214b54119c426bdb94cd17656a0f5eee182b041947f6d8430c",
     ),
     (
         "order-independence-a",
-        "b3:dce901213dac0e3dd9eb9af128da296fa3658c48bd65c6b2ca2ba48e841c1f82",
+        "b3:d382b3b023ea7fea6571feb2b42ad881ed35c62a00af7759a968ca5f5a96a905",
     ),
     (
         "order-independence-b",
-        "b3:dce901213dac0e3dd9eb9af128da296fa3658c48bd65c6b2ca2ba48e841c1f82",
+        "b3:d382b3b023ea7fea6571feb2b42ad881ed35c62a00af7759a968ca5f5a96a905",
     ),
     (
         "workstation",
-        "b3:16f6363f65a3425f29b53c2c41606a8267bdd8bd83f9ba52c7cd5af58a9c389b",
+        "b3:b3cb36947f7b99d6c552c8709e5783e552a9cb3045dec637c3d57cbd83c444d7",
     ),
 ];
 
 /// The epoch the values above were taken at. Changing `HASH_EPOCH` without
 /// changing this is the mistake this constant exists to catch.
-const FROZEN_AT_EPOCH: u32 = 4;
+const FROZEN_AT_EPOCH: u32 = 5;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -123,7 +123,21 @@ pub fn depmod_spec(root: &Path, kernel: &Kernel) -> SandboxSpec {
 /// return "available but not automatic" from its own `check()`, as Plymouth's
 /// does — so a module wanted in the initramfs has to be named, the same way
 /// `DRACUT_MODULE` always is.
-pub fn dracut_spec(root: &Path, kernel: &Kernel, extra_modules: &BTreeSet<String>) -> SandboxSpec {
+///
+/// `drivers` is `kernel.modules.initramfs`, and it is a separate list because
+/// a dracut *module* and a kernel *driver* are different things: `--add`
+/// takes the first, `--add-drivers` the second. Naming drivers is not
+/// belt-and-braces. A non-hostonly initramfs carries what is needed to reach
+/// the root filesystem, which does not include a GPU — so the boot splash
+/// starts with no device it will draw on and waits out its device timeout
+/// while the firmware framebuffer sits there unused. dracut takes them as one
+/// space-separated argument.
+pub fn dracut_spec(
+    root: &Path,
+    kernel: &Kernel,
+    extra_modules: &BTreeSet<String>,
+    drivers: &BTreeSet<String>,
+) -> SandboxSpec {
     let mut argv = vec![
         "dracut".to_string(),
         "--force".into(),
@@ -138,6 +152,10 @@ pub fn dracut_spec(root: &Path, kernel: &Kernel, extra_modules: &BTreeSet<String
     for module in extra_modules {
         argv.push("--add".into());
         argv.push(module.clone());
+    }
+    if !drivers.is_empty() {
+        argv.push("--add-drivers".into());
+        argv.push(drivers.iter().cloned().collect::<Vec<_>>().join(" "));
     }
     argv.push(format!("/{}", kernel.initramfs()));
 
@@ -156,6 +174,34 @@ pub fn verify_spec(root: &Path, kernel: &Kernel) -> SandboxSpec {
         root,
         ["lsinitrd".to_string(), format!("/{}", kernel.initramfs())],
     )
+}
+
+/// Drivers named in `kernel.modules.initramfs` that did not make it in.
+///
+/// This exists because **dracut does not fail when it cannot find one**. It
+/// logs `Failed to find module 'x'`, prints `dracut[E]: FAILED:`, and then
+/// exits 0 with an image missing exactly the driver that was asked for.
+/// Unchecked, a typo would reach the user as the symptom the key exists to
+/// prevent — a boot splash with no device to draw on — with nothing in the
+/// build pointing at the cause. Same rule as `initramfs_is_bootable`: verify
+/// it, do not trust dracut's exit code.
+///
+/// `builtin` is the kernel's `modules.builtin`. A driver compiled into the
+/// kernel cannot be put in an initramfs and does not need to be, so naming one
+/// is redundant rather than wrong, and must not fail a build.
+///
+/// Names are compared with `-` folded to `_`, because that is what dracut does
+/// with them: asking for `definitely-not-a-driver` gets you
+/// `Failed to find module 'definitely_not_a_driver'`.
+pub fn drivers_missing(listing: &str, builtin: &str, drivers: &BTreeSet<String>) -> Vec<String> {
+    drivers
+        .iter()
+        .filter(|driver| {
+            let file = format!("/{}.ko", driver.replace('-', "_"));
+            !listing.contains(&file) && !builtin.contains(&file)
+        })
+        .cloned()
+        .collect()
 }
 
 /// Given `lsinitrd`'s output, is this initramfs one that will boot?
