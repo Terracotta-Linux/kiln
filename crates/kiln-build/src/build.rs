@@ -286,6 +286,17 @@ impl Builder {
         // straight through.
         let output = self.output_dir(recipe);
         let fetch_work = self.fetch_work_dir(recipe);
+        // Both are scratch this build owns exclusively, keyed only by
+        // `pkgbase` rather than `key` — so a `.pkg.tar.zst` left behind by an
+        // earlier attempt at a different key (a changed version, a changed
+        // dependency closure) survives into this one otherwise. Left in
+        // place, it either makes `makepkg` refuse to run at all ("A package
+        // has already been built") or, worse, gets swept up by
+        // `artifacts_in` below and stored into the cache as this build's
+        // output though nothing this build did produced it.
+        for dir in [&output, &fetch_work] {
+            let _ = std::fs::remove_dir_all(dir);
+        }
         for dir in [&output, &self.source_cache, &fetch_work] {
             std::fs::create_dir_all(dir).map_err(|source| Error::Io {
                 doing: "preparing a build directory",
