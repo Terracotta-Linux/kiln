@@ -1138,10 +1138,10 @@ See [section 7](#7-packages).
 | `kernel.headers` | boolean | `false` | Declares whether the image should carry the kernel's headers. See the note below |
 | `kernel.cmdline` | list of strings | `[]` | Kernel command line. **Fully declarative**: Kiln passes exactly this set at every deploy and keeps no hidden additions |
 | `kernel.dracut_modules` | list of strings | `[]` | dracut modules to `--add` beyond the `ostree` one Kiln always requests. Needed because dracut's non-hostonly selection does not pull in every module whose package is installed |
-| `kernel.modules.load` | list of strings | `[]` | Modules the booted system should load. Declared only; see the note below |
-| `kernel.modules.blacklist` | list of strings | `[]` | Modules the booted system should not load. Declared only; see the note below |
+| `kernel.modules.load` | list of strings | `[]` | Modules the booted system should load. Written to `/etc/modules-load.d/kiln.conf`, one name per line, for `systemd-modules-load.service` |
+| `kernel.modules.blacklist` | list of strings | `[]` | Modules the booted system should not load. Written to `/etc/modprobe.d/kiln.conf` as `blacklist <name>` lines |
 | `kernel.modules.initramfs` | list of strings | `[]` | Drivers to put *in the initramfs* (dracut's `--add-drivers`). Verified after generation: a driver that did not make it in fails the build |
-| `kernel.modules.options` | table of string → string | `{}` | Module options. Keys are module names you choose, so the schema enumerates the table but never its contents. Declared only; see the note below |
+| `kernel.modules.options` | table of string → string | `{}` | Module options. Keys are module names you choose, so the schema enumerates the table but never its contents. Written to `/etc/modprobe.d/kiln.conf` as `options <name> <value>` lines, alongside `blacklist` |
 | `kernel.module` | array of tables | `[]` | Out-of-tree modules built from source with `make`. Entry keys: `name`, `source` (both required) |
 | `kernel.dkms` | list of names, or array of tables | `[]` | DKMS drivers compiled at build time. Entry keys: `name` (required), `source` (optional) |
 
@@ -1156,23 +1156,16 @@ never rebuilds modules at runtime is usually waste, which is why the default is 
 produces a machine that boots exactly once. `@kiln/boot/grub2` contributes `rw`, without which
 the deployment's root is mounted read-only and the first boot reaches an emergency shell.
 
-**Declared but not yet materialized.** `kernel.modules.load`, `kernel.modules.blacklist` and
-`kernel.modules.options` are parsed, validated, reported by `kiln show` and `kiln explain`, and
-folded into `config_id`, so writing them changes the image identity. The assembler does not yet
-write the `modules-load.d` and `modprobe.d` fragments they describe. Until it does, express them
-with a `[[file]]`:
+**`kernel.modules.load`/`blacklist`/`options`.** Assembly writes these as ordinary generated
+image content — `/etc/modules-load.d/kiln.conf` for `load`, `/etc/modprobe.d/kiln.conf` for
+`blacklist` and `options` together — during the same step that builds the initramfs (step 9),
+so `/etc`'s move to `/usr/etc` (step 10) carries them along like anything else assembly writes.
+An empty list writes no file at all. If you need something these three keys cannot express —
+multiple `modprobe.d` fragments, a fourth directive — a `[[file]]` targeting the same paths
+still works; the two mechanisms write the same files and the last one to run wins.
 
-```toml
-[[file]]
-target  = "/usr/lib/modules-load.d/kiln.conf"
-content = "v4l2loopback\n"
-
-[[file]]
-target  = "/usr/lib/modprobe.d/kiln.conf"
-content = "blacklist nouveau\noptions v4l2loopback devices=2 exclusive_caps=1\n"
-```
-
-`kernel.dracut_modules` and `kernel.modules.initramfs` are fully implemented and are what a
+`kernel.dracut_modules` and `kernel.modules.initramfs` are different from all three: those feed
+the initramfs itself, not the booted system's `modules-load.d`/`modprobe.d`, and are what a
 shipped module such as `@kiln/boot/plymouth` relies on.
 
 #### `[boot]`
@@ -1655,10 +1648,10 @@ headers = false                           # see §6.7
 dkms    = ["nvidia-open-dkms"]            # DKMS sources, compiled into the image
 
 [kernel.modules]                          # in-tree modules, just configured
-load      = ["v4l2loopback"]              # declared only, see §6.7
-blacklist = ["nouveau"]                   # declared only, see §6.7
+load      = ["v4l2loopback"]              # -> /etc/modules-load.d/kiln.conf
+blacklist = ["nouveau"]                   # -> /etc/modprobe.d/kiln.conf
 initramfs = ["i915"]                      # put these in the initramfs
-options   = { v4l2loopback = "devices=2 exclusive_caps=1" }   # declared only
+options   = { v4l2loopback = "devices=2 exclusive_caps=1" }   # -> /etc/modprobe.d/kiln.conf
 
 [[kernel.module]]                         # out-of-tree, built from source with make
 name   = "my-module"
@@ -1706,9 +1699,9 @@ booted system and would be far too late for anything the initrd needs, so the tw
 separate. After generation, Kiln greps the initramfs listing and fails the build if a driver
 you named is missing and is not built into the kernel.
 
-`kernel.modules.load`, `blacklist` and `options` are declared but not yet written out by the
-assembler; see [the note in section 6.7](#67-key-reference) for the `[[file]]` form to use in
-the meantime.
+`kernel.modules.load`, `blacklist` and `options` are written to `/etc/modules-load.d/kiln.conf`
+and `/etc/modprobe.d/kiln.conf` respectively; see [section 6.7](#67-key-reference) for the exact
+format.
 
 ### 10.3 Out-of-tree modules
 
@@ -3016,10 +3009,10 @@ include = ["@kiln/profiles/workstation", "@kiln/kernel/linux-zen"]
 cmdline = ["quiet"]
 
 [kernel.modules]
-initramfs = ["i915"]                        # implemented: dracut --add-drivers
-load      = ["v4l2loopback"]                # declared only, see §6.7
-blacklist = ["nouveau"]                     # declared only, see §6.7
-options   = { v4l2loopback = "devices=2 exclusive_caps=1" }   # declared only
+initramfs = ["i915"]                        # dracut --add-drivers
+load      = ["v4l2loopback"]                # /etc/modules-load.d/kiln.conf
+blacklist = ["nouveau"]                     # /etc/modprobe.d/kiln.conf
+options   = { v4l2loopback = "devices=2 exclusive_caps=1" }   # /etc/modprobe.d/kiln.conf
 
 [[kernel.module]]
 name   = "my-module"

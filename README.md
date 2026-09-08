@@ -253,8 +253,7 @@ surface are implemented and tested, including automatic rollback on boot failure
 drift detection.
 
 Declared in the schema and hashed into the image identity, but not yet written out by the
-assembler: `[system]` (hostname, timezone, keymap, locale) and `kernel.modules`'
-`load`/`blacklist`/`options`. The
+assembler: `[system]` (hostname, timezone, keymap, locale). The
 [guide shows the `[[file]]` form to use meanwhile](docs/GUIDE.md#67-key-reference).
 
 Not built yet: reproducibility auditing beyond `kiln rebuild`, and multi-arch.

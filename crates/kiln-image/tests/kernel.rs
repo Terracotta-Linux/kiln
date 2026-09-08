@@ -8,7 +8,7 @@ mod scratch;
 
 use kiln_image::kernel::{self, Kernel};
 use kiln_sandbox::{Network, Sandbox};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn image_with_kernel(name: &str, kver: &str) -> std::path::PathBuf {
     let root = scratch::root(name);
@@ -290,5 +290,59 @@ fn boot_is_emptied_but_not_removed() {
     assert_eq!(
         kiln_image::tree::entries(&root.join("boot")).unwrap().len(),
         0
+    );
+}
+
+/// `kernel.modules.load` becomes one module name per line, for
+/// `systemd-modules-load.service` to read — not the initramfs, which is why
+/// this is a different file from `kernel.modules.initramfs`'s `--add-drivers`.
+#[test]
+fn modules_load_is_one_name_per_line() {
+    let load: BTreeSet<String> = ["v4l2loopback".into(), "vfio_pci".into()].into();
+    assert_eq!(kernel::modules_load_conf(&load), "v4l2loopback\nvfio_pci\n");
+}
+
+/// `blacklist` and `options` share one `modprobe.d` fragment because both are
+/// read by the same program at the same time — modprobe, whenever anything
+/// (udev, `systemd-modules-load`, an explicit `modprobe`) loads a module.
+#[test]
+fn modprobe_conf_has_blacklist_then_options() {
+    let blacklist: BTreeSet<String> = ["nouveau".into()].into();
+    let options: BTreeMap<String, String> =
+        [("v4l2loopback".to_string(), "devices=2".to_string())].into();
+    assert_eq!(
+        kernel::modprobe_conf(&blacklist, &options),
+        "blacklist nouveau\noptions v4l2loopback devices=2\n"
+    );
+}
+
+/// An image that declares none of `load`/`blacklist`/`options` gets no
+/// `modules-load.d`/`modprobe.d` file at all — the same tree it produced
+/// before this existed — rather than a file with nothing in it.
+#[test]
+fn no_module_config_writes_no_files() {
+    let root = scratch::root("kernel-module-config-empty");
+    kernel::install_module_config(&root, &BTreeSet::new(), &BTreeSet::new(), &BTreeMap::new())
+        .unwrap();
+    assert!(!root.join(kernel::MODULES_LOAD_PATH).exists());
+    assert!(!root.join(kernel::MODPROBE_PATH).exists());
+}
+
+#[test]
+fn module_config_is_written_under_etc_for_normalization_to_move() {
+    let root = scratch::root("kernel-module-config");
+    let load: BTreeSet<String> = ["v4l2loopback".into()].into();
+    let blacklist: BTreeSet<String> = ["nouveau".into()].into();
+    kernel::install_module_config(&root, &load, &blacklist, &BTreeMap::new()).unwrap();
+
+    assert_eq!(kernel::MODULES_LOAD_PATH, "etc/modules-load.d/kiln.conf");
+    assert_eq!(kernel::MODPROBE_PATH, "etc/modprobe.d/kiln.conf");
+    assert_eq!(
+        std::fs::read_to_string(root.join(kernel::MODULES_LOAD_PATH)).unwrap(),
+        "v4l2loopback\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join(kernel::MODPROBE_PATH)).unwrap(),
+        "blacklist nouveau\n"
     );
 }

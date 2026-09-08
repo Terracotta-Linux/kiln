@@ -13,7 +13,7 @@
 
 use crate::tree::{self, Result};
 use kiln_sandbox::SandboxSpec;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// The one string that decides whether an image boots. The
@@ -234,4 +234,59 @@ pub fn clear_boot(root: &Path) -> Result<Vec<String>> {
         tree::remove(&entry)?;
     }
     Ok(removed)
+}
+
+/// `/etc/modules-load.d/kiln.conf` — `kernel.modules.load`, read by
+/// `systemd-modules-load.service` at boot. Staging-root-relative and written
+/// before normalization, so step 10's `/etc` → `/usr/etc` move carries it
+/// along like everything else written during assembly.
+///
+/// Not where `kernel.modules.initramfs` goes: that one has to be in the
+/// initramfs itself to be of any use, and this file is not read until long
+/// after the initrd has handed off.
+pub const MODULES_LOAD_PATH: &str = "etc/modules-load.d/kiln.conf";
+
+/// `/etc/modprobe.d/kiln.conf` — `kernel.modules.blacklist` and
+/// `kernel.modules.options`, read by `modprobe` itself, so this also governs
+/// modules `systemd-modules-load` or udev load, not only an explicit
+/// `modprobe`.
+pub const MODPROBE_PATH: &str = "etc/modprobe.d/kiln.conf";
+
+pub fn modules_load_conf(load: &BTreeSet<String>) -> String {
+    load.iter().map(|m| format!("{m}\n")).collect()
+}
+
+pub fn modprobe_conf(blacklist: &BTreeSet<String>, options: &BTreeMap<String, String>) -> String {
+    let mut out = String::new();
+    for module in blacklist {
+        out.push_str(&format!("blacklist {module}\n"));
+    }
+    for (module, opts) in options {
+        out.push_str(&format!("options {module} {opts}\n"));
+    }
+    out
+}
+
+/// Write `kernel.modules.load`/`blacklist`/`options` into the staging root.
+///
+/// A list left empty in the manifest writes no file at all, rather than an
+/// empty fragment: an image that declares none of these should produce the
+/// same tree it produced before this existed.
+pub fn install_module_config(
+    root: &Path,
+    load: &BTreeSet<String>,
+    blacklist: &BTreeSet<String>,
+    options: &BTreeMap<String, String>,
+) -> Result<()> {
+    if !load.is_empty() {
+        let at = root.join(MODULES_LOAD_PATH);
+        tree::write(&at, &modules_load_conf(load))?;
+        tree::set_mode(&at, 0o644)?;
+    }
+    if !blacklist.is_empty() || !options.is_empty() {
+        let at = root.join(MODPROBE_PATH);
+        tree::write(&at, &modprobe_conf(blacklist, options))?;
+        tree::set_mode(&at, 0o644)?;
+    }
+    Ok(())
 }

@@ -241,7 +241,7 @@ pub fn assemble(
         root,
         sandbox,
         &manifest.kernel.dracut_modules,
-        &manifest.kernel.modules.initramfs,
+        &manifest.kernel.modules,
     )?);
 
     // 10 ────────────────────────────────────────────────────────────────────
@@ -364,7 +364,7 @@ fn build_kernel(
     root: &Path,
     sandbox: &dyn Sandbox,
     dracut_modules: &BTreeSet<String>,
-    drivers: &BTreeSet<String>,
+    modules: &kiln_manifest::KernelModules,
 ) -> Result<kernel::Kernel> {
     let found = kernel::find(root)?;
     kernel::place_vmlinuz(root, &found)?;
@@ -372,7 +372,7 @@ fn build_kernel(
     run(sandbox, &kernel::depmod_spec(root, &found))?;
     run(
         sandbox,
-        &kernel::dracut_spec(root, &found, dracut_modules, drivers),
+        &kernel::dracut_spec(root, &found, dracut_modules, &modules.initramfs),
     )?;
 
     let listing = run(sandbox, &kernel::verify_spec(root, &found))?;
@@ -384,7 +384,7 @@ fn build_kernel(
         root.join(format!("usr/lib/modules/{}/modules.builtin", found.version)),
     )
     .unwrap_or_default();
-    let missing = kernel::drivers_missing(&listing, &builtin, drivers);
+    let missing = kernel::drivers_missing(&listing, &builtin, &modules.initramfs);
     if !missing.is_empty() {
         return Err(tree::shape(format!(
             "the initramfs is missing {}, named in `kernel.modules.initramfs`. \
@@ -396,6 +396,8 @@ fn build_kernel(
             found.version
         )));
     }
+
+    kernel::install_module_config(root, &modules.load, &modules.blacklist, &modules.options)?;
 
     kernel::clear_boot(root)?;
     Ok(found)
