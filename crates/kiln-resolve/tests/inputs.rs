@@ -225,6 +225,7 @@ fn a_dkms_source_tree_is_keyed_to_its_own_contents() {
     assert_eq!(
         origin,
         DkmsOrigin::Tree {
+            name: "my-driver".into(),
             path: "kernel/my-driver".into()
         }
     );

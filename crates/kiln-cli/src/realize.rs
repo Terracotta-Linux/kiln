@@ -378,7 +378,7 @@ impl Job {
                 DkmsOrigin::Package { name, evr } => {
                     println!("  \x1b[1mdkms\x1b[0m {name} {evr} against kernel {kernel_evr}")
                 }
-                DkmsOrigin::Tree { path } => {
+                DkmsOrigin::Tree { path, .. } => {
                     println!("  \x1b[1mdkms\x1b[0m {path} against kernel {kernel_evr}")
                 }
             },
@@ -569,12 +569,12 @@ fn build_one(
             // and never writes; a package's sources arrive in the build root
             // instead, and there is nothing to copy.
             let tree = match origin {
-                DkmsOrigin::Tree { path } => Some(opts.ctx.config_root.join(path)),
+                DkmsOrigin::Tree { path, .. } => Some(opts.ctx.config_root.join(path)),
                 DkmsOrigin::Package { .. } => None,
             };
             let sources = match (origin, &tree) {
                 (DkmsOrigin::Package { name, evr }, _) => dkms::Sources::Package { name, evr },
-                (DkmsOrigin::Tree { path }, Some(dir)) => dkms::Sources::Tree { name: path, dir },
+                (DkmsOrigin::Tree { name, .. }, Some(dir)) => dkms::Sources::Tree { name, dir },
                 (DkmsOrigin::Tree { .. }, None) => unreachable!("a tree always has a directory"),
             };
             let dir = dkms::materialize(
@@ -705,7 +705,7 @@ fn tree_hash(job: &Job, digests: &BTreeMap<String, Hash>) -> Hash {
         // a tree is its own content, and a package — which has no directory in
         // the configuration at all — is its name and version.
         Job::Dkms { origin, .. } => match origin {
-            DkmsOrigin::Tree { path } => digests.get(path).cloned(),
+            DkmsOrigin::Tree { path, .. } => digests.get(path).cloned(),
             DkmsOrigin::Package { name, evr } => {
                 Some(Hash::of(format!("dkms:{name}@{evr}").as_bytes()))
             }

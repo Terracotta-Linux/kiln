@@ -220,11 +220,14 @@ pub enum DkmsOrigin {
         /// names it too.
         evr: String,
     },
-    /// A directory in the configuration tree that ships a `dkms.conf`. **Not
-    /// hashed**, for the same reason `BuiltPackage::path` is not: `recipe`
-    /// already says what the directory *contains*, and renaming one is not a
-    /// reason to rebuild.
-    Tree { path: String },
+    /// A directory in the configuration tree that ships a `dkms.conf`. `path`
+    /// is **not hashed**, for the same reason `BuiltPackage::path` is not:
+    /// `recipe` already says what the directory *contains*, and moving it is
+    /// not a reason to rebuild. `name` is the `kernel.dkms` entry's own key —
+    /// already part of `config_id` — and is carried here too because it, not
+    /// `path`, is the label realization builds the synthesized package under;
+    /// `path` is a config-relative directory and is not a valid `pkgname`.
+    Tree { name: String, path: String },
 }
 
 // `SourcePin` lives in `kiln-build`: it describes one input to a *build*, and
@@ -601,8 +604,10 @@ impl Canonical for DkmsOrigin {
                 ("package", Canon::str(name)),
                 ("evr", Canon::str(evr)),
             ]),
-            // See the variant: the path is not hashed, `recipe` is.
-            DkmsOrigin::Tree { path: _ } => Canon::map([("kind", Canon::str("tree"))]),
+            // See the variant: neither field is hashed here. `path` because
+            // `recipe` already covers content; `name` because the outer
+            // `ResolvedInput::DkmsModule.name` already carries it.
+            DkmsOrigin::Tree { name: _, path: _ } => Canon::map([("kind", Canon::str("tree"))]),
         }
     }
 }

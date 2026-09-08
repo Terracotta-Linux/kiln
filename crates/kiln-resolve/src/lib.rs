@@ -423,6 +423,7 @@ fn build_keys(
                 };
                 (
                     DkmsOrigin::Tree {
+                        name: name.clone(),
                         path: source.clone(),
                     },
                     tree,
@@ -478,8 +479,8 @@ fn build_keys(
 fn build_sources(origin: &DkmsOrigin) -> dkms::Sources<'_> {
     match origin {
         DkmsOrigin::Package { name, evr } => dkms::Sources::Package { name, evr },
-        DkmsOrigin::Tree { path } => dkms::Sources::Tree {
-            name: path,
+        DkmsOrigin::Tree { name, path } => dkms::Sources::Tree {
+            name,
             dir: std::path::Path::new(path),
         },
     }

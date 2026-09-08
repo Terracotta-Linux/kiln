@@ -185,6 +185,7 @@ fn dkms_specimen() -> BuildPlan {
     plan.inputs.push(ResolvedInput::DkmsModule {
         name: "my-driver-modules".into(),
         origin: DkmsOrigin::Tree {
+            name: "my-driver".into(),
             path: "kernel/my-driver".into(),
         },
         build_key: Hash("b3:3399".into()),
@@ -327,6 +328,7 @@ fn every_dkms_field_moves_the_identity() {
             if let ResolvedInput::DkmsModule { origin, .. } = i {
                 if matches!(origin, DkmsOrigin::Package { .. }) {
                     *origin = DkmsOrigin::Tree {
+                        name: "nvidia".into(),
                         path: "kernel/nvidia".into(),
                     };
                 }
