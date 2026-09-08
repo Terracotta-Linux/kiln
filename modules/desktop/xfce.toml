@@ -2,11 +2,14 @@
 # panel plugin, on top of @kiln/desktop/xfce-minimal's bare session. There is
 # no xfce-full — this already is everything both groups ship (rule 1).
 # libalpm resolves package names, not group names, so both are listed here.
+# thunar-archive-plugin is only the context-menu glue, so xarchiver (with
+# 7z support) is added as the archive manager it needs to actually work.
 kiln = 1
 
 [packages]
 repo = [
   "exo", "garcon", "mousepad", "parole", "ristretto", "thunar", "thunar-archive-plugin",
+  "xarchiver", "7zip",
   "thunar-media-tags-plugin", "thunar-volman", "tumbler", "xfburn", "xfce4-appfinder", "xfce4-battery-plugin", "xfce4-clipman-plugin",
   "xfce4-cpufreq-plugin", "xfce4-cpugraph-plugin", "xfce4-dict", "xfce4-diskperf-plugin", "xfce4-eyes-plugin", "xfce4-fsguard-plugin", "xfce4-genmon-plugin",
   "xfce4-mailwatch-plugin", "xfce4-mount-plugin", "xfce4-mpc-plugin", "xfce4-netload-plugin", "xfce4-notes-plugin", "xfce4-notifyd", "xfce4-panel",

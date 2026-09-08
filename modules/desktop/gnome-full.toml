@@ -7,7 +7,7 @@ kiln = 1
 [packages]
 repo = [
   "gnome-shell", "gdm", "gnome-control-center", "xdg-desktop-portal-gnome",
-  "gnome-console", "gnome-calculator", "gnome-calendar",
+  "nautilus", "7zip", "gnome-console", "gnome-calculator", "gnome-calendar",
   "chatty", "d-spy", "dconf-editor", "endeavour", "file-roller", "ghex",
   "gnome-boxes", "gnome-builder", "gnome-calls", "gnome-chess", "gnome-mines",
   "gnome-nibbles", "gnome-robots", "gnome-sound-recorder", "gnome-sudoku",

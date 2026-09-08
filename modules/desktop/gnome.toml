@@ -1,8 +1,12 @@
-# GNOME's session and shell, plus a normal desktop's apps. See @kiln/desktop/gnome-minimal for essentials only, @kiln/desktop/gnome-full for the whole gnome-extra group.
+# GNOME's session and shell, plus a normal desktop's apps: a file manager,
+# an archive manager (with 7z support), a terminal, a calculator, and a
+# calendar. See @kiln/desktop/gnome-minimal for essentials only,
+# @kiln/desktop/gnome-full for the whole gnome-extra group.
 kiln = 1
 
 [packages]
 repo = ["gnome-shell", "gdm", "gnome-control-center", "xdg-desktop-portal-gnome",
+        "nautilus", "file-roller", "7zip",
         "gnome-console", "gnome-calculator", "gnome-calendar"]
 
 [systemd]

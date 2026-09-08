@@ -1,7 +1,7 @@
 # Plasma's session and portal, plus a normal desktop's apps and integration:
-# a terminal, a calculator, a file manager, a screenshot tool,
-# display/network/audio/bluetooth settings, and the QoL applets in
-# kdeplasma-addons. See
+# a terminal, a calculator, a file manager with archive (7z/rar included)
+# and admin:// support, a screenshot tool, display/network/audio/bluetooth
+# settings, and the QoL applets in kdeplasma-addons. See
 # @kiln/desktop/plasma-minimal for essentials only, and plasma-full for
 # plasma-meta, KDE's "everything" package.
 kiln = 1
@@ -9,9 +9,9 @@ kiln = 1
 [packages]
 repo = [
   "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
-  "konsole", "kcalc", "kinfocenter", "dolphin", "spectacle",
-  "kscreen", "plasma-nm", "plasma-pa", "bluedevil", "kpipewire",
-  "kdeplasma-addons", "plasma-workspace-wallpapers", "breeze-gtk",
+  "konsole", "kcalc", "kinfocenter", "dolphin", "ark", "7zip", "unarchiver",
+  "kio-admin", "spectacle", "kscreen", "plasma-nm", "plasma-pa", "bluedevil",
+  "kpipewire", "kdeplasma-addons", "plasma-workspace-wallpapers", "breeze-gtk",
 ]
 
 [systemd]

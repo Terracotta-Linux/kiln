@@ -1,14 +1,17 @@
 # The whole KDE experience: @kiln/desktop/plasma plus plasma-meta, KDE's own
 # meta-package for everything it ships. Unlike gnome-extra or the xfce
 # groups, plasma-meta is a real package name, so alpm resolves its
-# dependency closure and no member list is needed here.
+# dependency closure and no member list is needed here — except dolphin,
+# ark (with its 7z/rar backends), and kio-admin, which plasma-meta does not
+# depend on and plasma already lists explicitly.
 kiln = 1
 
 [packages]
 repo = [
   "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
-  "konsole", "kcalc", "korganizer", "spectacle",
-  "plasma-meta", "plasma-workspace-wallpapers", "breeze-gtk",
+  "konsole", "kcalc", "korganizer", "dolphin", "ark", "7zip", "unarchiver",
+  "kio-admin", "spectacle", "plasma-meta", "plasma-workspace-wallpapers",
+  "breeze-gtk",
 ]
 
 [systemd]
