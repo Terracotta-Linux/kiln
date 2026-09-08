@@ -7,7 +7,7 @@ kiln = 1
 [packages]
 repo = [
   "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
-  "konsole", "kcalc", "korganizer",
+  "konsole", "kcalc", "korganizer", "spectacle",
   "plasma-meta", "plasma-workspace-wallpapers", "breeze-gtk",
 ]
 
