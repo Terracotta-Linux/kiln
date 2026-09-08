@@ -107,7 +107,14 @@ pub fn detail(m: &Manifest) {
         m.kernel.package, m.kernel.headers
     );
     list("kernel.cmdline", m.kernel.cmdline.iter().cloned());
-    list("kernel.dkms", m.kernel.dkms.iter().cloned());
+    // A tree's path is the interesting half; a package is only its name.
+    list(
+        "kernel.dkms",
+        m.kernel.dkms.values().map(|d| match &d.source {
+            Some(source) => format!("{} ({source})", d.name),
+            None => d.name.clone(),
+        }),
+    );
     list(
         "kernel.dracut_modules",
         m.kernel.dracut_modules.iter().cloned(),

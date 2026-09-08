@@ -21,7 +21,7 @@ exclude = ["nano"]
 
 [kernel]
 cmdline = ["quiet", "zswap.enabled=0"]
-dkms    = ["v4l2loopback-dkms"]
+dkms    = ["v4l2loopback-dkms"]           # a package; the long form is in hardware.toml
 
 [kernel.modules]
 load    = ["kvm_intel"]

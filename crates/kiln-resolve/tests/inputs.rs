@@ -8,7 +8,7 @@
 mod harness;
 
 use harness::*;
-use kiln_resolve::{Inputs, ResolvedInput};
+use kiln_resolve::{DkmsOrigin, Inputs, ResolvedInput};
 
 /// A recipe in the configuration tree. `.SRCINFO` is required by resolution and
 /// is written here for the same reason a user would commit one.
@@ -147,15 +147,13 @@ fn a_dkms_package_becomes_a_build_keyed_to_the_kernel_in_the_image() {
         .find_map(|i| match i {
             ResolvedInput::DkmsModule {
                 name,
-                package,
-                evr,
+                origin,
                 kernel_evr,
                 build_key,
                 ..
             } => Some((
                 name.clone(),
-                package.clone(),
-                evr.clone(),
+                origin.clone(),
                 kernel_evr.clone(),
                 build_key.clone(),
             )),
@@ -164,13 +162,19 @@ fn a_dkms_package_becomes_a_build_keyed_to_the_kernel_in_the_image() {
         .expect("the DKMS package must reach the plan");
 
     assert_eq!(dkms.0, "fixture-nvidia-dkms-modules");
-    assert_eq!(dkms.1, "fixture-nvidia-dkms");
-    assert_eq!(dkms.2, "1.0-1", "resolved from the repositories");
     assert_eq!(
-        dkms.3, "6.19-1",
+        dkms.1,
+        DkmsOrigin::Package {
+            name: "fixture-nvidia-dkms".into(),
+            evr: "1.0-1".into(),
+        },
+        "resolved from the repositories"
+    );
+    assert_eq!(
+        dkms.2, "6.19-1",
         "the resolved EVR of the kernel this image actually contains"
     );
-    assert!(!dkms.4 .0.is_empty());
+    assert!(!dkms.3 .0.is_empty());
 
     // The DKMS package itself is a build-time dependency and nothing else. It
     // ships ~1 GB of sources and a `dkms.conf` that expects a compile at
@@ -182,6 +186,62 @@ fn a_dkms_package_becomes_a_build_keyed_to_the_kernel_in_the_image() {
         )),
         "the DKMS package must not enter the image"
     );
+}
+
+/// A DKMS tree in the configuration is hashed content, not a package: nothing
+/// is looked up in a repository, and the tree's own digest is the recipe
+/// identity — so editing a line of the driver rebuilds it.
+#[test]
+fn a_dkms_source_tree_is_keyed_to_its_own_contents() {
+    // An array of tables goes after the whole snippet: `[[kernel.dkms]]` opens
+    // a new table, and anything following it would land inside the entry.
+    let toml = format!(
+        "{BOOTABLE}\n[[kernel.dkms]]\nname = \"my-driver\"\nsource = \"kernel/my-driver\"\n"
+    );
+    let files = |body: &'static str| {
+        vec![
+            ("kernel/my-driver/dkms.conf", body),
+            ("kernel/my-driver/Makefile", "obj-m := my-driver.o\n"),
+        ]
+    };
+    let conf = "PACKAGE_NAME=\"my-driver\"\nPACKAGE_VERSION=\"1.0\"\n";
+    let plan = plan_with("inputs-dkms-tree", &toml, &files(conf));
+
+    let (name, origin, key) = plan
+        .inputs
+        .iter()
+        .find_map(|i| match i {
+            ResolvedInput::DkmsModule {
+                name,
+                origin,
+                build_key,
+                ..
+            } => Some((name.clone(), origin.clone(), build_key.clone())),
+            _ => None,
+        })
+        .expect("the DKMS tree must reach the plan");
+
+    assert_eq!(name, "my-driver-modules");
+    assert_eq!(
+        origin,
+        DkmsOrigin::Tree {
+            path: "kernel/my-driver".into()
+        }
+    );
+
+    // Edit the driver and the key moves. This is the whole reason the tree's
+    // digest is the recipe identity rather than the name.
+    let edited = plan_with(
+        "inputs-dkms-tree-edited",
+        &toml,
+        &files("PACKAGE_NAME=\"my-driver\"\nPACKAGE_VERSION=\"1.1\"\n"),
+    );
+    let edited_key = edited
+        .inputs
+        .iter()
+        .find_map(|i| i.build_key().cloned())
+        .expect("a DKMS tree has a build key");
+    assert_ne!(key, edited_key);
 }
 
 /// A name that resolves nowhere is an error at `kiln check`, naming the line

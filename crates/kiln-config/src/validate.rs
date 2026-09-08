@@ -462,6 +462,22 @@ impl Validator<'_> {
             out_of_tree.insert(name.clone(), OutOfTreeModule { name, source });
         }
 
+        // A DKMS entry is either a package name or a source tree in the
+        // configuration. `source` is what says which, and the shorthand form —
+        // `dkms = ["nvidia-open-dkms"]` — is the package one.
+        let mut dkms = BTreeMap::new();
+        for e in self.entries(doc, "kernel.dkms") {
+            let Some(name) = self.required(e, "name", "a DKMS module") else {
+                continue;
+            };
+            let source = self.field(e, "source");
+            if let Some(source) = &source {
+                self.hash_local(source, e, "DKMS module source");
+            }
+            self.note_item("kernel.dkms", &name, e, "name");
+            dkms.insert(name.clone(), DkmsModule { name, source });
+        }
+
         Kernel {
             package: self.string(doc, "kernel.package", "linux"),
             headers: self.bool(doc, "kernel.headers", false),
@@ -474,7 +490,7 @@ impl Validator<'_> {
                 options,
             },
             out_of_tree,
-            dkms: self.str_set(doc, "kernel.dkms"),
+            dkms,
         }
     }
 

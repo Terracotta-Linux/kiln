@@ -151,7 +151,9 @@ fn write(path: &Path, text: &str) -> Result<(), Error> {
     })
 }
 
-fn copy_tree(from: &Path, to: &Path) -> Result<(), Error> {
+/// Public because a DKMS tree needs exactly the same copy, for exactly the same
+/// reason — see [`crate::dkms`].
+pub fn copy_tree(from: &Path, to: &Path) -> Result<(), Error> {
     let out = std::process::Command::new("cp")
         .arg("-a")
         .arg(from)

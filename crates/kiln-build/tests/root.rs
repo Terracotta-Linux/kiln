@@ -170,6 +170,9 @@ fn a_prebuilt_dependency_goes_in_from_disk() {
 
 /// A build root for a DKMS package holds `dkms` — and not its alpm hooks.
 ///
+/// A DKMS *tree* asks for the same root minus the package, which is why
+/// `makedepends` is the thing under test rather than a hand-written list.
+///
 /// Installing a DKMS package beside a kernel's headers is exactly what
 /// `70-dkms-install.hook` triggers on, and it would compile the module here: as
 /// root, inside the transaction, into a `/usr/lib/modules` nothing collects
@@ -187,7 +190,13 @@ fn a_dkms_build_root_does_not_unpack_the_dkms_hooks() {
     let base = scratch("buildroot-dkms");
     let sources = sources(&base.join("state"));
 
-    let wanted = kiln_build::dkms::makedepends("fixture-nvidia-dkms", "fixture-linux");
+    let wanted = kiln_build::dkms::makedepends(
+        &kiln_build::dkms::Sources::Package {
+            name: "fixture-nvidia-dkms",
+            evr: "1.0-1",
+        },
+        "fixture-linux",
+    );
     let root = BuildRoot::assemble(&base.join("root"), &wanted, &[], &sources).expect("assembling");
 
     let session = Session::open(Config::for_root(&root.dir, "x86_64")).unwrap();

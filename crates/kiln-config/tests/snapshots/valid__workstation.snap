@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:fc7795bf3eb35590274d691388ba97327a01ad458fbf3aa303ccc9d4f35c35e1
+config_id: b3:9fd0dbcd09d20fe686595e4a9faeb937dc088a5f9dd964026b5bf07d58c350c0
 
 
   boot: 
@@ -29,7 +29,7 @@ config_id: b3:fc7795bf3eb35590274d691388ba97327a01ad458fbf3aa303ccc9d4f35c35e1
       mode: []
       source: []
       target: "/usr/lib/tmpfiles.d/scratch.conf"
-  hash_epoch: 6
+  hash_epoch: 7
   image: 
     arch: "[ARCH]"
     name: "workstation"
@@ -41,7 +41,13 @@ config_id: b3:fc7795bf3eb35590274d691388ba97327a01ad458fbf3aa303ccc9d4f35c35e1
       - "rw"
       - "zswap.enabled=0"
     dkms: 
-      - "v4l2loopback-dkms"
+      my-driver: 
+        name: "my-driver"
+        source: 
+          - "kernel/my-driver"
+      v4l2loopback-dkms: 
+        name: "v4l2loopback-dkms"
+        source: []
     dracut_modules: []
     headers: false
     modules: 
@@ -58,6 +64,7 @@ config_id: b3:fc7795bf3eb35590274d691388ba97327a01ad458fbf3aa303ccc9d4f35c35e1
     files/20-locale.sh: "b3:d93c38ec5fbbe57b9eb26742864b7b46fcc60af4a3db9b509762df7bf1b851ed"
     files/motd: "b3:8876b82b2f052d7533903ded58b1f0a37ee4b8fc1a4220677a292ef83530fa25"
     files/mytool: "b3:fc2cbc0dfa8ea62d093bab9c041feaebea9b3343d6534a1a539bcb67716081f5"
+    kernel/my-driver: "b3:d9f85457ec741ec8c3c982c2b34217cbf1677fee4d47ad2ce02954f61b9705f1"
     units/backup.timer: "b3:10a3a9333f95f0a9c2018b8129fef872c37d45023b62c7d5c41d6e15b5e58519"
   packages: 
     aur: 

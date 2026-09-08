@@ -354,7 +354,7 @@ Six kinds of input, all of which end up as a `.pkg.tar.zst` going through pacman
 | `packages.build` | your own PKGBUILDs, from a directory in your config tree |
 | `packages.file` | a `.pkg.tar.zst`, local or by URL, with a required `sha256` |
 | `[[kernel.module]]` | an out-of-tree module, built against the image's kernel |
-| `kernel.dkms` | a DKMS package, compiled against the image's kernel |
+| `kernel.dkms` | DKMS sources — a package, or a tree of your own — compiled against the image's kernel |
 
 A few things that surprise people:
 
@@ -478,7 +478,7 @@ Four different things, four different keys:
 [kernel]
 package = "linux"                         # which kernel package
 headers = false                           # build-time only; see below
-dkms    = ["nvidia-open-dkms"]            # DKMS packages, compiled into the image
+dkms    = ["nvidia-open-dkms"]            # DKMS sources, compiled into the image
 
 [kernel.modules]                          # in-tree modules, just configured
 load      = ["v4l2loopback"]
@@ -506,25 +506,54 @@ the machine, at install time, against the running kernel*. An immutable image ha
 moment: no install time on the target, no headers in the image, nothing writable under
 `/usr/lib/modules` to write the result into.
 
-`kernel.dkms` moves that moment into the build:
+`kernel.dkms` moves that moment into the build. The sources can come from a **package** or
+from a **tree of your own**, and after that the two are the same thing:
 
 ```toml
 [kernel]
-dkms = ["nvidia-open-dkms"]
+dkms = ["nvidia-open-dkms"]               # a package: shorthand for { name = "..." }
+
+[[kernel.dkms]]                           # a tree in your config, with a dkms.conf
+name   = "my-driver"
+source = "kernel/my-driver"
 ```
 
-Kiln installs the DKMS package into a **build root** — never into the image — runs `dkms
-build` there against the exact kernel the plan resolved, and packages the resulting `.ko`
-files as `nvidia-open-dkms-modules`. That is what goes in, so what ships is the driver and
-not the gigabyte of sources that produced it. The image never has `dkms` installed and never
-runs it.
+Either way Kiln puts the sources where `dkms` can reach them — a package into a **build
+root** that is never the image, a tree copied into the build — runs `dkms build` there
+against the exact kernel the plan resolved, and packages the resulting `.ko` files as
+`<name>-modules`. That is what goes in, so what ships is the driver and not the sources that
+produced it. The image never has `dkms` installed and never runs it.
 
 It is a build like any other: the same sandbox, the same build cache, the same failure
 report. Bump the kernel and every DKMS driver rebuilds, because the kernel's version is part
 of the build key — `kiln check` reports that as `(kernel changed)` before you build, exactly
-as it does for `[[kernel.module]]`.
+as it does for `[[kernel.module]]`. Edit a file in your own tree and it rebuilds too, because
+the tree's digest is part of `config_id`.
 
-Two things worth knowing:
+### A tree of your own
+
+The directory needs a `dkms.conf` at its root, and that file is the driver's own — the same
+one you would hand to `dkms` on a mutable system:
+
+```toml
+[[kernel.dkms]]
+name   = "my-driver"
+source = "kernel/my-driver"
+```
+
+```
+kernel/my-driver/
+  dkms.conf          PACKAGE_NAME, PACKAGE_VERSION, BUILT_MODULE_NAME[0], …
+  Makefile
+  my-driver.c
+```
+
+`name` is only a label — the driver names itself in `PACKAGE_NAME`, and that is what `dkms`
+builds under. A tree with no `dkms.conf` is refused before a build root is assembled, with a
+message pointing at `[[kernel.module]]`, which builds a plain Makefile tree with `make`.
+That is the real difference between the two keys: a tool, not a preference.
+
+### Things worth knowing
 
 **Prefer a prebuilt package when one exists.** `nvidia-open` is the same driver with the
 compile already done; `@kiln/gpu/nvidia-open` names it, and `@kiln/gpu/nvidia-open-dkms` is
@@ -534,6 +563,11 @@ for kernels Arch ships no prebuilt module for — `linux-zen`, `linux-hardened`,
 build modules from; `packages.aur` is what tells Kiln to build the package itself first.
 Naming a package that resolves in neither place is an error at `kiln check`, pointing at the
 line that wrote it.
+
+**One spelling per file.** TOML will not accept `dkms = [...]` and `[[kernel.dkms]]` in the
+same document — that is a duplicate key. Use one form per file; entries from different files
+union, so a profile's packages and your own tree compose without either knowing about the
+other.
 
 The initramfs is dracut, with the upstream `ostree` module. The bootloader is GRUB2. Neither
 takes another value; `boot.loader = "systemd-boot"` gets a diagnostic explaining that

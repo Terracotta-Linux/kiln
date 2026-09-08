@@ -12,17 +12,19 @@
 
 use kiln_manifest::{Hash, HASH_EPOCH};
 use kiln_resolve::{
-    BuildPlan, ContentRef, EnableState, IdEntry, ImageRef, Provenance, ResolvedInput, SourcePin,
-    UidMap, VolatileInput,
+    BuildPlan, ContentRef, DkmsOrigin, EnableState, IdEntry, ImageRef, Provenance, ResolvedInput,
+    SourcePin, UidMap, VolatileInput,
 };
 
-/// Frozen at hash epoch 6. `plan_id` embeds `HASH_EPOCH` directly, so an epoch
+/// Frozen at hash epoch 7. `plan_id` embeds `HASH_EPOCH` directly, so an epoch
 /// bump moves it whether or not anything about a *plan* changed — which is the
 /// intent: the epoch exists to invalidate every cached identity at once. This
-/// bump was `kernel.dkms` joining `Kernel`'s canonical encoding, as epoch 5 was
-/// `kernel.modules.initramfs` joining `KernelModules`' and epoch 4 was
-/// `kernel.dracut_modules`; see `kiln-config`'s `hash_freeze.rs` for why.
-const FROZEN_AT_EPOCH: u32 = 6;
+/// bump was `kernel.dkms` growing a `source`, so a DKMS tree in the
+/// configuration can be built the way a packaged one is; epoch 6 was
+/// `kernel.dkms` arriving, 5 was `kernel.modules.initramfs` joining
+/// `KernelModules`' encoding and 4 was `kernel.dracut_modules`. See
+/// `kiln-config`'s `hash_freeze.rs` for why.
+const FROZEN_AT_EPOCH: u32 = 7;
 
 /// The plan as phase 2 could express it: repository packages, a file and a
 /// unit.
@@ -170,10 +172,23 @@ fn dkms_specimen() -> BuildPlan {
     let mut plan = phase_three_specimen();
     plan.inputs.push(ResolvedInput::DkmsModule {
         name: "nvidia-open-dkms-modules".into(),
-        package: "nvidia-open-dkms".into(),
-        evr: "580.95.05-1".into(),
+        origin: DkmsOrigin::Package {
+            name: "nvidia-open-dkms".into(),
+            evr: "580.95.05-1".into(),
+        },
         build_key: Hash("b3:1177".into()),
         recipe: Hash("b3:2288".into()),
+        kernel_evr: "6.19.2-1".into(),
+    });
+    // A tree of the user's own is a different origin at the same shape, and the
+    // encoding has to keep them apart.
+    plan.inputs.push(ResolvedInput::DkmsModule {
+        name: "my-driver-modules".into(),
+        origin: DkmsOrigin::Tree {
+            path: "kernel/my-driver".into(),
+        },
+        build_key: Hash("b3:3399".into()),
+        recipe: Hash("b3:44aa".into()),
         kernel_evr: "6.19.2-1".into(),
     });
     plan.canonicalize();
@@ -189,7 +204,7 @@ fn plan_id_is_frozen() {
     let got = specimen().plan_id();
     assert_eq!(
         got.to_string(),
-        "b3:495619f9119fa952ce443849c8ffcf1a40806a0ce7761bb3861ca4b7c92924fd",
+        "b3:f4846db3f677ae94f7b36e7670ed24ce8d18403d1e9a73e49f9c6f95fc1d2cc8",
         "\n\
          `plan_id` changed. There are exactly two legitimate causes:\n\
          \n\
@@ -218,7 +233,7 @@ fn plan_id_is_frozen() {
 fn the_phase_three_input_kinds_did_not_move_a_phase_two_plan() {
     assert_eq!(
         specimen().plan_id().to_string(),
-        "b3:495619f9119fa952ce443849c8ffcf1a40806a0ce7761bb3861ca4b7c92924fd",
+        "b3:f4846db3f677ae94f7b36e7670ed24ce8d18403d1e9a73e49f9c6f95fc1d2cc8",
         "\nthis is the value frozen at epoch 3 with the phase-3 kinds already present: adding an input kind must not \
          invalidate a plan that uses none of it\n"
     );
@@ -229,7 +244,7 @@ fn the_phase_three_input_kinds_are_frozen_too() {
     assert_eq!(HASH_EPOCH, FROZEN_AT_EPOCH);
     assert_eq!(
         phase_three_specimen().plan_id().to_string(),
-        "b3:6cba821e27a490355e7732ac4c83d031a26211dabd3793d3ae413c4b6dd5aa9a",
+        "b3:427bddbcfec22db7028072da9838cf2d0c632f4e1ad2299411595a6334bba928",
         "\nsee `plan_id_is_frozen` for the two legitimate reasons this can change\n"
     );
 }
@@ -239,7 +254,7 @@ fn a_dkms_package_is_frozen_too() {
     assert_eq!(HASH_EPOCH, FROZEN_AT_EPOCH);
     assert_eq!(
         dkms_specimen().plan_id().to_string(),
-        "b3:4c200c8155380ab65c06b9e5401b58a2fdd1e2e711ac5848b42d3a773833e834",
+        "b3:a7844fe2f6ee129cbe08cc0e90ae30d1d7de71e806f856147532a5e8cd40cf34",
         "\nsee `plan_id_is_frozen` for the two legitimate reasons this can change\n"
     );
 }
@@ -263,7 +278,11 @@ fn every_dkms_field_moves_the_identity() {
     // The driver's own version.
     assert_ne!(
         mutate(&|i| {
-            if let ResolvedInput::DkmsModule { evr, .. } = i {
+            if let ResolvedInput::DkmsModule {
+                origin: DkmsOrigin::Package { evr, .. },
+                ..
+            } = i
+            {
                 *evr = "581.0.0-1".into();
             }
         }),
@@ -287,11 +306,30 @@ fn every_dkms_field_moves_the_identity() {
         }),
         baseline
     );
-    // which package the sources came from.
+    // which package the sources came from...
     assert_ne!(
         mutate(&|i| {
-            if let ResolvedInput::DkmsModule { package, .. } = i {
-                *package = "something-else-dkms".into();
+            if let ResolvedInput::DkmsModule {
+                origin: DkmsOrigin::Package { name, .. },
+                ..
+            } = i
+            {
+                *name = "something-else-dkms".into();
+            }
+        }),
+        baseline
+    );
+    // ...and whether they came from a package at all. A driver that moved from
+    // `nvidia-open-dkms` to a tree of your own is a different image, and a
+    // encoding that could not say so would call the two the same.
+    assert_ne!(
+        mutate(&|i| {
+            if let ResolvedInput::DkmsModule { origin, .. } = i {
+                if matches!(origin, DkmsOrigin::Package { .. }) {
+                    *origin = DkmsOrigin::Tree {
+                        path: "kernel/nvidia".into(),
+                    };
+                }
             }
         }),
         baseline
@@ -432,7 +470,7 @@ fn a_build_script_reaches_the_identity_by_text_and_by_phase() {
     let baseline = specimen().plan_id();
     assert_eq!(
         baseline.to_string(),
-        "b3:495619f9119fa952ce443849c8ffcf1a40806a0ce7761bb3861ca4b7c92924fd",
+        "b3:f4846db3f677ae94f7b36e7670ed24ce8d18403d1e9a73e49f9c6f95fc1d2cc8",
         "the specimen has no scripts, so adding the kind must not have moved it"
     );
 

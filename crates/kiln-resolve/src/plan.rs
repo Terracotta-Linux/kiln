@@ -170,20 +170,19 @@ pub enum ResolvedInput {
     /// a `dkms.conf`, and the machine that would have compiled them at install
     /// time does not exist. Only what it builds ships.
     DkmsModule {
-        /// The synthesized package's name, `<package>-modules`. What the plan
+        /// The synthesized package's name, `<name>-modules`. What the plan
         /// contributes to the image's package set; not the DKMS package's own
         /// name, which describes something else entirely.
         name: String,
-        /// The DKMS package Kiln installs into the build root.
-        package: String,
-        /// Its resolved version — from the repositories, or from the AUR when
-        /// `packages.aur` names it too.
-        evr: String,
+        /// Where the sources come from — a package, or a tree in the
+        /// configuration.
+        origin: DkmsOrigin,
         build_key: Hash,
-        /// `blake3("dkms:<package>@<evr>")`. A DKMS package *is* its sources, so
-        /// its version is the recipe identity — carried alongside `build_key`
-        /// for the same reason `BuiltPackage` carries one: so `kiln check` can
-        /// say whether a rebuild is the driver moving or its toolchain moving.
+        /// `blake3("dkms:<package>@<evr>")` for a package, the tree's own digest
+        /// for a tree. A DKMS package *is* its sources, so its version is the
+        /// recipe identity; carried alongside `build_key` for the same reason
+        /// `BuiltPackage` carries one, so `kiln check` can say whether a rebuild
+        /// is the driver moving or its toolchain moving.
         recipe: Hash,
         /// including this in the build key is what makes "rebuild the
         /// driver when the kernel changes" automatic rather than a special case.
@@ -205,6 +204,27 @@ pub enum ResolvedInput {
         phase: ScriptPhase,
         content: ContentRef,
     },
+}
+
+/// Where a DKMS driver's sources come from.
+///
+/// A separate type rather than two optional fields, because they are genuinely
+/// exclusive and the encoding has to keep them apart: a driver that moved from
+/// a package to a tree of your own is a different image even at the same name.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DkmsOrigin {
+    /// A DKMS package, installed into the build root and never into the image.
+    Package {
+        name: String,
+        /// Resolved from the repositories, or from the AUR when `packages.aur`
+        /// names it too.
+        evr: String,
+    },
+    /// A directory in the configuration tree that ships a `dkms.conf`. **Not
+    /// hashed**, for the same reason `BuiltPackage::path` is not: `recipe`
+    /// already says what the directory *contains*, and renaming one is not a
+    /// reason to rebuild.
+    Tree { path: String },
 }
 
 // `SourcePin` lives in `kiln-build`: it describes one input to a *build*, and
@@ -557,20 +577,32 @@ impl Canonical for ResolvedInput {
             ]),
             ResolvedInput::DkmsModule {
                 name,
-                package,
-                evr,
+                origin,
                 build_key,
                 recipe,
                 kernel_evr,
             } => Canon::map([
                 ("kind", Canon::str("dkms-module")),
                 ("name", Canon::str(name)),
-                ("package", Canon::str(package)),
-                ("evr", Canon::str(evr)),
+                ("origin", origin.canon()),
                 ("build_key", build_key.canon()),
                 ("recipe", recipe.canon()),
                 ("kernel_evr", Canon::str(kernel_evr)),
             ]),
+        }
+    }
+}
+
+impl Canonical for DkmsOrigin {
+    fn canon(&self) -> Canon {
+        match self {
+            DkmsOrigin::Package { name, evr } => Canon::map([
+                ("kind", Canon::str("package")),
+                ("package", Canon::str(name)),
+                ("evr", Canon::str(evr)),
+            ]),
+            // See the variant: the path is not hashed, `recipe` is.
+            DkmsOrigin::Tree { path: _ } => Canon::map([("kind", Canon::str("tree"))]),
         }
     }
 }

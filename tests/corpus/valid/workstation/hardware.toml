@@ -4,3 +4,9 @@ include = ["@kiln/gpu/nvidia-open", "@kiln/hardware/intel-ucode"]
 
 [kernel]
 cmdline = ["amd_iommu=on"]
+
+# The long form, in a different file: TOML will not take `dkms = [...]` and
+# `[[kernel.dkms]]` in one document, and the two union across files anyway.
+[[kernel.dkms]]
+name   = "my-driver"
+source = "kernel/my-driver"

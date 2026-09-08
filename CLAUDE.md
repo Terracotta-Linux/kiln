@@ -129,11 +129,13 @@ bottom ones need root and run only in privileged CI containers.
 - `kiln-sandbox` — `Sandbox` trait; bwrap + nspawn.
 - `kiln-image` — all eleven assembly steps, normalization, and `bootcount`.
 - `kiln-build` — recipes, `build_key`, the build cache, the two-phase build, the build root,
-  synthesized module recipes, and the synthesized *DKMS* recipe (`dkms.rs`): a `kernel.dkms`
-  package is installed into a build root, never the image, `dkms build` runs there against
-  the resolved kernel, and only the `.ko` files ship. The build root sets `NoExtract` over
-  the three `dkms` alpm hooks, which would otherwise compile the module a second time as
-  root, inside the transaction, before Kiln compiles it in a sandbox.
+  synthesized module recipes, and the synthesized *DKMS* recipe (`dkms.rs`): `kernel.dkms`
+  sources are either a package installed into a build root that is never the image, or a
+  tree in the configuration copied into the build; `dkms build` runs there against the
+  resolved kernel and only the `.ko` files ship. The two differ in where `$source_tree`
+  points and nothing else. The build root sets `NoExtract` over the three `dkms` alpm hooks,
+  which would otherwise compile the module a second time as root, inside the transaction,
+  before Kiln compiles it in a sandbox.
 - `kiln-aur` — RPC, commit identity, the dependency closure, the clone.
 - `kiln-record` — the build record.
 - `kiln-ostree` — commit, deploy, generations, rollback, `grubenv`, the `Removal` policy

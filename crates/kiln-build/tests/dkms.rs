@@ -45,14 +45,48 @@ impl Sandbox for NeverRuns {
 fn materialize(into: &str) -> PathBuf {
     let base = scratch(into);
     dkms::materialize(
-        "nvidia-open-dkms",
-        "580.95.05-1",
+        &dkms::Sources::Package {
+            name: "nvidia-open-dkms",
+            evr: "580.95.05-1",
+        },
         &base.join("recipe"),
         "x86_64",
         "linux",
         "6.19.2-1",
     )
     .expect("materializing the recipe")
+}
+
+/// A DKMS source tree as a user would write one: a `dkms.conf` naming the
+/// module, and whatever `MAKE[0]` needs.
+fn tree(at: &Path, conf: &str) -> PathBuf {
+    let dir = at.join("src/my-driver");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Makefile"), "obj-m := my-driver.o\n").unwrap();
+    std::fs::write(dir.join("my-driver.c"), "/* a driver */\n").unwrap();
+    if !conf.is_empty() {
+        std::fs::write(dir.join("dkms.conf"), conf).unwrap();
+    }
+    dir
+}
+
+const DKMS_CONF: &str = "PACKAGE_NAME=\"my-driver\"\nPACKAGE_VERSION=\"1.0\"\n\
+                         BUILT_MODULE_NAME[0]=\"my-driver\"\n\
+                         DEST_MODULE_LOCATION[0]=\"/kernel/drivers/misc\"\n";
+
+fn materialize_tree(into: &str, conf: &str) -> Result<PathBuf, dkms::Error> {
+    let base = scratch(into);
+    let from = tree(&base, conf);
+    dkms::materialize(
+        &dkms::Sources::Tree {
+            name: "my-driver",
+            dir: &from,
+        },
+        &base.join("recipe"),
+        "x86_64",
+        "linux",
+        "6.19.2-1",
+    )
 }
 
 fn pkgbuild(dir: &Path) -> String {
@@ -152,20 +186,109 @@ fn module_signing_is_turned_off_rather_than_left_to_a_guess() {
     assert!(pkgbuild(&materialize("dkms-signing")).contains("export try_sign_modules=false"));
 }
 
+/// A DKMS tree of your own reaches the same build. What differs is where the
+/// sources come from, and therefore what the build root has to hold: `dkms` and
+/// the headers, and no third package, because there is no package.
+#[test]
+fn a_source_tree_reads_back_as_a_recipe_and_asks_for_no_package() {
+    let dir = materialize_tree("dkms-tree", DKMS_CONF).expect("materializing");
+    let recipe = Recipe::read(
+        &dir,
+        "my-driver-modules",
+        Hash("b3:aa".into()),
+        "x86_64",
+        &NeverRuns,
+    )
+    .expect("reading the synthesized recipe");
+
+    assert_eq!(recipe.meta.pkgnames, ["my-driver-modules"]);
+    assert_eq!(recipe.meta.makedepends, ["dkms", "linux-headers"]);
+    assert!(recipe.remote_sources().is_empty());
+}
+
+/// The driver's own source is carried over, and the recipe Kiln wrote does not
+/// leak into it — the same contract `[[kernel.module]]` has.
+#[test]
+fn the_source_tree_is_copied_and_the_configuration_tree_is_not_touched() {
+    let base = scratch("dkms-copy");
+    let from = tree(&base, DKMS_CONF);
+    let dir = dkms::materialize(
+        &dkms::Sources::Tree {
+            name: "my-driver",
+            dir: &from,
+        },
+        &base.join("recipe"),
+        "x86_64",
+        "linux",
+        "6.19.2-1",
+    )
+    .unwrap();
+
+    assert!(dir.join("dkms.conf").is_file());
+    assert!(dir.join("my-driver.c").is_file());
+    assert!(dir.join("PKGBUILD").is_file());
+    // The config root is somewhere Kiln reads and never writes.
+    assert!(!from.join("PKGBUILD").exists());
+    assert!(!from.join(".SRCINFO").exists());
+
+    let text = pkgbuild(&dir);
+    assert!(
+        text.contains("rm -f \"$staged/PKGBUILD\""),
+        "the synthesized recipe must not become part of the driver's source: {text}"
+    );
+    // `dkms add` insists the sources sit at `$source_tree/$module-$version`,
+    // and /usr/src is not writable by the build user.
+    assert!(
+        text.contains("_sourcetree() {\n  echo \"$srcdir/src\""),
+        "{text}"
+    );
+}
+
+/// A tree with no `dkms.conf` is an ordinary out-of-tree module, and the two
+/// are built by different tools. Saying so here costs nothing; discovering it
+/// after a build root has been assembled costs a minute and a confusing error
+/// out of `dkms`.
+#[test]
+fn a_tree_without_a_dkms_conf_is_refused_before_anything_is_built() {
+    let err = materialize_tree("dkms-no-conf", "").expect_err("must not materialize");
+    let text = err.to_string();
+    assert!(text.contains("no dkms.conf"), "{text}");
+    assert!(text.contains("[[kernel.module]]"), "{text}");
+}
+
+/// Both shapes produce a `pkgver` `makepkg` will accept — a tree has no version
+/// of its own, so it takes the kernel's, the way `[[kernel.module]]` does.
+#[test]
+fn a_tree_is_versioned_by_the_kernel_it_was_built_against() {
+    let dir = materialize_tree("dkms-tree-pkgver", DKMS_CONF).unwrap();
+    assert!(
+        pkgbuild(&dir).contains("\npkgver=6.19.2_1\n"),
+        "{}",
+        pkgbuild(&dir)
+    );
+    // The `.SRCINFO` beside it has to agree, or Kiln would be lying to itself.
+    let srcinfo = std::fs::read_to_string(dir.join(".SRCINFO")).unwrap();
+    assert!(srcinfo.contains("pkgver = 6.19.2_1"), "{srcinfo}");
+}
+
 /// The recipe is bash, and a syntax error in it is a build that dies after the
 /// build root has been assembled — several hundred megabytes and a minute in,
 /// for a mistake a parse would have caught here.
 #[test]
 fn the_synthesized_recipe_is_valid_bash() {
-    let dir = materialize("dkms-syntax");
-    let out = std::process::Command::new("bash")
-        .arg("-n")
-        .arg(dir.join("PKGBUILD"))
-        .output()
-        .expect("running bash -n");
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    for dir in [
+        materialize("dkms-syntax"),
+        materialize_tree("dkms-syntax-tree", DKMS_CONF).unwrap(),
+    ] {
+        let out = std::process::Command::new("bash")
+            .arg("-n")
+            .arg(dir.join("PKGBUILD"))
+            .output()
+            .expect("running bash -n");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
 }

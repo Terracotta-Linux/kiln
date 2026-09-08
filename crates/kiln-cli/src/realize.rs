@@ -35,7 +35,7 @@ use kiln_build::{dkms, key::Ingredients, module, BuildRoot, Builder, Recipe};
 use kiln_diag::ExitCode;
 use kiln_image::assemble;
 use kiln_manifest::{Hash, Manifest};
-use kiln_resolve::{BuildPlan, ResolvedInput};
+use kiln_resolve::{BuildPlan, DkmsOrigin, ResolvedInput};
 use kiln_sandbox::{Bubblewrap, Sandbox};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -313,12 +313,12 @@ enum Job {
         key: Hash,
         kernel_evr: String,
     },
-    /// a DKMS package's modules, compiled against the kernel in the image.
-    /// The package itself is a build-time dependency and never ships.
+    /// a DKMS driver's modules, compiled against the kernel in the image.
+    /// Sources from a package — a build-time dependency that never ships — or
+    /// from a tree in the configuration.
     Dkms {
         name: String,
-        package: String,
-        evr: String,
+        origin: DkmsOrigin,
         key: Hash,
         kernel_evr: String,
     },
@@ -373,11 +373,15 @@ impl Job {
                 name, kernel_evr, ..
             } => println!("  \x1b[1mmodule\x1b[0m {name} against kernel {kernel_evr}"),
             Job::Dkms {
-                package,
-                evr,
-                kernel_evr,
-                ..
-            } => println!("  \x1b[1mdkms\x1b[0m {package} {evr} against kernel {kernel_evr}"),
+                origin, kernel_evr, ..
+            } => match origin {
+                DkmsOrigin::Package { name, evr } => {
+                    println!("  \x1b[1mdkms\x1b[0m {name} {evr} against kernel {kernel_evr}")
+                }
+                DkmsOrigin::Tree { path } => {
+                    println!("  \x1b[1mdkms\x1b[0m {path} against kernel {kernel_evr}")
+                }
+            },
         }
     }
 }
@@ -448,15 +452,13 @@ fn jobs(plan: &BuildPlan) -> Vec<Job> {
             }),
             ResolvedInput::DkmsModule {
                 name,
-                package,
-                evr,
+                origin,
                 build_key,
                 kernel_evr,
                 ..
             } => modules.push(Job::Dkms {
                 name: name.clone(),
-                package: package.clone(),
-                evr: evr.clone(),
+                origin: origin.clone(),
                 key: build_key.clone(),
                 kernel_evr: kernel_evr.clone(),
             }),
@@ -557,16 +559,26 @@ fn build_one(
             (dir, Some(key.clone()))
         }
         Job::Dkms {
-            package,
-            evr,
+            origin,
             key,
             kernel_evr,
             ..
         } => {
             kind = "dkms";
+            // A tree is copied out of the configuration root, which Kiln reads
+            // and never writes; a package's sources arrive in the build root
+            // instead, and there is nothing to copy.
+            let tree = match origin {
+                DkmsOrigin::Tree { path } => Some(opts.ctx.config_root.join(path)),
+                DkmsOrigin::Package { .. } => None,
+            };
+            let sources = match (origin, &tree) {
+                (DkmsOrigin::Package { name, evr }, _) => dkms::Sources::Package { name, evr },
+                (DkmsOrigin::Tree { path }, Some(dir)) => dkms::Sources::Tree { name: path, dir },
+                (DkmsOrigin::Tree { .. }, None) => unreachable!("a tree always has a directory"),
+            };
             let dir = dkms::materialize(
-                package,
-                evr,
+                &sources,
                 &scratch,
                 arch,
                 &opts.manifest.kernel.package,
@@ -689,12 +701,15 @@ fn tree_hash(job: &Job, digests: &BTreeMap<String, Hash>) -> Hash {
     match job {
         Job::Recipe { path, .. } => digests.get(path).cloned(),
         Job::Module { source, .. } => digests.get(source).cloned(),
-        // A DKMS package has no directory in the configuration tree: its
-        // sources arrive as a package, so its identity is name and version —
-        // spelled the same way resolution spelled it into the plan's `recipe`.
-        Job::Dkms { package, evr, .. } => {
-            Some(Hash::of(format!("dkms:{package}@{evr}").as_bytes()))
-        }
+        // Spelled the same way resolution spelled it into the plan's `recipe`:
+        // a tree is its own content, and a package — which has no directory in
+        // the configuration at all — is its name and version.
+        Job::Dkms { origin, .. } => match origin {
+            DkmsOrigin::Tree { path } => digests.get(path).cloned(),
+            DkmsOrigin::Package { name, evr } => {
+                Some(Hash::of(format!("dkms:{name}@{evr}").as_bytes()))
+            }
+        },
         Job::Aur { .. } => None,
     }
     .unwrap_or_else(|| aur_recipe_identity(job))

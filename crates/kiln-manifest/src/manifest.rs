@@ -29,7 +29,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// | 5 | `kernel.modules.initramfs` joined `KernelModules`' canonical encoding. Which drivers are *in* the initramfs decides what the machine can do before it has a root filesystem — whether the panel has a KMS driver for the splash, most visibly — and dracut's non-hostonly selection does not put a GPU driver there on its own. |
 /// | 4 | `kernel.dracut_modules` joined `Kernel`'s canonical encoding. dracut's default, non-hostonly module selection does not include every module whose package is installed — a module can be present but excluded unless named — so which dracut modules are requested is genuinely part of what is inside the image, not incidental to it. |
 /// | 6 | `kernel.dkms` joined `Kernel`'s canonical encoding. A DKMS package's modules are compiled into the image at build time rather than on the machine at install time, so which DKMS packages a configuration names decides what drivers the image contains. |
-pub const HASH_EPOCH: u32 = 6;
+/// | 7 | `kernel.dkms` became entries carrying an optional `source` rather than a flat set of package names, so a DKMS tree in the configuration itself can be built the same way. A tree the user wrote is a different input from a package with the same name, and a set of strings has nowhere to say which one it is. |
+pub const HASH_EPOCH: u32 = 7;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -190,14 +191,9 @@ pub struct Kernel {
     pub dracut_modules: BTreeSet<String>,
     pub modules: KernelModules,
     pub out_of_tree: BTreeMap<String, OutOfTreeModule>,
-    /// Packages that ship DKMS sources rather than a compiled module —
-    /// `nvidia-open-dkms` and its kind. The package itself never enters the
-    /// image: Kiln installs it into a build root, compiles its modules against
-    /// the kernel the plan resolved, and ships the `.ko` files.
-    ///
-    /// A set of package names, not a table: there is exactly one thing to say
-    /// about a DKMS package, which is that the image wants what it builds.
-    pub dkms: BTreeSet<String>,
+    /// DKMS sources, compiled against the kernel the plan resolved rather than
+    /// on the machine at install time. Keyed by name, like everything else.
+    pub dkms: BTreeMap<String, DkmsModule>,
 }
 
 impl Default for Kernel {
@@ -209,7 +205,7 @@ impl Default for Kernel {
             dracut_modules: BTreeSet::new(),
             modules: KernelModules::default(),
             out_of_tree: BTreeMap::new(),
-            dkms: BTreeSet::new(),
+            dkms: BTreeMap::new(),
         }
     }
 }
@@ -236,6 +232,28 @@ pub struct KernelModules {
 pub struct OutOfTreeModule {
     pub name: String,
     pub source: String,
+}
+
+/// One DKMS driver: sources plus a `dkms.conf` saying how to build them.
+///
+/// Two places those can come from, and the `source` field is which:
+///
+/// - **`None`** — `name` is a *package* (`nvidia-open-dkms`), from the
+///   repositories or, when `packages.aur` names it too, the AUR. The package is
+///   installed into a build root and never into the image.
+/// - **`Some`** — a directory in the configuration tree that ships a
+///   `dkms.conf`, copied into the build the way `[[kernel.module]]`'s source is.
+///   `name` is then only a label; the driver names itself in its `dkms.conf`.
+///
+/// One key rather than two, because what happens after the sources arrive is
+/// identical: `dkms build` against the image's kernel, and the `.ko` files
+/// packaged as `<name>-modules`. `[[kernel.module]]` stays what it is — a
+/// Makefile tree built with `make` — because a tree with a `dkms.conf` and a
+/// tree without are built by different tools, not by the same tool with a flag.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DkmsModule {
+    pub name: String,
+    pub source: Option<String>,
 }
 
 /// GRUB2, through libostree's own `bootloader=grub2` backend.
@@ -489,6 +507,20 @@ impl Canonical for OutOfTreeModule {
         Canon::map([
             ("name", Canon::str(&self.name)),
             ("source", Canon::str(&self.source)),
+        ])
+    }
+}
+
+impl Canonical for DkmsModule {
+    fn canon(&self) -> Canon {
+        Canon::map([
+            ("name", Canon::str(&self.name)),
+            // Hashed, unlike a recipe directory's path: this one decides
+            // *where the sources come from*, so a driver that moved from a
+            // package to a tree of your own is a different image even when the
+            // name is the same. What the tree contains rides in
+            // `local_digests`, as every other local path does.
+            ("source", Canon::opt(self.source.as_ref().map(Canon::str))),
         ])
     }
 }

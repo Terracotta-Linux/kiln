@@ -400,36 +400,89 @@ fn build_keys(
         });
     }
 
-    for package in &manifest.kernel.dkms {
-        let Some((evr, from)) = dkms_version(manifest, session, aur, package, problems) else {
-            continue;
+    for (name, entry) in &manifest.kernel.dkms {
+        // An AUR DKMS package is in the plan and realization builds it before
+        // this one, handing the artifact to the build root as a file — but no
+        // sync database has it, so it is the one `makedepends` entry that has
+        // to stay out of the resolved closure.
+        let mut aur_only = false;
+        // A tree in the configuration is hashed content, exactly like a
+        // `[[kernel.module]]` source; a package is a name and a resolved
+        // version. That is the whole difference, and it is settled here.
+        let (origin, recipe) = match &entry.source {
+            Some(source) => {
+                let Some(tree) = manifest.local_digests.get(source).cloned() else {
+                    problems.push(
+                        Diag::error(
+                            "kiln::resolution",
+                            format!("`{name}` names a source tree Kiln did not hash"),
+                        )
+                        .help("this is a bug in Kiln, not in your configuration"),
+                    );
+                    continue;
+                };
+                (
+                    DkmsOrigin::Tree {
+                        path: source.clone(),
+                    },
+                    tree,
+                )
+            }
+            None => {
+                let Some((evr, from)) = dkms_version(manifest, session, aur, name, problems) else {
+                    continue;
+                };
+                // A DKMS package *is* its sources, so its version is the recipe
+                // identity — the same move `aur_recipe_identity` makes with a
+                // commit. An AUR one is resolved but not solvable, so its
+                // version reaches the key only through this.
+                let recipe = Hash::of(format!("dkms:{name}@{evr}").as_bytes());
+                aur_only = from == DkmsSource::Aur;
+                (
+                    DkmsOrigin::Package {
+                        name: name.clone(),
+                        evr,
+                    },
+                    recipe,
+                )
+            }
         };
-        // A DKMS package *is* its sources, so its version is the recipe
-        // identity — the same move `aur_recipe_identity` makes with a commit.
-        let recipe = Hash::of(format!("dkms:{package}@{evr}").as_bytes());
-        // The whole build root, minus what resolution cannot see: an AUR
-        // package has no entry in any sync database, and its identity is
-        // already in `recipe` above.
-        let wanted: Vec<String> = dkms::makedepends(package, kernel)
+
+        let sources = build_sources(&origin);
+        let wanted: Vec<String> = dkms::makedepends(&sources, kernel)
             .into_iter()
-            .filter(|d| d != package || from == DkmsSource::Repositories)
+            .filter(|d| !(aur_only && d == name))
             .collect();
-        let Some(makedeps) = closure_evrs(session, &wanted, package, problems) else {
+        let Some(makedeps) = closure_evrs(session, &wanted, name, problems) else {
             continue;
         };
         let ingredients = Ingredients::new(recipe.clone(), arch)
             .with_makedeps(makedeps)
             .against_kernel(&kernel_evr);
         out.push(ResolvedInput::DkmsModule {
-            name: dkms::package_name(package),
-            package: package.clone(),
-            evr,
+            name: dkms::package_name(name),
+            origin,
             build_key: ingredients.build_key(),
             recipe,
             kernel_evr: kernel_evr.clone(),
         });
     }
     out
+}
+
+/// The plan's view of a DKMS driver's sources, as `kiln-build` wants it.
+///
+/// Resolution has no directory to hand over — realization copies the tree — so
+/// the path stands in for it. Only `makedepends` is asked of the result here,
+/// and that reads the *shape*, not the directory.
+fn build_sources(origin: &DkmsOrigin) -> dkms::Sources<'_> {
+    match origin {
+        DkmsOrigin::Package { name, evr } => dkms::Sources::Package { name, evr },
+        DkmsOrigin::Tree { path } => dkms::Sources::Tree {
+            name: path,
+            dir: std::path::Path::new(path),
+        },
+    }
 }
 
 /// The version of a DKMS package, from wherever the configuration gets it.
@@ -466,9 +519,10 @@ fn dkms_version(
         diag = diag.label(o, "named here");
     }
     problems.push(diag.help(
-        "`kernel.dkms` names the package that ships the DKMS sources — \
-         `nvidia-open-dkms`, not `nvidia-open`. A DKMS package from the AUR has to be \
-         listed in `packages.aur` as well, so that Kiln knows to build it first.",
+        "a `kernel.dkms` entry with no `source` names the *package* that ships the DKMS \
+         sources — `nvidia-open-dkms`, not `nvidia-open`. One from the AUR has to be listed \
+         in `packages.aur` as well, so that Kiln knows to build it first; for a source tree \
+         of your own, give the entry a `source`.",
     ));
     None
 }

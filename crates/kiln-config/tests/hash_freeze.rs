@@ -12,21 +12,25 @@
 use kiln_config::Options;
 use std::path::{Path, PathBuf};
 
-/// Frozen at hash epoch 6 — `kernel.dkms` joined `Kernel`'s canonical encoding.
-/// A DKMS package ships sources and expects the *machine* to compile them at
-/// install time, which an immutable image never does; naming one now means Kiln
-/// compiles it into the image instead, so which DKMS packages a configuration
-/// names decides what drivers the image contains. All five fixtures moved
-/// together — four of them name no DKMS package at all — which is what says it
-/// was a schema change rather than a module content change (see cause (c)
-/// below). `workstation` also gained a `kernel.dkms` line of its own, so the
-/// corpus covers the key; that change rides along in the same commit.
+/// Frozen at hash epoch 7 — `kernel.dkms` became entries carrying an optional
+/// `source` rather than a flat set of package names, so that a DKMS tree in the
+/// configuration itself can be built the same way a packaged one is. A tree the
+/// user wrote and a package with the same name are different inputs, and a set
+/// of strings has nowhere to say which one an entry is. All five fixtures moved
+/// together — four name no DKMS entry at all — which is what says it was a
+/// schema change rather than a module content change (see cause (c) below).
+/// `workstation` also gained a `[[kernel.dkms]]` tree, so the corpus covers
+/// both shapes; that rides along in the same commit.
 ///
-/// Epochs 4 and 5 were the same shape of change: `kernel.dracut_modules` and
-/// then `kernel.modules.initramfs` joining the canonical encoding, because
-/// dracut's default, non-hostonly selection includes neither every module whose
-/// package is installed nor the drivers a splash needs before there is a root
-/// filesystem. Do not "fix" these by pasting new values.
+/// Epoch 6 was `kernel.dkms` arriving at all: a DKMS package ships sources and
+/// expects the *machine* to compile them at install time, which an immutable
+/// image never does, so naming one means Kiln compiles it into the image
+/// instead. Epochs 4 and 5 were the same shape of change again —
+/// `kernel.dracut_modules` and then `kernel.modules.initramfs` joining the
+/// canonical encoding, because dracut's default, non-hostonly selection
+/// includes neither every module whose package is installed nor the drivers a
+/// splash needs before there is a root filesystem. Do not "fix" any of these by
+/// pasting new values.
 ///
 /// Three of these fixtures include shipped modules, so their identity depends on
 /// what those modules say — which is the point of them, and the third way a
@@ -64,29 +68,29 @@ use std::path::{Path, PathBuf};
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
-        "b3:150437794c6339df1f69af4144e844b3052eec6221ab06ba7655c95abb3b5f78",
+        "b3:107c6b86f1c203aac4cf4f800e0ff735d084a2d8462e1c958b0ed2506ad91e5b",
     ),
     (
         "minimal",
-        "b3:c092f3b179abc78122d3e518e1fc2dd51190257b6758222efc41c4ddb01f4f49",
+        "b3:c13cb2d67524f9ffad72526d82447e384a77ceec96df073b1ddc8f2235679a29",
     ),
     (
         "order-independence-a",
-        "b3:028805bc2257ffae05310bc2380208ebbed63ce6783b3b8f1db6e7d14e103a79",
+        "b3:b4540d883d504446590553ba81428c507770b1d997f2ab28c0c9b6b79d63fcbc",
     ),
     (
         "order-independence-b",
-        "b3:028805bc2257ffae05310bc2380208ebbed63ce6783b3b8f1db6e7d14e103a79",
+        "b3:b4540d883d504446590553ba81428c507770b1d997f2ab28c0c9b6b79d63fcbc",
     ),
     (
         "workstation",
-        "b3:fc7795bf3eb35590274d691388ba97327a01ad458fbf3aa303ccc9d4f35c35e1",
+        "b3:9fd0dbcd09d20fe686595e4a9faeb937dc088a5f9dd964026b5bf07d58c350c0",
     ),
 ];
 
 /// The epoch the values above were taken at. Changing `HASH_EPOCH` without
 /// changing this is the mistake this constant exists to catch.
-const FROZEN_AT_EPOCH: u32 = 6;
+const FROZEN_AT_EPOCH: u32 = 7;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

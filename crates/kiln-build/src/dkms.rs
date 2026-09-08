@@ -7,11 +7,17 @@
 //! install time on the target, no headers in the image, and nothing writable
 //! under `/usr/lib/modules` to write the result into.
 //!
-//! So Kiln moves that moment. The DKMS package is installed into a **build
-//! root**, never into the image; `dkms build` runs there against the exact
-//! kernel the plan resolved; and the `.ko` files it produces are packaged and
+//! So Kiln moves that moment. The sources are put where `dkms` can reach them —
+//! a DKMS **package** installed into a build root that is never the image, or a
+//! **directory in the configuration** copied into the build the way
+//! `[[kernel.module]]`'s source is — `dkms build` runs there against the exact
+//! kernel the plan resolved, and the `.ko` files it produces are packaged and
 //! installed like anything else. What ships is the compiled driver, and the
 //! ~1 GB of sources that produced it stays behind.
+//!
+//! The two differ only in where `$source_tree` points and in how the sources get
+//! there. Everything after that — `dkms add`, `dkms build`, the copy out of the
+//! DKMS tree — is one code path, because it is one operation.
 //!
 //! As with [`crate::module`], there is no DKMS builder here — only a *recipe
 //! writer*. Everything after this file is the same code a `packages.build`
@@ -53,53 +59,98 @@ pub fn package_name(package: &str) -> String {
     format!("{package}-modules")
 }
 
-/// Write a synthesized PKGBUILD for `package`'s DKMS modules into `into`.
+/// Where a DKMS driver's sources come from.
 ///
-/// Unlike [`crate::module::materialize`] there is no source tree to copy: the
-/// sources arrive as a package, installed into the build root by the same
-/// `makedepends` machinery that puts `base-devel` there.
+/// The distinction is real work, not a label: a package has a version and lands
+/// in the build root through `makedepends`, a tree has a content hash and is
+/// copied in. Everything downstream is the same.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Sources<'a> {
+    /// A DKMS package — installed into the build root, never into the image.
+    Package { name: &'a str, evr: &'a str },
+    /// A directory in the configuration tree that ships a `dkms.conf`.
+    Tree { name: &'a str, dir: &'a Path },
+}
+
+impl Sources<'_> {
+    /// The name the entry was written under. For a package it is the package;
+    /// for a tree it is a label the configuration chose.
+    pub fn name(&self) -> &str {
+        match self {
+            Sources::Package { name, .. } | Sources::Tree { name, .. } => name,
+        }
+    }
+}
+
+/// Write a synthesized PKGBUILD for a DKMS driver into `into`.
+///
+/// For [`Sources::Tree`] the tree is **copied**, not linked or built in place,
+/// for the same reason [`crate::module::materialize`] copies one: the
+/// configuration root is somewhere Kiln reads and never writes, and `makepkg`
+/// writes to the directory it is run from.
 pub fn materialize(
-    package: &str,
-    evr: &str,
+    sources: &Sources<'_>,
     into: &Path,
     arch: &str,
     kernel_package: &str,
     kernel_evr: &str,
 ) -> Result<PathBuf, Error> {
     let _ = std::fs::remove_dir_all(into);
-    std::fs::create_dir_all(into).map_err(|source| Error::Io {
-        doing: "creating the DKMS build directory",
-        path: into.to_path_buf(),
-        source,
-    })?;
+    match sources {
+        Sources::Package { .. } => {
+            std::fs::create_dir_all(into).map_err(|source| Error::Io {
+                doing: "creating the DKMS build directory",
+                path: into.to_path_buf(),
+                source,
+            })?;
+        }
+        Sources::Tree { dir, .. } => {
+            if let Some(parent) = into.parent() {
+                std::fs::create_dir_all(parent).map_err(|source| Error::Io {
+                    doing: "creating the DKMS build directory",
+                    path: parent.to_path_buf(),
+                    source,
+                })?;
+            }
+            crate::module::copy_tree(dir, into).map_err(Error::Module)?;
+            // A `dkms.conf` is the whole difference between this and a
+            // `[[kernel.module]]` tree, and finding out it is missing twenty
+            // minutes into a build root would be finding out too late.
+            if !into.join("dkms.conf").is_file() {
+                return Err(Error::NotDkms {
+                    dir: dir.to_path_buf(),
+                });
+            }
+        }
+    }
 
     write(
         &into.join("PKGBUILD"),
-        &pkgbuild(package, evr, arch, kernel_package, kernel_evr),
+        &pkgbuild(sources, arch, kernel_package, kernel_evr),
     )?;
     // Written rather than generated, for the same reason `module` writes one:
     // `Recipe::read` would otherwise spend a sandbox running
     // `makepkg --printsrcinfo` to re-read a file Kiln wrote thirty lines ago.
     write(
         &into.join(".SRCINFO"),
-        &srcinfo(package, evr, arch, kernel_package),
+        &srcinfo(sources, arch, kernel_package, kernel_evr),
     )?;
     Ok(into.to_path_buf())
 }
 
 /// The names a DKMS build root has to hold, beyond `base-devel`.
 ///
-/// `dkms` itself, the kernel's headers, and the package carrying the sources.
-/// Named in one place because resolution folds their resolved versions into the
-/// build key and realization installs them — a build root that held a different
-/// set from the one the key describes is the silently-wrong artifact the whole
-/// key exists to prevent.
-pub fn makedepends(package: &str, kernel_package: &str) -> Vec<String> {
-    vec![
-        DKMS.to_string(),
-        format!("{kernel_package}-headers"),
-        package.to_string(),
-    ]
+/// `dkms` itself, the kernel's headers, and — when the sources come from one —
+/// the package carrying them. Named in one place because resolution folds their
+/// resolved versions into the build key and realization installs them; a build
+/// root that held a different set from the one the key describes is the
+/// silently-wrong artifact the whole key exists to prevent.
+pub fn makedepends(sources: &Sources<'_>, kernel_package: &str) -> Vec<String> {
+    let mut out = vec![DKMS.to_string(), format!("{kernel_package}-headers")];
+    if let Sources::Package { name, .. } = sources {
+        out.push((*name).to_string());
+    }
+    out
 }
 
 /// The package providing `/usr/bin/dkms`.
@@ -111,28 +162,43 @@ pub const DKMS: &str = "dkms";
 /// name.
 pub const DEST: &str = "updates/dkms";
 
-fn pkgbuild(
-    package: &str,
-    evr: &str,
-    arch: &str,
-    kernel_package: &str,
-    kernel_evr: &str,
-) -> String {
-    let name = package_name(package);
-    let version = crate::module::version_of(evr);
-    let deps = makedepends(package, kernel_package)
+fn pkgbuild(sources: &Sources<'_>, arch: &str, kernel_package: &str, kernel_evr: &str) -> String {
+    let name = package_name(sources.name());
+    let deps = makedepends(sources, kernel_package)
         .iter()
         .map(|d| format!("'{d}'"))
         .collect::<Vec<_>>()
         .join(" ");
+    let (version, pkgdesc, sourcetree, stage) = match sources {
+        Sources::Package { name, evr } => (
+            crate::module::version_of(evr),
+            format!("DKMS modules from {name} {evr}, built against {kernel_package} {kernel_evr}"),
+            // The package unpacked its sources here, and `dkms`'s own default.
+            "/usr/src".to_string(),
+            String::new(),
+        ),
+        Sources::Tree { name, .. } => (
+            // A tree in the configuration has no version of its own — the
+            // driver's `dkms.conf` names one, but that is only known once the
+            // build is running. The kernel EVR is the honest answer to "which
+            // build of this is it", and is what `[[kernel.module]]` uses too.
+            crate::module::version_of(kernel_evr),
+            format!("DKMS modules from {name}, built against {kernel_package} {kernel_evr}"),
+            // Not /usr/src: the build user cannot write there, and `dkms add`
+            // needs the sources at `$source_tree/$module-$version` — a name
+            // only the driver's own dkms.conf knows.
+            "$srcdir/src".to_string(),
+            STAGE.to_string(),
+        ),
+    };
     format!(
         r#"# Synthesized by Kiln. Do not edit: this file is written
-# fresh into a scratch directory on every build, from the DKMS package the plan
-# resolved and the kernel it resolved alongside it.
+# fresh into a scratch directory on every build, from the DKMS sources the plan
+# resolved and the kernel it resolved alongside them.
 pkgname={name}
 pkgver={version}
 pkgrel=1
-pkgdesc="DKMS modules from {package} {evr}, built against {kernel_package} {kernel_evr}"
+pkgdesc="{pkgdesc}"
 arch=('{arch}')
 license=('unknown')
 makedepends=({deps})
@@ -146,6 +212,11 @@ options=('!strip')
 # `$srcdir` exists, and a top-level assignment would capture the empty string.
 _dkmstree() {{
   echo "$srcdir/dkms"
+}}
+
+# Where `dkms` looks for `$module-$version`.
+_sourcetree() {{
+  echo "{sourcetree}"
 }}
 
 # The one kernel in the build root. This puts the resolved kernel EVR in the
@@ -164,24 +235,22 @@ _kernelrelease() {{
   return 1
 }}
 
-# The `dkms.conf` `{package}` installed. Found by looking rather than by
-# name: a DKMS package's source directory is `<module>-<version>`, which is
-# neither the package name nor the package version and is not derivable from
-# either. The build root holds `base-devel`, the kernel headers, `dkms` and
-# this package, and only the last of those ships anything under /usr/src.
+# The one `dkms.conf` in the source tree. Found by looking rather than by name:
+# a DKMS source directory is `<module>-<version>`, which is neither the package
+# name nor the package version and is not derivable from either.
 _dkms_conf() {{
   local found=() conf
-  for conf in /usr/src/*/dkms.conf; do
+  for conf in "$(_sourcetree)"/*/dkms.conf; do
     [[ -f $conf ]] && found+=("$conf")
   done
   if (( ${{#found[@]}} == 0 )); then
-    echo "==> ERROR: {package} installed no /usr/src/*/dkms.conf, so it is not a DKMS package" >&2
+    echo "==> ERROR: no dkms.conf under $(_sourcetree), so there is nothing DKMS can build" >&2
     return 1
   fi
   if (( ${{#found[@]}} > 1 )); then
-    echo "==> ERROR: more than one DKMS source tree in the build root:" >&2
+    echo "==> ERROR: more than one DKMS source tree under $(_sourcetree):" >&2
     printf '  %s\n' "${{found[@]}}" >&2
-    echo "Kiln builds one DKMS package per build root and cannot tell which of these is it." >&2
+    echo "Kiln builds one DKMS driver per build root and cannot tell which of these is it." >&2
     return 1
   fi
   echo "${{found[0]}}"
@@ -192,7 +261,7 @@ _dkms_conf() {{
 _dkms_field() {{
   ( source "$2" >/dev/null; printf '%s\n' "${{!1}}" )
 }}
-
+{stage}
 build() {{
   local kver conf mod ver tree
   tree=$(_dkmstree)
@@ -213,8 +282,8 @@ build() {{
   export try_sign_modules=false
 
   mkdir -p "$tree"
-  dkms add --dkmstree "$tree" --sourcetree /usr/src -m "$mod" -v "$ver"
-  dkms build --dkmstree "$tree" --sourcetree /usr/src -m "$mod" -v "$ver" -k "$kver"
+  dkms add --dkmstree "$tree" --sourcetree "$(_sourcetree)" -m "$mod" -v "$ver"
+  dkms build --dkmstree "$tree" --sourcetree "$(_sourcetree)" -m "$mod" -v "$ver" -k "$kver"
 }}
 
 package() {{
@@ -238,28 +307,61 @@ package() {{
   # `dkms`, which wraps it — is happy to call success. Better to say so here
   # than to ship an image missing a driver.
   if [[ -z $(ls -A "$dest") ]]; then
-    echo "==> ERROR: {package} built no kernel modules for $kver" >&2
+    echo "==> ERROR: {label} built no kernel modules for $kver" >&2
     return 1
   fi
 }}
 "#,
         dest = DEST,
+        label = sources.name(),
     )
 }
 
+/// `prepare()` for a source tree: put it where `dkms add` expects to find it.
+///
+/// Only the tree case has one. `dkms` insists the sources live at
+/// `$source_tree/$module-$version`, and both halves of that name come out of
+/// the driver's own `dkms.conf` — so the move cannot happen until the file has
+/// been read, and it happens here rather than in `build()` so that a
+/// `--keep-failed` root shows the same layout a working build had.
+const STAGE: &str = r#"
+prepare() {
+  local mod ver staged
+  staged="$srcdir/staged"
+  rm -rf "$staged" "$(_sourcetree)"
+  cp -a "$startdir/." "$staged"
+  # The recipe Kiln wrote is not part of the driver's source.
+  rm -f "$staged/PKGBUILD" "$staged/.SRCINFO"
+
+  mod=$(_dkms_field PACKAGE_NAME "$staged/dkms.conf")
+  ver=$(_dkms_field PACKAGE_VERSION "$staged/dkms.conf")
+  if [[ -z $mod || -z $ver ]]; then
+    echo "==> ERROR: dkms.conf declares no PACKAGE_NAME/PACKAGE_VERSION" >&2
+    return 1
+  fi
+  mkdir -p "$(_sourcetree)"
+  mv "$staged" "$(_sourcetree)/$mod-$ver"
+}
+"#;
+
 /// The same facts in `.SRCINFO` form. `makedepends` is the field that matters:
-/// it is what puts `dkms`, the kernel headers and the DKMS package itself in
-/// the build root, and their resolved EVRs are what fold into the build key.
-fn srcinfo(package: &str, evr: &str, arch: &str, kernel_package: &str) -> String {
-    let mut out = format!(
-        "pkgbase = {}\n\tpkgver = {}\n\tpkgrel = 1\n\tarch = {arch}\n",
-        package_name(package),
-        crate::module::version_of(evr),
-    );
-    for dep in makedepends(package, kernel_package) {
+/// it is what puts `dkms`, the kernel headers and — for a package — the sources
+/// themselves in the build root, and their resolved EVRs are what fold into the
+/// build key.
+fn srcinfo(sources: &Sources<'_>, arch: &str, kernel_package: &str, kernel_evr: &str) -> String {
+    let name = package_name(sources.name());
+    // The same answer `pkgbuild` reaches, and it has to be: a `.SRCINFO` that
+    // disagreed with the recipe beside it would be a lie Kiln told itself.
+    let version = crate::module::version_of(match sources {
+        Sources::Package { evr, .. } => evr,
+        Sources::Tree { .. } => kernel_evr,
+    });
+    let mut out =
+        format!("pkgbase = {name}\n\tpkgver = {version}\n\tpkgrel = 1\n\tarch = {arch}\n");
+    for dep in makedepends(sources, kernel_package) {
         out.push_str(&format!("\tmakedepends = {dep}\n"));
     }
-    out.push_str(&format!("\npkgname = {}\n", package_name(package)));
+    out.push_str(&format!("\npkgname = {name}\n"));
     out
 }
 
@@ -273,6 +375,12 @@ fn write(path: &Path, text: &str) -> Result<(), Error> {
 
 #[derive(Debug)]
 pub enum Error {
+    /// A source tree with no `dkms.conf` is a `[[kernel.module]]`, not a DKMS
+    /// driver — and the two are built by different tools.
+    NotDkms {
+        dir: PathBuf,
+    },
+    Module(crate::module::Error),
     Io {
         doing: &'static str,
         path: PathBuf,
@@ -283,6 +391,14 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::NotDkms { dir } => write!(
+                f,
+                "{} has no dkms.conf, so `dkms` has nothing to build there\n\n\
+                 A source tree without one is an ordinary out-of-tree module: name it \
+                 with `[[kernel.module]]` instead, which builds it with `make`.",
+                dir.display()
+            ),
+            Error::Module(e) => write!(f, "{e}"),
             Error::Io {
                 doing,
                 path,
