@@ -474,6 +474,7 @@ impl Validator<'_> {
                 options,
             },
             out_of_tree,
+            dkms: self.str_set(doc, "kernel.dkms"),
         }
     }
 

@@ -19,6 +19,7 @@
 
 pub mod build;
 pub mod cache;
+pub mod dkms;
 pub mod key;
 pub mod module;
 pub mod recipe;

@@ -28,7 +28,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// | 3 | the UID seed became a users/groups pair carrying `home` and `shell`, not a flat map of numbers. Writing the assembler showed that the flat shape cannot say whether a user owns a group of its own name, and that a seed omitting home and shell decides them by omission. |
 /// | 5 | `kernel.modules.initramfs` joined `KernelModules`' canonical encoding. Which drivers are *in* the initramfs decides what the machine can do before it has a root filesystem — whether the panel has a KMS driver for the splash, most visibly — and dracut's non-hostonly selection does not put a GPU driver there on its own. |
 /// | 4 | `kernel.dracut_modules` joined `Kernel`'s canonical encoding. dracut's default, non-hostonly module selection does not include every module whose package is installed — a module can be present but excluded unless named — so which dracut modules are requested is genuinely part of what is inside the image, not incidental to it. |
-pub const HASH_EPOCH: u32 = 5;
+/// | 6 | `kernel.dkms` joined `Kernel`'s canonical encoding. A DKMS package's modules are compiled into the image at build time rather than on the machine at install time, so which DKMS packages a configuration names decides what drivers the image contains. |
+pub const HASH_EPOCH: u32 = 6;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -189,6 +190,14 @@ pub struct Kernel {
     pub dracut_modules: BTreeSet<String>,
     pub modules: KernelModules,
     pub out_of_tree: BTreeMap<String, OutOfTreeModule>,
+    /// Packages that ship DKMS sources rather than a compiled module —
+    /// `nvidia-open-dkms` and its kind. The package itself never enters the
+    /// image: Kiln installs it into a build root, compiles its modules against
+    /// the kernel the plan resolved, and ships the `.ko` files.
+    ///
+    /// A set of package names, not a table: there is exactly one thing to say
+    /// about a DKMS package, which is that the image wants what it builds.
+    pub dkms: BTreeSet<String>,
 }
 
 impl Default for Kernel {
@@ -200,6 +209,7 @@ impl Default for Kernel {
             dracut_modules: BTreeSet::new(),
             modules: KernelModules::default(),
             out_of_tree: BTreeMap::new(),
+            dkms: BTreeSet::new(),
         }
     }
 }
@@ -458,6 +468,7 @@ impl Canonical for Kernel {
             ("dracut_modules", self.dracut_modules.canon()),
             ("modules", self.modules.canon()),
             ("out_of_tree", self.out_of_tree.canon()),
+            ("dkms", self.dkms.canon()),
         ])
     }
 }

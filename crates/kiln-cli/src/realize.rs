@@ -31,7 +31,7 @@
 use crate::paths;
 use crate::pipeline::Context;
 use kiln_alpm::{Config, Request, Session};
-use kiln_build::{key::Ingredients, module, BuildRoot, Builder, Recipe};
+use kiln_build::{dkms, key::Ingredients, module, BuildRoot, Builder, Recipe};
 use kiln_diag::ExitCode;
 use kiln_image::assemble;
 use kiln_manifest::{Hash, Manifest};
@@ -313,12 +313,24 @@ enum Job {
         key: Hash,
         kernel_evr: String,
     },
+    /// a DKMS package's modules, compiled against the kernel in the image.
+    /// The package itself is a build-time dependency and never ships.
+    Dkms {
+        name: String,
+        package: String,
+        evr: String,
+        key: Hash,
+        kernel_evr: String,
+    },
 }
 
 impl Job {
     fn name(&self) -> &str {
         match self {
-            Job::Aur { name, .. } | Job::Recipe { name, .. } | Job::Module { name, .. } => name,
+            Job::Aur { name, .. }
+            | Job::Recipe { name, .. }
+            | Job::Module { name, .. }
+            | Job::Dkms { name, .. } => name,
         }
     }
 
@@ -360,6 +372,12 @@ impl Job {
             Job::Module {
                 name, kernel_evr, ..
             } => println!("  \x1b[1mmodule\x1b[0m {name} against kernel {kernel_evr}"),
+            Job::Dkms {
+                package,
+                evr,
+                kernel_evr,
+                ..
+            } => println!("  \x1b[1mdkms\x1b[0m {package} {evr} against kernel {kernel_evr}"),
         }
     }
 }
@@ -425,6 +443,20 @@ fn jobs(plan: &BuildPlan) -> Vec<Job> {
             } => modules.push(Job::Module {
                 name: name.clone(),
                 source: source.clone(),
+                key: build_key.clone(),
+                kernel_evr: kernel_evr.clone(),
+            }),
+            ResolvedInput::DkmsModule {
+                name,
+                package,
+                evr,
+                build_key,
+                kernel_evr,
+                ..
+            } => modules.push(Job::Dkms {
+                name: name.clone(),
+                package: package.clone(),
+                evr: evr.clone(),
                 key: build_key.clone(),
                 kernel_evr: kernel_evr.clone(),
             }),
@@ -516,6 +548,25 @@ fn build_one(
             let dir = module::materialize(
                 name,
                 &opts.ctx.config_root.join(source),
+                &scratch,
+                arch,
+                &opts.manifest.kernel.package,
+                kernel_evr,
+            )
+            .map_err(|e| e.to_string())?;
+            (dir, Some(key.clone()))
+        }
+        Job::Dkms {
+            package,
+            evr,
+            key,
+            kernel_evr,
+            ..
+        } => {
+            kind = "dkms";
+            let dir = dkms::materialize(
+                package,
+                evr,
                 &scratch,
                 arch,
                 &opts.manifest.kernel.package,
@@ -638,6 +689,12 @@ fn tree_hash(job: &Job, digests: &BTreeMap<String, Hash>) -> Hash {
     match job {
         Job::Recipe { path, .. } => digests.get(path).cloned(),
         Job::Module { source, .. } => digests.get(source).cloned(),
+        // A DKMS package has no directory in the configuration tree: its
+        // sources arrive as a package, so its identity is name and version —
+        // spelled the same way resolution spelled it into the plan's `recipe`.
+        Job::Dkms { package, evr, .. } => {
+            Some(Hash::of(format!("dkms:{package}@{evr}").as_bytes()))
+        }
         Job::Aur { .. } => None,
     }
     .unwrap_or_else(|| aur_recipe_identity(job))

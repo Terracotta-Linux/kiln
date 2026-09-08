@@ -125,6 +125,76 @@ fn an_out_of_tree_module_is_keyed_to_the_kernel_in_the_image() {
     assert!(!module.2 .0.is_empty());
 }
 
+/// `BOOTABLE` already opens a `[kernel]` table, and TOML has no second one, so
+/// the key goes in beside `kernel.package` rather than after the snippet.
+fn with_dkms(package: &str) -> String {
+    BOOTABLE.replace(
+        "package = \"fixture-linux\"",
+        &format!("package = \"fixture-linux\"\ndkms = [\"{package}\"]"),
+    )
+}
+
+/// A DKMS package resolves to a *build*, not to image content: nothing named
+/// `fixture-nvidia-dkms` goes into the transaction, and what does is the
+/// package Kiln builds out of it, keyed to the kernel the image contains.
+#[test]
+fn a_dkms_package_becomes_a_build_keyed_to_the_kernel_in_the_image() {
+    let plan = plan_with("inputs-dkms", &with_dkms("fixture-nvidia-dkms"), &[]);
+
+    let dkms = plan
+        .inputs
+        .iter()
+        .find_map(|i| match i {
+            ResolvedInput::DkmsModule {
+                name,
+                package,
+                evr,
+                kernel_evr,
+                build_key,
+                ..
+            } => Some((
+                name.clone(),
+                package.clone(),
+                evr.clone(),
+                kernel_evr.clone(),
+                build_key.clone(),
+            )),
+            _ => None,
+        })
+        .expect("the DKMS package must reach the plan");
+
+    assert_eq!(dkms.0, "fixture-nvidia-dkms-modules");
+    assert_eq!(dkms.1, "fixture-nvidia-dkms");
+    assert_eq!(dkms.2, "1.0-1", "resolved from the repositories");
+    assert_eq!(
+        dkms.3, "6.19-1",
+        "the resolved EVR of the kernel this image actually contains"
+    );
+    assert!(!dkms.4 .0.is_empty());
+
+    // The DKMS package itself is a build-time dependency and nothing else. It
+    // ships ~1 GB of sources and a `dkms.conf` that expects a compile at
+    // install time, and an immutable image has neither the room nor the moment.
+    assert!(
+        !plan.inputs.iter().any(|i| matches!(
+            i,
+            ResolvedInput::RepoPackage { name, .. } if name == "fixture-nvidia-dkms"
+        )),
+        "the DKMS package must not enter the image"
+    );
+}
+
+/// A name that resolves nowhere is an error at `kiln check`, naming the line
+/// that wrote it — not a build that discovers the same thing an hour later.
+#[test]
+fn a_dkms_package_that_does_not_exist_is_a_resolution_error() {
+    let errs = try_plan_with("inputs-dkms-missing", &with_dkms("no-such-dkms"), &[])
+        .expect_err("a DKMS package that resolves nowhere must not produce a plan");
+    let rendered = kiln_diag::render_all(&errs);
+    assert!(rendered.contains("no-such-dkms"), "{rendered}");
+    assert!(rendered.contains("packages.aur"), "{rendered}");
+}
+
 /// a `SKIP` checksum means the contents are only known after fetching,
 /// so it is reported rather than guessed at — and excluded from `plan_id`,
 /// because including something unresolved would make the identity a guess.

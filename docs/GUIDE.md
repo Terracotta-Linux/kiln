@@ -242,6 +242,7 @@ package        = "linux"
 headers        = true
 cmdline        = ["quiet", "amd_iommu=on"]
 dracut_modules = ["plymouth"]              # dracut modules to --add beyond ostree
+dkms           = ["nvidia-open-dkms"]      # DKMS sources, compiled at build time
 
 [kernel.modules]
 load      = ["v4l2loopback"]
@@ -344,7 +345,7 @@ over anything it includes.
 
 ## Packages and where they come from
 
-Five kinds of input, all of which end up as a `.pkg.tar.zst` going through pacman:
+Six kinds of input, all of which end up as a `.pkg.tar.zst` going through pacman:
 
 | Key | What it is |
 |---|---|
@@ -353,6 +354,7 @@ Five kinds of input, all of which end up as a `.pkg.tar.zst` going through pacma
 | `packages.build` | your own PKGBUILDs, from a directory in your config tree |
 | `packages.file` | a `.pkg.tar.zst`, local or by URL, with a required `sha256` |
 | `[[kernel.module]]` | an out-of-tree module, built against the image's kernel |
+| `kernel.dkms` | a DKMS package, compiled against the image's kernel |
 
 A few things that surprise people:
 
@@ -470,12 +472,13 @@ the schema should have, or a module.
 
 ## Kernels and modules
 
-Three different things, three different keys:
+Four different things, four different keys:
 
 ```toml
 [kernel]
 package = "linux"                         # which kernel package
 headers = false                           # build-time only; see below
+dkms    = ["nvidia-open-dkms"]            # DKMS packages, compiled into the image
 
 [kernel.modules]                          # in-tree modules, just configured
 load      = ["v4l2loopback"]
@@ -494,6 +497,43 @@ system rebuilds modules at runtime, so shipping ~150 MB of headers in the image 
 
 Out-of-tree modules are built against the exact kernel in the image, and rebuilt when it
 moves — `kiln check` reports that as `(kernel changed)` before you build.
+
+### DKMS
+
+A DKMS package — `nvidia-open-dkms`, `v4l2loopback-dkms`, most of the AUR's drivers — ships
+no compiled module. It ships sources under `/usr/src` and expects `dkms` to compile them *on
+the machine, at install time, against the running kernel*. An immutable image has no such
+moment: no install time on the target, no headers in the image, nothing writable under
+`/usr/lib/modules` to write the result into.
+
+`kernel.dkms` moves that moment into the build:
+
+```toml
+[kernel]
+dkms = ["nvidia-open-dkms"]
+```
+
+Kiln installs the DKMS package into a **build root** — never into the image — runs `dkms
+build` there against the exact kernel the plan resolved, and packages the resulting `.ko`
+files as `nvidia-open-dkms-modules`. That is what goes in, so what ships is the driver and
+not the gigabyte of sources that produced it. The image never has `dkms` installed and never
+runs it.
+
+It is a build like any other: the same sandbox, the same build cache, the same failure
+report. Bump the kernel and every DKMS driver rebuilds, because the kernel's version is part
+of the build key — `kiln check` reports that as `(kernel changed)` before you build, exactly
+as it does for `[[kernel.module]]`.
+
+Two things worth knowing:
+
+**Prefer a prebuilt package when one exists.** `nvidia-open` is the same driver with the
+compile already done; `@kiln/gpu/nvidia-open` names it, and `@kiln/gpu/nvidia-open-dkms` is
+for kernels Arch ships no prebuilt module for — `linux-zen`, `linux-hardened`, `linux-rt`.
+
+**A DKMS package from the AUR has to be in `packages.aur` too.** `kernel.dkms` says what to
+build modules from; `packages.aur` is what tells Kiln to build the package itself first.
+Naming a package that resolves in neither place is an error at `kiln check`, pointing at the
+line that wrote it.
 
 The initramfs is dracut, with the upstream `ostree` module. The bootloader is GRUB2. Neither
 takes another value; `boot.loader = "systemd-boot"` gets a diagnostic explaining that

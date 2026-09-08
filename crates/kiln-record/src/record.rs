@@ -325,6 +325,21 @@ impl Record {
                     kernel_evr: Some(kernel_evr.clone()),
                     sources: Vec::new(),
                 }),
+                // A DKMS package's modules go in beside the out-of-tree ones:
+                // both are a compiled driver whose identity is a build key and
+                // the kernel it was compiled against, and `kiln diff` reads
+                // them out of one list.
+                ResolvedInput::DkmsModule {
+                    name,
+                    build_key,
+                    kernel_evr,
+                    ..
+                } => record.built_packages.push(BuiltEntry {
+                    name: name.clone(),
+                    build_key: build_key.to_string(),
+                    kernel_evr: Some(kernel_evr.clone()),
+                    sources: Vec::new(),
+                }),
                 ResolvedInput::FilePackage { path, sha256 } => {
                     record.local_packages.push(LocalPackage {
                         path: path.clone(),

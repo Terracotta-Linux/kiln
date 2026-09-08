@@ -168,6 +168,57 @@ fn a_prebuilt_dependency_goes_in_from_disk() {
     root.discard();
 }
 
+/// A build root for a DKMS package holds `dkms` — and not its alpm hooks.
+///
+/// Installing a DKMS package beside a kernel's headers is exactly what
+/// `70-dkms-install.hook` triggers on, and it would compile the module here: as
+/// root, inside the transaction, into a `/usr/lib/modules` nothing collects
+/// from, minutes before Kiln compiles the same module in a sandbox under a
+/// build key. `NoExtract` is the lever, and this is the check that it is
+/// actually pulled — a hook that quietly came back would cost the whole build
+/// twice and say nothing about why.
+#[test]
+#[ignore = "privileged: installing into a build root needs root"]
+fn a_dkms_build_root_does_not_unpack_the_dkms_hooks() {
+    if !is_root() {
+        eprintln!("skipped: assembling a build root needs root");
+        return;
+    }
+    let base = scratch("buildroot-dkms");
+    let sources = sources(&base.join("state"));
+
+    let wanted = kiln_build::dkms::makedepends("fixture-nvidia-dkms", "fixture-linux");
+    let root = BuildRoot::assemble(&base.join("root"), &wanted, &[], &sources).expect("assembling");
+
+    let session = Session::open(Config::for_root(&root.dir, "x86_64")).unwrap();
+    let installed: Vec<String> = session.installed().into_iter().map(|(n, _)| n).collect();
+    for name in ["dkms", "fixture-linux-headers", "fixture-nvidia-dkms"] {
+        assert!(installed.contains(&name.to_string()), "{installed:?}");
+    }
+    drop(session);
+
+    // The sources are here, which is the point of the root...
+    assert!(root
+        .dir
+        .join("usr/src/fixture-nvidia-1.0/dkms.conf")
+        .is_file());
+    // ...and the headers the recipe reads the kernel version out of.
+    assert!(root
+        .dir
+        .join("usr/lib/modules/6.19.0-fixture/build")
+        .is_dir());
+    // But none of the hooks that would have built it already.
+    for hook in [
+        "70-dkms-install.hook",
+        "70-dkms-upgrade.hook",
+        "71-dkms-remove.hook",
+    ] {
+        let at = root.dir.join("usr/share/libalpm/hooks").join(hook);
+        assert!(!at.exists(), "{} was unpacked", at.display());
+    }
+    root.discard();
+}
+
 /// Assembly step 1's rule, applied here for the same reason: a root left behind by a
 /// failed build is a root that inherited state.
 #[test]

@@ -246,7 +246,12 @@ fn the_full_dracut_command_line() {
     let kernel = kernel::find(&root).unwrap();
     let bwrap = kiln_sandbox::Bubblewrap::new(root.join("../scratch"));
     let argv = bwrap
-        .argv(&kernel::dracut_spec(&root, &kernel, &BTreeSet::new(), &BTreeSet::new()))
+        .argv(&kernel::dracut_spec(
+            &root,
+            &kernel,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        ))
         .unwrap();
     // The staging root's path varies per machine; the rest must not.
     let rendered = argv.join(" ").replace(root.to_str().unwrap(), "<root>");

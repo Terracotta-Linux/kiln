@@ -1,10 +1,10 @@
 # NVIDIA's open kernel modules, prebuilt against `linux` (@kiln/kernel/linux).
 #
-# `nvidia-open`, never `nvidia-open-dkms`. DKMS builds the module on the machine
-# at install time, against headers Kiln deliberately does not ship — in
-# an immutable image it either fails in a scriptlet or leaves nothing behind.
-# The prebuilt package is the same driver with the build already done, which is
-# what an image wants. On @kiln/kernel/linux-lts use @kiln/gpu/nvidia-open-lts.
+# `nvidia-open`, not `nvidia-open-dkms`: the prebuilt package is the same driver
+# with the compile already done, which is what an image wants. Where Arch ships
+# no prebuilt module for the kernel you run — linux-zen, linux-hardened,
+# linux-rt — @kiln/gpu/nvidia-open-dkms builds one. On @kiln/kernel/linux-lts
+# use @kiln/gpu/nvidia-open-lts.
 kiln = 1
 
 [packages]

@@ -35,6 +35,7 @@ pub fn summary(m: &Manifest, files: &[kiln_diag::Src], verbose: bool) {
                 m.kernel.modules.load.len() + m.kernel.modules.blacklist.len(),
             ),
             count("out-of-tree", m.kernel.out_of_tree.len()),
+            count("dkms", m.kernel.dkms.len()),
         ],
     );
     row(
@@ -106,6 +107,7 @@ pub fn detail(m: &Manifest) {
         m.kernel.package, m.kernel.headers
     );
     list("kernel.cmdline", m.kernel.cmdline.iter().cloned());
+    list("kernel.dkms", m.kernel.dkms.iter().cloned());
     list(
         "kernel.dracut_modules",
         m.kernel.dracut_modules.iter().cloned(),

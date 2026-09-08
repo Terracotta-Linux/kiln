@@ -30,6 +30,14 @@ pub struct Config {
     /// Later entries shadow earlier ones by filename — the only lever there is
     /// over package-shipped hooks.
     pub hookdirs: Vec<PathBuf>,
+    /// Root-relative paths, glob-matched, that a transaction extracts no file
+    /// for. libalpm's `NoExtract`.
+    ///
+    /// Shadowing is the lever over a hook that has to *exist*; this is the
+    /// lever over one that does not. A hook file that was never unpacked cannot
+    /// fire, which is a stronger statement than an inert file of the same name
+    /// and does not depend on hook-directory ordering.
+    pub noextract: Vec<String>,
     pub arch: String,
     pub repos: Vec<RepoSpec>,
     pub logfile: Option<PathBuf>,
@@ -46,6 +54,7 @@ impl Config {
             cachedirs: Vec::new(),
             gpgdir: None,
             hookdirs: Vec::new(),
+            noextract: Vec::new(),
             arch: arch.into(),
             repos: Vec::new(),
             logfile: None,
@@ -71,6 +80,7 @@ impl Config {
             cachedirs: vec![state.join("cache/pkg")],
             gpgdir: Some(state.join("keyring")),
             hookdirs: Vec::new(),
+            noextract: Vec::new(),
             arch: arch.into(),
             repos: Vec::new(),
             logfile: None,
@@ -94,6 +104,11 @@ impl Config {
 
     pub fn with_hookdir(mut self, dir: impl Into<PathBuf>) -> Config {
         self.hookdirs.push(dir.into());
+        self
+    }
+
+    pub fn with_noextract(mut self, paths: impl IntoIterator<Item = String>) -> Config {
+        self.noextract.extend(paths);
         self
     }
 }
@@ -136,6 +151,10 @@ impl Session {
         for dir in &config.hookdirs {
             alpm.add_hookdir(path_arg(dir)?)
                 .map_err(|e| Error::alpm("setting a hook directory", e))?;
+        }
+        for path in &config.noextract {
+            alpm.add_noextract(path.as_str())
+                .map_err(|e| Error::alpm("setting an unextracted path", e))?;
         }
         if let Some(g) = &config.gpgdir {
             alpm.set_gpgdir(path_arg(g)?)

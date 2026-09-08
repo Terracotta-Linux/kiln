@@ -1,0 +1,19 @@
+# The same driver, compiled from DKMS sources against whatever kernel the image
+# runs — for @kiln/kernel/linux-zen, linux-hardened and linux-rt, which Arch
+# ships no prebuilt NVIDIA module for. On plain `linux` or `linux-lts` prefer
+# @kiln/gpu/nvidia-open or @kiln/gpu/nvidia-open-lts: the build is already done.
+#
+# `kernel.dkms`, not `packages.repo`: DKMS builds a module on the machine at
+# install time, and an immutable image has no such moment. Kiln moves it into a
+# build root at image-build time, ships the .ko, and leaves the sources behind.
+kiln = 1
+
+[packages]
+repo = ["nvidia-utils"]
+
+[kernel]
+dkms    = ["nvidia-open-dkms"]
+cmdline = ["nvidia_drm.modeset=1"]
+
+[kernel.modules]
+blacklist = ["nouveau"]

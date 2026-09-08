@@ -63,8 +63,8 @@ out of scope — deliberately, permanently, and this is not an oversight:
 - **Atomic and reversible.** Every build is a generation. `kiln rollback` boots the previous
   one, and a machine that fails to boot three times rolls itself back without you.
 - **It stays Arch.** Real pacman packages from real Arch repositories, the AUR, your own
-  PKGBUILDs, out-of-tree kernel modules, local `.pkg.tar.zst` files. `pacman -Q`, `kiln why`
-  and `kiln owns` all work inside the booted image.
+  PKGBUILDs, out-of-tree and DKMS kernel modules, local `.pkg.tar.zst` files. `pacman -Q`,
+  `kiln why` and `kiln owns` all work inside the booted image.
 - **`kiln check` covers every input**, not only official packages — your files, your
   PKGBUILDs, your AUR pins and your configuration report in one place, and the fix is always
   one command.

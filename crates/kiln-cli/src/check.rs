@@ -217,6 +217,12 @@ impl Side {
                         build_key,
                         kernel_evr,
                         ..
+                    }
+                    | ResolvedInput::DkmsModule {
+                        name,
+                        build_key,
+                        kernel_evr,
+                        ..
                     } => Some((
                         name.clone(),
                         (build_key.to_string(), Some(kernel_evr.clone())),

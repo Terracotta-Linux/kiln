@@ -28,6 +28,28 @@ use std::path::{Path, PathBuf};
 /// which `find_satisfier` would not resolve.
 pub const BASE_DEVEL: &str = "base-devel";
 
+/// Hook files the `dkms` package ships, and that a build root must not unpack.
+///
+/// Installing a DKMS package alongside `dkms` and a kernel's headers is exactly
+/// the trigger `70-dkms-install.hook` waits for, and it would then compile the
+/// module — as root, in the transaction, minutes before Kiln compiles the same
+/// module itself in a sandbox with a build key over it. The result would go
+/// into the build root's own `/usr/lib/modules`, where nothing collects it, and
+/// the second copy of the compile is the whole cost of the build paid twice.
+///
+/// `NoExtract` rather than a shadowing hook directory: a hook Kiln never
+/// unpacked cannot fire, whatever the hook directory order, and the build root
+/// is thrown away — nothing else ever asks whether these files are there.
+///
+/// Listed by exact filename rather than as `*dkms*`: a glob would quietly grow
+/// to cover a hook some future package ships, and the point is to disable the
+/// three Kiln has reasoned about.
+const DKMS_HOOKS: &[&str] = &[
+    "usr/share/libalpm/hooks/70-dkms-install.hook",
+    "usr/share/libalpm/hooks/70-dkms-upgrade.hook",
+    "usr/share/libalpm/hooks/71-dkms-remove.hook",
+];
+
 /// Where the two-phase build's fixed paths are rooted inside the sandbox. The
 /// directories have to exist in the root before bubblewrap is asked to mount
 /// over them, and `makepkg` needs `BUILDDIR` to be somewhere it can write.
@@ -101,7 +123,8 @@ impl BuildRoot {
         let config = Config::for_root(dir, &sources.arch)
             .with_repos(sources.repos.clone())
             .with_cache(&sources.cache)
-            .with_gpgdir(&sources.gpgdir);
+            .with_gpgdir(&sources.gpgdir)
+            .with_noextract(DKMS_HOOKS.iter().map(|h| h.to_string()));
         let mut session = Session::open(config).map_err(Error::Alpm)?;
         session.fetch(&transaction).map_err(Error::Alpm)?;
 

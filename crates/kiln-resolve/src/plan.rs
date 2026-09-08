@@ -163,6 +163,32 @@ pub enum ResolvedInput {
         /// case.
         kernel_evr: String,
     },
+    /// A DKMS package's modules, compiled against the exact kernel in the
+    /// image and packaged like anything else.
+    ///
+    /// The DKMS package itself never enters the image — it is a source tree and
+    /// a `dkms.conf`, and the machine that would have compiled them at install
+    /// time does not exist. Only what it builds ships.
+    DkmsModule {
+        /// The synthesized package's name, `<package>-modules`. What the plan
+        /// contributes to the image's package set; not the DKMS package's own
+        /// name, which describes something else entirely.
+        name: String,
+        /// The DKMS package Kiln installs into the build root.
+        package: String,
+        /// Its resolved version — from the repositories, or from the AUR when
+        /// `packages.aur` names it too.
+        evr: String,
+        build_key: Hash,
+        /// `blake3("dkms:<package>@<evr>")`. A DKMS package *is* its sources, so
+        /// its version is the recipe identity — carried alongside `build_key`
+        /// for the same reason `BuiltPackage` carries one: so `kiln check` can
+        /// say whether a rebuild is the driver moving or its toolchain moving.
+        recipe: Hash,
+        /// including this in the build key is what makes "rebuild the
+        /// driver when the kernel changes" automatic rather than a special case.
+        kernel_evr: String,
+    },
     /// A build script, pinned by the text that will run.
     ///
     /// There is nothing to *fetch*, so this variant carries no more than the
@@ -196,9 +222,10 @@ impl ResolvedInput {
             ResolvedInput::BuiltPackage { name, .. } => (2, name),
             ResolvedInput::FilePackage { path, .. } => (3, path),
             ResolvedInput::KernelModule { name, .. } => (4, name),
-            ResolvedInput::File { target, .. } => (5, target),
-            ResolvedInput::Unit { name, .. } => (6, name),
-            ResolvedInput::BuildScript { name, .. } => (7, name),
+            ResolvedInput::DkmsModule { name, .. } => (5, name),
+            ResolvedInput::File { target, .. } => (6, target),
+            ResolvedInput::Unit { name, .. } => (7, name),
+            ResolvedInput::BuildScript { name, .. } => (8, name),
         }
     }
 
@@ -210,7 +237,8 @@ impl ResolvedInput {
             ResolvedInput::RepoPackage { name, .. }
             | ResolvedInput::AurPackage { name, .. }
             | ResolvedInput::BuiltPackage { name, .. }
-            | ResolvedInput::KernelModule { name, .. } => Some(name),
+            | ResolvedInput::KernelModule { name, .. }
+            | ResolvedInput::DkmsModule { name, .. } => Some(name),
             ResolvedInput::FilePackage { path, .. } => Some(path),
             ResolvedInput::File { .. }
             | ResolvedInput::Unit { .. }
@@ -224,7 +252,8 @@ impl ResolvedInput {
     pub fn build_key(&self) -> Option<&Hash> {
         match self {
             ResolvedInput::BuiltPackage { build_key, .. }
-            | ResolvedInput::KernelModule { build_key, .. } => Some(build_key),
+            | ResolvedInput::KernelModule { build_key, .. }
+            | ResolvedInput::DkmsModule { build_key, .. } => Some(build_key),
             _ => None,
         }
     }
@@ -522,6 +551,22 @@ impl Canonical for ResolvedInput {
             } => Canon::map([
                 ("kind", Canon::str("kernel-module")),
                 ("name", Canon::str(name)),
+                ("build_key", build_key.canon()),
+                ("recipe", recipe.canon()),
+                ("kernel_evr", Canon::str(kernel_evr)),
+            ]),
+            ResolvedInput::DkmsModule {
+                name,
+                package,
+                evr,
+                build_key,
+                recipe,
+                kernel_evr,
+            } => Canon::map([
+                ("kind", Canon::str("dkms-module")),
+                ("name", Canon::str(name)),
+                ("package", Canon::str(package)),
+                ("evr", Canon::str(evr)),
                 ("build_key", build_key.canon()),
                 ("recipe", recipe.canon()),
                 ("kernel_evr", Canon::str(kernel_evr)),

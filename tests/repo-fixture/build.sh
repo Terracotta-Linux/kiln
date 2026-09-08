@@ -337,6 +337,76 @@ package() {
 EOF
 build "$d"
 
+# --- dkms -------------------------------------------------------------------
+# Named exactly as Arch names it, for the same reason `base-devel` is: Kiln
+# puts `dkms` in every DKMS build root by that name, and a fixture that called
+# it something else would be testing a different code path. It is a stub —
+# resolution never runs it, and the real thing is the boot test's job.
+d=$(pkg dkms)
+cat > "$d/PKGBUILD" <<'EOF'
+pkgname=dkms
+pkgver=3.4.3
+pkgrel=2
+pkgdesc="Dynamic Kernel Modules System"
+arch=('any')
+license=('MIT')
+package() {
+  install -dm755 "$pkgdir/usr/bin"
+  printf '#!/bin/sh
+exit 0
+' > "$pkgdir/usr/bin/dkms"
+  chmod 755 "$pkgdir/usr/bin/dkms"
+  # The hooks the real package ships, by their real names. A build root must
+  # not unpack these: installing a DKMS package beside a kernel's headers is
+  # exactly what they trigger on, and they would compile the module a second
+  # time, as root, outside the sandbox. `BuildRoot` lists them in NoExtract,
+  # and this is what makes that testable.
+  install -dm755 "$pkgdir/usr/share/libalpm/hooks"
+  local h
+  for h in 70-dkms-install 70-dkms-upgrade 71-dkms-remove; do
+    printf '[Trigger]
+Operation = Install
+Type = Path
+Target = usr/src/*/dkms.conf
+
+[Action]
+Description = %s
+When = PostTransaction
+Exec = /usr/bin/true
+' "$h" > "$pkgdir/usr/share/libalpm/hooks/$h.hook"
+  done
+}
+EOF
+build "$d"
+
+# --- fixture-nvidia-dkms ----------------------------------------------------
+# A DKMS package: sources under /usr/src and a dkms.conf, and nothing compiled.
+# This is the shape `kernel.dkms` names — the package goes into a build root,
+# never into the image.
+d=$(pkg fixture-nvidia-dkms)
+cat > "$d/PKGBUILD" <<'EOF'
+pkgname=fixture-nvidia-dkms
+pkgver=1.0
+pkgrel=1
+pkgdesc="A driver, as DKMS sources"
+arch=('any')
+license=('MIT')
+depends=('dkms')
+package() {
+  local src="$pkgdir/usr/src/fixture-nvidia-1.0"
+  install -dm755 "$src"
+  printf 'PACKAGE_NAME="fixture-nvidia"
+PACKAGE_VERSION="1.0"
+BUILT_MODULE_NAME[0]="fixture-nvidia"
+DEST_MODULE_LOCATION[0]="/kernel/drivers/video"
+AUTOINSTALL="yes"
+' > "$src/dkms.conf"
+  printf 'obj-m := fixture-nvidia.o
+' > "$src/Makefile"
+}
+EOF
+build "$d"
+
 # --- fixture-init -----------------------------------------------------------
 # Something has to be PID 1. It provides the virtual name `init`, which is what
 # the bootability check actually asks for.

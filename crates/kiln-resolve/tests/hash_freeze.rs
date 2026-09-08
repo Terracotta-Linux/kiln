@@ -16,13 +16,13 @@ use kiln_resolve::{
     UidMap, VolatileInput,
 };
 
-/// Frozen at hash epoch 5. `plan_id` embeds `HASH_EPOCH` directly, so an epoch
+/// Frozen at hash epoch 6. `plan_id` embeds `HASH_EPOCH` directly, so an epoch
 /// bump moves it whether or not anything about a *plan* changed — which is the
 /// intent: the epoch exists to invalidate every cached identity at once. This
-/// bump was `kernel.modules.initramfs` joining `KernelModules`' canonical
-/// encoding, as epoch 4 was `kernel.dracut_modules` joining `Kernel`'s; see
-/// `kiln-config`'s `hash_freeze.rs` for why.
-const FROZEN_AT_EPOCH: u32 = 5;
+/// bump was `kernel.dkms` joining `Kernel`'s canonical encoding, as epoch 5 was
+/// `kernel.modules.initramfs` joining `KernelModules`' and epoch 4 was
+/// `kernel.dracut_modules`; see `kiln-config`'s `hash_freeze.rs` for why.
+const FROZEN_AT_EPOCH: u32 = 6;
 
 /// The plan as phase 2 could express it: repository packages, a file and a
 /// unit.
@@ -161,6 +161,25 @@ fn phase_three_specimen() -> BuildPlan {
     plan
 }
 
+/// A DKMS package's modules, the one input kind added after phase 3. Frozen in
+/// its own specimen for the same reason the phase-3 kinds are frozen apart from
+/// the phase-2 ones: the value above is the evidence that adding a kind leaves a
+/// plan containing none of it alone, and folding this into it would spend that
+/// evidence to save a function.
+fn dkms_specimen() -> BuildPlan {
+    let mut plan = phase_three_specimen();
+    plan.inputs.push(ResolvedInput::DkmsModule {
+        name: "nvidia-open-dkms-modules".into(),
+        package: "nvidia-open-dkms".into(),
+        evr: "580.95.05-1".into(),
+        build_key: Hash("b3:1177".into()),
+        recipe: Hash("b3:2288".into()),
+        kernel_evr: "6.19.2-1".into(),
+    });
+    plan.canonicalize();
+    plan
+}
+
 #[test]
 fn plan_id_is_frozen() {
     assert_eq!(
@@ -170,7 +189,7 @@ fn plan_id_is_frozen() {
     let got = specimen().plan_id();
     assert_eq!(
         got.to_string(),
-        "b3:9981ba28f93f1826b93cee480e97548eb889bb3a088410b3d36da69303522ea4",
+        "b3:495619f9119fa952ce443849c8ffcf1a40806a0ce7761bb3861ca4b7c92924fd",
         "\n\
          `plan_id` changed. There are exactly two legitimate causes:\n\
          \n\
@@ -199,7 +218,7 @@ fn plan_id_is_frozen() {
 fn the_phase_three_input_kinds_did_not_move_a_phase_two_plan() {
     assert_eq!(
         specimen().plan_id().to_string(),
-        "b3:9981ba28f93f1826b93cee480e97548eb889bb3a088410b3d36da69303522ea4",
+        "b3:495619f9119fa952ce443849c8ffcf1a40806a0ce7761bb3861ca4b7c92924fd",
         "\nthis is the value frozen at epoch 3 with the phase-3 kinds already present: adding an input kind must not \
          invalidate a plan that uses none of it\n"
     );
@@ -210,8 +229,72 @@ fn the_phase_three_input_kinds_are_frozen_too() {
     assert_eq!(HASH_EPOCH, FROZEN_AT_EPOCH);
     assert_eq!(
         phase_three_specimen().plan_id().to_string(),
-        "b3:adf2f26429aae5b71196c6eb1cb536b55cc206a70fa8d38325c5a3fbf726579f",
+        "b3:6cba821e27a490355e7732ac4c83d031a26211dabd3793d3ae413c4b6dd5aa9a",
         "\nsee `plan_id_is_frozen` for the two legitimate reasons this can change\n"
+    );
+}
+
+#[test]
+fn a_dkms_package_is_frozen_too() {
+    assert_eq!(HASH_EPOCH, FROZEN_AT_EPOCH);
+    assert_eq!(
+        dkms_specimen().plan_id().to_string(),
+        "b3:4c200c8155380ab65c06b9e5401b58a2fdd1e2e711ac5848b42d3a773833e834",
+        "\nsee `plan_id_is_frozen` for the two legitimate reasons this can change\n"
+    );
+}
+
+/// Every field of a DKMS input has to reach the identity. The driver's own
+/// version and the kernel it was compiled against are the two that move on
+/// their own — a DKMS package is rebuilt when either does, and an image whose
+/// `plan_id` did not notice would silently keep the old driver.
+#[test]
+fn every_dkms_field_moves_the_identity() {
+    let baseline = dkms_specimen().plan_id();
+    let mutate = |f: &dyn Fn(&mut ResolvedInput)| {
+        let mut plan = dkms_specimen();
+        for input in plan.inputs.iter_mut() {
+            f(input);
+        }
+        plan.canonicalize();
+        plan.plan_id()
+    };
+
+    // The driver's own version.
+    assert_ne!(
+        mutate(&|i| {
+            if let ResolvedInput::DkmsModule { evr, .. } = i {
+                *evr = "581.0.0-1".into();
+            }
+        }),
+        baseline
+    );
+    // bump the kernel and every DKMS driver's key changes with it.
+    assert_ne!(
+        mutate(&|i| {
+            if let ResolvedInput::DkmsModule { kernel_evr, .. } = i {
+                *kernel_evr = "6.19.3-1".into();
+            }
+        }),
+        baseline
+    );
+    // the key is what decides whether anything is built at all.
+    assert_ne!(
+        mutate(&|i| {
+            if let ResolvedInput::DkmsModule { build_key, .. } = i {
+                *build_key = Hash("b3:0000".into());
+            }
+        }),
+        baseline
+    );
+    // which package the sources came from.
+    assert_ne!(
+        mutate(&|i| {
+            if let ResolvedInput::DkmsModule { package, .. } = i {
+                *package = "something-else-dkms".into();
+            }
+        }),
+        baseline
     );
 }
 
@@ -349,7 +432,7 @@ fn a_build_script_reaches_the_identity_by_text_and_by_phase() {
     let baseline = specimen().plan_id();
     assert_eq!(
         baseline.to_string(),
-        "b3:9981ba28f93f1826b93cee480e97548eb889bb3a088410b3d36da69303522ea4",
+        "b3:495619f9119fa952ce443849c8ffcf1a40806a0ce7761bb3861ca4b7c92924fd",
         "the specimen has no scripts, so adding the kind must not have moved it"
     );
 

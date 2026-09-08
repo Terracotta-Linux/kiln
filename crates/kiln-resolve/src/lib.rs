@@ -15,9 +15,10 @@ pub mod recipes;
 pub mod time;
 
 use kiln_alpm::{mirrors, Config, RepoSpec, Request, Session, Trust};
+use kiln_build::dkms;
 use kiln_build::key::Ingredients;
 use kiln_diag::{Diag, Errors};
-use kiln_manifest::{Manifest, Snapshot};
+use kiln_manifest::{Hash, Manifest, Snapshot};
 use std::path::PathBuf;
 
 pub use plan::*;
@@ -205,6 +206,7 @@ pub fn resolve(
         &mut session,
         &declared,
         &modules,
+        &aur.inputs,
         &solution,
         &mut problems,
     );
@@ -330,11 +332,13 @@ fn bootability(manifest: &Manifest, solution: &kiln_alpm::Solution) -> Result<()
 /// > Including `makedep_evrs` in the key is what makes the cache *correct*
 /// > rather than merely fast — a package built against `gcc 15.1` is not the
 /// > same artifact as one built against `gcc 15.2`.
+#[allow(clippy::too_many_arguments)]
 fn build_keys(
     manifest: &Manifest,
     session: &mut Session,
     declared: &[recipes::Declared],
     modules: &[recipes::Module],
+    aur: &[ResolvedInput],
     solution: &kiln_alpm::Solution,
     problems: &mut Errors,
 ) -> Vec<ResolvedInput> {
@@ -362,38 +366,120 @@ fn build_keys(
         });
     }
 
-    // An out-of-tree module needs the kernel's headers to build and the
-    // kernel's EVR in its key.
-    if !modules.is_empty() {
-        let kernel = &manifest.kernel.package;
-        let Some(kernel_evr) = solution.get(kernel).map(|p| p.version.clone()) else {
-            // `bootability` already reported a missing kernel; saying it twice
-            // would be noise.
-            return out;
+    // An out-of-tree module and a DKMS package both need the kernel's headers
+    // to build and the kernel's EVR in their key.
+    if modules.is_empty() && manifest.kernel.dkms.is_empty() {
+        return out;
+    }
+    let kernel = &manifest.kernel.package;
+    let Some(kernel_evr) = solution.get(kernel).map(|p| p.version.clone()) else {
+        // `bootability` already reported a missing kernel; saying it twice
+        // would be noise.
+        return out;
+    };
+    let headers = format!("{kernel}-headers");
+
+    for module in modules {
+        let Some(makedeps) = closure_evrs(
+            session,
+            std::slice::from_ref(&headers),
+            &module.source,
+            problems,
+        ) else {
+            continue;
         };
-        let headers = format!("{kernel}-headers");
-        for module in modules {
-            let Some(makedeps) = closure_evrs(
-                session,
-                std::slice::from_ref(&headers),
-                &module.source,
-                problems,
-            ) else {
-                continue;
-            };
-            let ingredients = Ingredients::new(module.tree.clone(), arch)
-                .with_makedeps(makedeps)
-                .against_kernel(&kernel_evr);
-            out.push(ResolvedInput::KernelModule {
-                name: module.name.clone(),
-                source: module.source.clone(),
-                build_key: ingredients.build_key(),
-                recipe: module.tree.clone(),
-                kernel_evr: kernel_evr.clone(),
-            });
-        }
+        let ingredients = Ingredients::new(module.tree.clone(), arch)
+            .with_makedeps(makedeps)
+            .against_kernel(&kernel_evr);
+        out.push(ResolvedInput::KernelModule {
+            name: module.name.clone(),
+            source: module.source.clone(),
+            build_key: ingredients.build_key(),
+            recipe: module.tree.clone(),
+            kernel_evr: kernel_evr.clone(),
+        });
+    }
+
+    for package in &manifest.kernel.dkms {
+        let Some((evr, from)) = dkms_version(manifest, session, aur, package, problems) else {
+            continue;
+        };
+        // A DKMS package *is* its sources, so its version is the recipe
+        // identity — the same move `aur_recipe_identity` makes with a commit.
+        let recipe = Hash::of(format!("dkms:{package}@{evr}").as_bytes());
+        // The whole build root, minus what resolution cannot see: an AUR
+        // package has no entry in any sync database, and its identity is
+        // already in `recipe` above.
+        let wanted: Vec<String> = dkms::makedepends(package, kernel)
+            .into_iter()
+            .filter(|d| d != package || from == DkmsSource::Repositories)
+            .collect();
+        let Some(makedeps) = closure_evrs(session, &wanted, package, problems) else {
+            continue;
+        };
+        let ingredients = Ingredients::new(recipe.clone(), arch)
+            .with_makedeps(makedeps)
+            .against_kernel(&kernel_evr);
+        out.push(ResolvedInput::DkmsModule {
+            name: dkms::package_name(package),
+            package: package.clone(),
+            evr,
+            build_key: ingredients.build_key(),
+            recipe,
+            kernel_evr: kernel_evr.clone(),
+        });
     }
     out
+}
+
+/// The version of a DKMS package, from wherever the configuration gets it.
+///
+/// The repositories first, then `packages.aur` — a large share of DKMS drivers
+/// live only there, and realization already installs an AUR package Kiln built
+/// into a later build root as a file. What it will not do is guess: a name that
+/// resolves nowhere is an error naming the line that wrote it, not a build that
+/// discovers the same thing an hour later.
+fn dkms_version(
+    manifest: &Manifest,
+    session: &mut Session,
+    aur: &[ResolvedInput],
+    package: &str,
+    problems: &mut Errors,
+) -> Option<(String, DkmsSource)> {
+    if let Ok(solved) = session.solve(&Request::new([package.to_string()])) {
+        if let Some(p) = solved.get(package) {
+            return Some((p.version.clone(), DkmsSource::Repositories));
+        }
+    }
+    if let Some(evr) = aur.iter().find_map(|i| match i {
+        ResolvedInput::AurPackage { name, evr, .. } if name == package => Some(evr.clone()),
+        _ => None,
+    }) {
+        return Some((evr, DkmsSource::Aur));
+    }
+
+    let mut diag = Diag::error(
+        "kiln::resolution",
+        format!("no package named `{package}` to build DKMS modules from"),
+    );
+    if let Some(o) = manifest.item_origins.get(&format!("kernel.dkms/{package}")) {
+        diag = diag.label(o, "named here");
+    }
+    problems.push(diag.help(
+        "`kernel.dkms` names the package that ships the DKMS sources — \
+         `nvidia-open-dkms`, not `nvidia-open`. A DKMS package from the AUR has to be \
+         listed in `packages.aur` as well, so that Kiln knows to build it first.",
+    ));
+    None
+}
+
+/// Where a DKMS package's sources come from — which decides whether its name
+/// can go in the build root's `makedepends` closure, or arrives as a file
+/// realization built first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DkmsSource {
+    Repositories,
+    Aur,
 }
 
 /// `name-evr` for a build-time dependency closure, resolved against the same

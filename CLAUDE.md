@@ -87,7 +87,9 @@ section — read it before writing image code. The shape:
 - Kernel at `/usr/lib/modules/$kver/{vmlinuz,initramfs.img}`; dracut with the `50ostree`
   module, verified with `lsinitrd` rather than trusted.
 - UID/GID pinned via `sysusers.d`, seeded between two alpm transactions.
-- Package-shipped alpm hooks always run and can only be *shadowed* by filename.
+- Package-shipped alpm hooks always run and can only be *shadowed* by filename — or, where
+  Kiln owns the transaction and the tree is thrown away afterwards, kept out of it entirely
+  with `NoExtract` (the build root's answer to the `dkms` hooks).
 - Determinism needs `%INSTALLDATE%` pinned and `machine-id` truncated.
 
 **Bootloader: GRUB2**, through libostree's own `sysroot.bootloader=grub2` backend, with
@@ -127,7 +129,11 @@ bottom ones need root and run only in privileged CI containers.
 - `kiln-sandbox` — `Sandbox` trait; bwrap + nspawn.
 - `kiln-image` — all eleven assembly steps, normalization, and `bootcount`.
 - `kiln-build` — recipes, `build_key`, the build cache, the two-phase build, the build root,
-  synthesized module recipes.
+  synthesized module recipes, and the synthesized *DKMS* recipe (`dkms.rs`): a `kernel.dkms`
+  package is installed into a build root, never the image, `dkms build` runs there against
+  the resolved kernel, and only the `.ko` files ship. The build root sets `NoExtract` over
+  the three `dkms` alpm hooks, which would otherwise compile the module a second time as
+  root, inside the transaction, before Kiln compiles it in a sandbox.
 - `kiln-aur` — RPC, commit identity, the dependency closure, the clone.
 - `kiln-record` — the build record.
 - `kiln-ostree` — commit, deploy, generations, rollback, `grubenv`, the `Removal` policy

@@ -12,19 +12,21 @@
 use kiln_config::Options;
 use std::path::{Path, PathBuf};
 
-/// Frozen at hash epoch 5 — `kernel.modules.initramfs` joined
-/// `KernelModules`' canonical encoding. Which *drivers* are in the initramfs
-/// decides what the machine can do before it has a root filesystem, and
-/// dracut's non-hostonly selection does not put a GPU driver there on its
-/// own; so a boot splash had no device to draw on until some unrelated DRM
-/// driver registered. All five fixtures moved together — none of them names a
-/// driver — which is what says it was a schema change rather than a module
-/// content change (see cause (c) below).
+/// Frozen at hash epoch 6 — `kernel.dkms` joined `Kernel`'s canonical encoding.
+/// A DKMS package ships sources and expects the *machine* to compile them at
+/// install time, which an immutable image never does; naming one now means Kiln
+/// compiles it into the image instead, so which DKMS packages a configuration
+/// names decides what drivers the image contains. All five fixtures moved
+/// together — four of them name no DKMS package at all — which is what says it
+/// was a schema change rather than a module content change (see cause (c)
+/// below). `workstation` also gained a `kernel.dkms` line of its own, so the
+/// corpus covers the key; that change rides along in the same commit.
 ///
-/// Epoch 4 was the same shape of change: `kernel.dracut_modules` joining
-/// `Kernel`'s canonical encoding, because dracut's default selection does not
-/// include every module whose package is installed.
-/// Do not "fix" these by pasting new values.
+/// Epochs 4 and 5 were the same shape of change: `kernel.dracut_modules` and
+/// then `kernel.modules.initramfs` joining the canonical encoding, because
+/// dracut's default, non-hostonly selection includes neither every module whose
+/// package is installed nor the drivers a splash needs before there is a root
+/// filesystem. Do not "fix" these by pasting new values.
 ///
 /// Three of these fixtures include shipped modules, so their identity depends on
 /// what those modules say — which is the point of them, and the third way a
@@ -62,29 +64,29 @@ use std::path::{Path, PathBuf};
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
-        "b3:51b23d2728515a6358269ec5374697389c3268c89290e39b9a7dcf95e9686991",
+        "b3:150437794c6339df1f69af4144e844b3052eec6221ab06ba7655c95abb3b5f78",
     ),
     (
         "minimal",
-        "b3:d4366912983cf3214b54119c426bdb94cd17656a0f5eee182b041947f6d8430c",
+        "b3:c092f3b179abc78122d3e518e1fc2dd51190257b6758222efc41c4ddb01f4f49",
     ),
     (
         "order-independence-a",
-        "b3:d382b3b023ea7fea6571feb2b42ad881ed35c62a00af7759a968ca5f5a96a905",
+        "b3:028805bc2257ffae05310bc2380208ebbed63ce6783b3b8f1db6e7d14e103a79",
     ),
     (
         "order-independence-b",
-        "b3:d382b3b023ea7fea6571feb2b42ad881ed35c62a00af7759a968ca5f5a96a905",
+        "b3:028805bc2257ffae05310bc2380208ebbed63ce6783b3b8f1db6e7d14e103a79",
     ),
     (
         "workstation",
-        "b3:b3cb36947f7b99d6c552c8709e5783e552a9cb3045dec637c3d57cbd83c444d7",
+        "b3:fc7795bf3eb35590274d691388ba97327a01ad458fbf3aa303ccc9d4f35c35e1",
     ),
 ];
 
 /// The epoch the values above were taken at. Changing `HASH_EPOCH` without
 /// changing this is the mistake this constant exists to catch.
-const FROZEN_AT_EPOCH: u32 = 5;
+const FROZEN_AT_EPOCH: u32 = 6;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -21,6 +21,7 @@ exclude = ["nano"]
 
 [kernel]
 cmdline = ["quiet", "zswap.enabled=0"]
+dkms    = ["v4l2loopback-dkms"]
 
 [kernel.modules]
 load    = ["kvm_intel"]
