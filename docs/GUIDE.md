@@ -2255,7 +2255,7 @@ and lines, and setting it here is the fix.
 
 ### 14.3 The module library
 
-Kiln ships 58 modules under `/usr/share/kiln/modules`:
+Kiln ships 59 modules under `/usr/share/kiln/modules`:
 
 ```text
 @kiln/profiles/    minimal · workstation · server
@@ -2271,7 +2271,7 @@ Kiln ships 58 modules under `/usr/share/kiln/modules`:
 @kiln/wm/          hyprland · sway · niri · i3
 @kiln/audio/       pipewire
 @kiln/hardware/    firmware · bluetooth · printing · laptop · intel-ucode · amd-ucode
-@kiln/virt/        libvirt · podman · docker · distrobox · lilipod
+@kiln/virt/        libvirt · podman · docker · nvidia-docker · distrobox · lilipod
 @kiln/dev/         base-devel · rust · go
 @kiln/security/    wheel-sudo · apparmor
 @kiln/terracotta/  kiln · installer · branding · branding-plymouth
