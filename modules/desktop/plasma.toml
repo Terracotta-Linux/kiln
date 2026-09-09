@@ -12,6 +12,7 @@ repo = [
   "konsole", "kcalc", "kinfocenter", "dolphin", "ark", "7zip", "unarchiver",
   "kio-admin", "spectacle", "kscreen", "plasma-nm", "plasma-pa", "bluedevil",
   "kpipewire", "kdeplasma-addons", "plasma-workspace-wallpapers", "breeze-gtk",
+  "kde-gtk-config",
 ]
 
 [systemd]

@@ -11,7 +11,7 @@ repo = [
   "plasma-desktop", "plasma-login-manager", "xdg-desktop-portal-kde",
   "konsole", "kcalc", "korganizer", "dolphin", "ark", "7zip", "unarchiver",
   "kio-admin", "spectacle", "plasma-meta", "plasma-workspace-wallpapers",
-  "breeze-gtk",
+  "breeze-gtk", "kde-gtk-config",
 ]
 
 [systemd]
