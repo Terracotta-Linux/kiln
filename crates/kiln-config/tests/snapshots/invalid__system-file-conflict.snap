@@ -1,0 +1,22 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+assertion_line: 131
+expression: rendered
+---
+kiln::semantic
+
+  × `/etc/hostname` is set by both `[[file]]` and `system.hostname`
+   ╭─[system.toml:4:12]
+ 3 │ [system]
+ 4 │ hostname = "forge"
+   ·            ───┬───
+   ·               ╰── and set here
+ 5 │ 
+ 6 │ [[file]]
+ 7 │ target  = "/etc/hostname"
+   ·           ───────┬───────
+   ·                  ╰── written here
+ 8 │ content = "forge\n"
+   ╰────
+  help: `system.hostname` already writes `/etc/hostname`; remove the `[[file]]` entry or
+        leave `system.hostname` unset

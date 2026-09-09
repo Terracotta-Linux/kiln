@@ -1,5 +1,6 @@
 ---
 source: crates/kiln-config/tests/corpus.rs
+assertion_line: 131
 expression: rendered
 ---
 kiln::semantic
@@ -24,5 +25,17 @@ kiln::semantic
  9 │ content = "x\n"
    ╰────
   help: `target` is a real system path and must start with `/`
+kiln::semantic
 
-2 problems found.
+  × Kiln cannot ship a file to `/etc/locale.conf`
+    ╭─[system.toml:12:11]
+ 11 │ [[file]]
+ 12 │ target  = "/etc/locale.conf"
+    ·           ─────────┬────────
+    ·                    ╰── here
+ 13 │ content = "LANG=en_US.UTF-8\n"
+    ╰────
+  help: `system.locale.lang` always writes this, defaulting to "C.UTF-8" — there is no
+        `[[file]]` route to it
+
+3 problems found.

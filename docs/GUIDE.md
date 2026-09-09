@@ -1229,33 +1229,27 @@ See [section 8](#8-files-and-the-filesystem).
 | `system.locale.lang` | string | `"C.UTF-8"` | The default `LANG` |
 | `system.locale.generate` | list of strings | `[]` | Locales to generate, written the way `locale.gen` wants them (`"en_US.UTF-8 UTF-8"`) |
 
-**`[system]` is declared but not yet materialized either.** All four keys are validated,
-reported and hashed into `config_id`, and nothing in assembly writes `/etc/hostname`,
-`/etc/localtime`, `/etc/vconsole.conf`, `/etc/locale.conf` or `/etc/locale.gen` from them yet.
-Until it does, a `[[file]]` or a `[[script]]` is the way to set them:
+`system.timezone`, `system.keymap` and `system.locale.lang` always have a concrete value —
+`"UTC"`, `"us"` and `"C.UTF-8"` are defaults, not an unset state — so `/etc/localtime`,
+`/etc/vconsole.conf` and `/etc/locale.conf` are written for every image, whether or not the
+configuration has a `[system]` table at all. `system.hostname` is the one key with a real
+unset (`None` means systemd's own default applies), and `system.locale.generate` only ever
+names locales beyond the ones glibc's stock archive already carries, so `/etc/hostname` and
+`/etc/locale.gen` are written only when the configuration actually sets them; when
+`system.locale.generate` is non-empty, `locale-gen` also runs, chrooted into the image, to
+compile the archive.
+
+Because the first three are always written, a `[[file]]` targeting `/etc/localtime`,
+`/etc/vconsole.conf` or `/etc/locale.conf` is refused outright — there is no `[[file]]` route
+to them. A `[[file]]` targeting `/etc/hostname` or `/etc/locale.gen` is refused only once the
+matching `[system]` key is actually set, since the two would otherwise race:
 
 ```toml
-[[file]]
-target  = "/etc/hostname"
-content = "forge\n"
-
-[[file]]
-target  = "/etc/locale.conf"
-content = "LANG=en_US.UTF-8\n"
-
-[[file]]
-target  = "/etc/vconsole.conf"
-content = "KEYMAP=us\n"
-
-[[script]]                                      # locale-gen needs to run
-name    = "20-locale"
-after   = "files"
-content = """
-#!/bin/sh
-set -eu
-echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen
-locale-gen
-"""
+[system]
+hostname = "forge"
+timezone = "Asia/Riyadh"
+keymap   = "us"
+locale   = { lang = "en_US.UTF-8", generate = ["en_US.UTF-8 UTF-8"] }
 ```
 
 ### 6.8 Ordering never matters
@@ -2889,8 +2883,8 @@ repo = ["neovim", "fish", "firefox", "git", "ripgrep"]
 [kernel]
 cmdline = ["quiet", "amd_iommu=on"]
 
-[system]                                    # declared and hashed; see §6.7 on
-hostname = "forge"                          # materializing these with [[file]]
+[system]
+hostname = "forge"
 timezone = "Asia/Riyadh"
 locale   = { lang = "en_US.UTF-8", generate = ["en_US.UTF-8 UTF-8"] }
 ```

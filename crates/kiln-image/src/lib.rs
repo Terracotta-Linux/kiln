@@ -19,7 +19,11 @@
 //!
 //! Plus `bootcount`, which is not a step of its own: automatic rollback
 //! is three files, written alongside steps 6 and 7 because two of them are
-//! ordinary image content and the third is a unit like any other.
+//! ordinary image content and the third is a unit like any other. Likewise
+//! `system` — hostname, timezone, keymap, locale — writes plain `/etc`
+//! content between steps 8 and 9, late enough that the toolchain
+//! `locale-gen` needs is already installed and early enough that step 10
+//! still finds an `/etc` to move.
 //!
 //! Steps 5 and 8 are build scripts, which phase 3 owns.
 
@@ -33,6 +37,7 @@ pub mod normalize;
 pub mod overlay;
 pub mod scripts;
 pub mod skeleton;
+pub mod system;
 pub mod tree;
 pub mod uid;
 pub mod units;

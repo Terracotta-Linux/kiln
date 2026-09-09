@@ -25,7 +25,8 @@
 
 use crate::tree::{self, Result};
 use crate::{
-    bootcount, drain, hooks, kernel, normalize, overlay, scripts, skeleton, uid, units, verify,
+    bootcount, drain, hooks, kernel, normalize, overlay, scripts, skeleton, system, uid, units,
+    verify,
 };
 use kiln_alpm::{RepoSpec, Session, Transaction};
 use kiln_manifest::{Manifest, ScriptPhase};
@@ -235,6 +236,15 @@ pub fn assemble(
     // The alpm session holds an open database inside the tree that is about to
     // be rewritten. Nothing after this point asks it anything.
     drop(session);
+
+    // `[system]` — hostname, timezone, keymap, locale — writes plain /etc
+    // content and, when `system.locale.generate` asks for one, compiles it
+    // with `locale-gen`. After the transaction, which is what puts glibc and
+    // tzdata in the tree; before step 10, which moves `/etc` to `/usr/etc`.
+    system::install(root, &manifest.system)?;
+    if system::needs_locale_gen(&manifest.system) {
+        run(sandbox, &system::locale_gen_spec(root))?;
+    }
 
     // 9 ─────────────────────────────────────────────────────────────────────
     report.kernel = Some(build_kernel(

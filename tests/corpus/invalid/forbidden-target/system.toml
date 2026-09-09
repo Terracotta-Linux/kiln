@@ -7,3 +7,7 @@ content = "x\n"
 [[file]]
 target  = "etc/relative"
 content = "x\n"
+
+[[file]]
+target  = "/etc/locale.conf"
+content = "LANG=en_US.UTF-8\n"

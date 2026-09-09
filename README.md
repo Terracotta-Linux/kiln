@@ -249,12 +249,8 @@ More in the [development chapter](docs/GUIDE.md#16-development).
 ## 📈 Status
 
 The frontend, the builder, the whole package/build/module input taxonomy and the command
-surface are implemented and tested, including automatic rollback on boot failure and `/etc`
-drift detection.
-
-Declared in the schema and hashed into the image identity, but not yet written out by the
-assembler: `[system]` (hostname, timezone, keymap, locale). The
-[guide shows the `[[file]]` form to use meanwhile](docs/GUIDE.md#67-key-reference).
+surface are implemented and tested, including automatic rollback on boot failure, `/etc`
+drift detection, and `[system]` (hostname, timezone, keymap, locale).
 
 Not built yet: reproducibility auditing beyond `kiln rebuild`, and multi-arch.
 

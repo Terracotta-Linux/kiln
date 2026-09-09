@@ -36,6 +36,21 @@ const FORBIDDEN_TARGETS: &[(&str, &str)] = &[
     ("/tmp", "runtime mount"),
     ("/sysroot", "OSTree's physical root"),
     ("/ostree", "OSTree's own storage"),
+    (
+        "/etc/localtime",
+        "`system.timezone` always writes this, defaulting to \"UTC\" — there is no `[[file]]` \
+         route to it",
+    ),
+    (
+        "/etc/vconsole.conf",
+        "`system.keymap` always writes this, defaulting to \"us\" — there is no `[[file]]` \
+         route to it",
+    ),
+    (
+        "/etc/locale.conf",
+        "`system.locale.lang` always writes this, defaulting to \"C.UTF-8\" — there is no \
+         `[[file]]` route to it",
+    ),
 ];
 
 /// Targets that are accepted but do not mean what they look like. The table
@@ -121,6 +136,9 @@ struct Validator<'a> {
 
 impl Validator<'_> {
     fn manifest(&mut self, doc: &Node, origins: kiln_diag::OriginMap) -> Manifest {
+        let files = self.files(doc);
+        let system = self.system(doc);
+        self.check_system_file_conflicts(doc, &files, &system);
         Manifest {
             schema: SCHEMA_VERSION,
             image: self.image(doc),
@@ -129,9 +147,9 @@ impl Validator<'_> {
             kernel: self.kernel(doc),
             boot: self.boot(doc),
             systemd: self.systemd(doc),
-            files: self.files(doc),
+            files,
             scripts: self.scripts(doc),
-            system: self.system(doc),
+            system,
             local_digests: BTreeMap::new(),
             origins,
             item_origins: std::mem::take(&mut self.item_origins),
@@ -856,6 +874,51 @@ impl Validator<'_> {
                 lang: self.string(doc, "system.locale.lang", "C.UTF-8"),
                 generate: self.str_set(doc, "system.locale.generate"),
             },
+        }
+    }
+
+    /// `/etc/hostname` and `/etc/locale.gen` are the two `[system]` targets
+    /// assembly writes *conditionally* — only when `system.hostname` or
+    /// `system.locale.generate` is actually set. `FORBIDDEN_TARGETS` can
+    /// refuse `/etc/localtime`, `/etc/vconsole.conf` and `/etc/locale.conf`
+    /// unconditionally because those three are always written; these two are
+    /// legal `[[file]]` targets right up until the matching `[system]` key is
+    /// used, at which point the two entries would silently race — the same
+    /// ambiguity the merge algebra already refuses for a scalar two files set
+    /// differently, just between a `[[file]]` and a `[system]` key instead of
+    /// two files.
+    fn check_system_file_conflicts(
+        &mut self,
+        doc: &Node,
+        files: &BTreeMap<String, FileEntry>,
+        system: &SystemDefaults,
+    ) {
+        let mut conflicts: Vec<(&str, &str)> = Vec::new();
+        if system.hostname.is_some() {
+            conflicts.push(("/etc/hostname", "system.hostname"));
+        }
+        if !system.locale.generate.is_empty() {
+            conflicts.push(("/etc/locale.gen", "system.locale.generate"));
+        }
+
+        for (target, system_path) in conflicts {
+            if !files.contains_key(target) {
+                continue;
+            }
+            let mut diag = Diag::error(
+                "kiln::semantic",
+                format!("`{target}` is set by both `[[file]]` and `{system_path}`"),
+            );
+            if let Some(origin) = self.item_origins.get(&format!("file/{target}")) {
+                diag = diag.label(origin, "written here");
+            }
+            if let Some(node) = self.node(doc, system_path) {
+                diag = diag.label(&node.origin, "and set here");
+            }
+            self.errs.push(diag.help(format!(
+                "`{system_path}` already writes `{target}`; remove the `[[file]]` entry or \
+                 leave `{system_path}` unset"
+            )));
         }
     }
 

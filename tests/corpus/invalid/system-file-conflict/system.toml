@@ -1,0 +1,8 @@
+kiln = 1
+
+[system]
+hostname = "forge"
+
+[[file]]
+target  = "/etc/hostname"
+content = "forge\n"
