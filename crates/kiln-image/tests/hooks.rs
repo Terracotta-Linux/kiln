@@ -8,7 +8,7 @@ use kiln_image::hooks;
 /// owns; keep the rest. This test is the list, so that adding to it is a
 /// deliberate act rather than a drive-by.
 #[test]
-fn exactly_the_four_hooks_the_design_names_are_shadowed() {
+fn exactly_the_five_hooks_the_design_names_are_shadowed() {
     let names: Vec<&str> = hooks::SHADOWED.iter().map(|h| h.filename).collect();
     assert_eq!(
         names,
@@ -17,6 +17,7 @@ fn exactly_the_four_hooks_the_design_names_are_shadowed() {
             "90-dracut-install.hook",
             "60-dracut-remove.hook",
             "60-depmod.hook",
+            "nvidia-ctk-cdi.hook",
         ]
     );
     // Everything else is legitimate image content: locale-gen, ldconfig,

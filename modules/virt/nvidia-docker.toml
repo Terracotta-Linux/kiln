@@ -1,0 +1,25 @@
+# Docker (see @kiln/virt/docker) plus the NVIDIA Container Toolkit, so
+# `docker run --gpus all` reaches the GPU. A separate module rather than a
+# flag on @kiln/virt/docker, the same reason nvidia-open-lts is its own
+# module. Needs a driver alongside it — @kiln/gpu/nvidia-open, -lts or
+# -dkms — which this does not install.
+kiln = 1
+
+[packages]
+repo = ["docker", "docker-buildx", "docker-compose", "nvidia-container-toolkit"]
+
+[systemd]
+enable = ["docker.service"]
+
+[[file]]
+target  = "/etc/docker/daemon.json"
+content = '''
+{
+  "runtimes": {
+    "nvidia": {
+      "path": "/usr/bin/nvidia-container-runtime",
+      "runtimeArgs": []
+    }
+  }
+}
+'''

@@ -44,6 +44,15 @@ pub const SHADOWED: &[Shadowed] = &[
         reason: "Kiln runs depmod itself, deterministically, after the transaction \
 .",
     },
+    Shadowed {
+        filename: "nvidia-ctk-cdi.hook",
+        reason: "it runs `nvidia-ctk cdi generate`, which queries NVML for the GPUs actually \
+                 present — nothing, inside a sandboxed transaction — and the resulting exit \
+                 aborts the build. /etc/cdi/nvidia.yaml describes the machine that will run \
+                 containers, not the packages in the image, so it does not belong in the \
+                 commit even where it could be generated: that is a fact for the booted \
+                 machine to establish, not the builder.",
+    },
 ];
 
 /// Write the shadow hooks into `dir` and return it, for registering as a
