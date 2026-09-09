@@ -379,6 +379,28 @@ impl Sysroot {
         }
     }
 
+    /// `ostree_sysroot_write_deployments`, retried against a remounted
+    /// `/boot` on failure.
+    ///
+    /// `write_deployments` rewrites the BLS entries in `/boot/loader.N`, and
+    /// `/boot` read-only is the common case on a booted system — see `arm`.
+    /// Unlike `arm`, this is not best-effort: `kiln rollback` and `kiln rm`
+    /// have nothing sensible to fall back to if the reorder itself does not
+    /// land, so the retry's own failure is what propagates.
+    fn write_deployments(&self, deployments: &[Deployment], what: &'static str) -> Result<()> {
+        match self.inner.write_deployments(deployments, gio::Cancellable::NONE) {
+            Ok(()) => Ok(()),
+            Err(_) if self.path == Path::new("/") => {
+                remount_rw_and_retry(&self.boot(), || {
+                    self.inner
+                        .write_deployments(deployments, gio::Cancellable::NONE)
+                        .map_err(Error::of(what))
+                })
+            }
+            Err(e) => Err(Error::of(what)(e)),
+        }
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -574,9 +596,7 @@ impl Sysroot {
         let chosen = deployments.remove(position);
         deployments.insert(0, chosen);
 
-        self.inner
-            .write_deployments(&deployments, gio::Cancellable::NONE)
-            .map_err(Error::of("reordering the deployments"))?;
+        self.write_deployments(&deployments, "reordering the deployments")?;
         self.inner
             .load(gio::Cancellable::NONE)
             .map_err(Error::of("reloading after reordering"))?;
@@ -656,9 +676,7 @@ impl Sysroot {
             }
         }
 
-        self.inner
-            .write_deployments(&keep, gio::Cancellable::NONE)
-            .map_err(Error::of("removing deployments"))?;
+        self.write_deployments(&keep, "removing deployments")?;
         self.inner
             .load(gio::Cancellable::NONE)
             .map_err(Error::of("reloading after removing deployments"))?;
