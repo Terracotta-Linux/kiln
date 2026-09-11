@@ -1948,6 +1948,19 @@ cmdline = ["root=UUID=…", "rw"]
 State lives under the sysroot, not at an absolute path: `--sysroot /mnt` puts the artifact
 store at `/mnt/var/lib/kiln`, so half the operation cannot end up on the wrong machine.
 
+**Disk encryption follows the same seam.** `cryptsetup luksFormat` and the resulting
+`/etc/crypttab` entry are the installer's job, for the same reason partitioning is: Kiln does
+not touch storage layout, and `/etc/crypttab` is one of the files `kiln status` never reports
+on (§11.5) — whatever the installer writes there is left alone by every future deploy. What
+the installer's generated configuration adds, alongside `root=UUID=…`, is the kernel side of
+unlocking that root:
+
+```toml
+[kernel]
+cmdline        = ["rd.luks.uuid=…", "rd.luks.name=…=root", "root=/dev/mapper/root", "rw"]
+dracut_modules = ["crypt"]
+```
+
 ---
 
 ## 12. Generations
@@ -2255,7 +2268,7 @@ and lines, and setting it here is the fix.
 
 ### 14.3 The module library
 
-Kiln ships 59 modules under `/usr/share/kiln/modules`:
+Kiln ships 61 modules under `/usr/share/kiln/modules`:
 
 ```text
 @kiln/profiles/    minimal · workstation · server
@@ -2274,6 +2287,7 @@ Kiln ships 59 modules under `/usr/share/kiln/modules`:
 @kiln/virt/        libvirt · podman · docker · nvidia-docker · distrobox · lilipod
 @kiln/dev/         base-devel · rust · go
 @kiln/security/    wheel-sudo · apparmor
+@kiln/system/      zram · swapfile
 @kiln/terracotta/  kiln · installer · branding · branding-plymouth
 ```
 

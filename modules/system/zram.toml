@@ -1,0 +1,11 @@
+# Compressed swap in RAM. No installer step: the package's own generator
+# reads this file and creates the device at boot, so it is image content
+# start to finish. See @kiln/system/swapfile for on-disk swap instead.
+kiln = 1
+
+[packages]
+repo = ["zram-generator"]
+
+[[file]]
+target  = "/etc/zram-generator.conf"
+content = "[zram0]\nzram-size = min(ram / 2, 8192)\ncompression-algorithm = zstd\n"

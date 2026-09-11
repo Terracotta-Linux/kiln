@@ -1,0 +1,15 @@
+# A 4GiB swap file, created idempotently on first boot. The file itself
+# lives under /var — seeded per-machine, not shipped in the image — since
+# its size depends on free space on the machine's own disk, which an image
+# cannot know. See @kiln/system/zram for compressed RAM swap instead.
+kiln = 1
+
+[[systemd.unit]]
+name    = "kiln-swapfile-create.service"
+enable  = true
+content = "[Unit]\nDescription=Create the Kiln swap file\nConditionPathExists=!/var/swap/swapfile\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/bin/mkdir -p /var/swap\nExecStart=/usr/bin/fallocate -l 4G /var/swap/swapfile\nExecStart=/usr/bin/chmod 600 /var/swap/swapfile\nExecStart=/usr/bin/mkswap /var/swap/swapfile\n\n[Install]\nWantedBy=multi-user.target\n"
+
+[[systemd.unit]]
+name    = "var-swap-swapfile.swap"
+enable  = true
+content = "[Unit]\nDescription=Kiln swap file\nRequires=kiln-swapfile-create.service\nAfter=kiln-swapfile-create.service\n\n[Swap]\nWhat=/var/swap/swapfile\n\n[Install]\nWantedBy=swap.target\n"
