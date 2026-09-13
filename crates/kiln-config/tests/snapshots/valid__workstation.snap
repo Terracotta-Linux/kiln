@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:9fd0dbcd09d20fe686595e4a9faeb937dc088a5f9dd964026b5bf07d58c350c0
+config_id: b3:9ff41f8be71c3f465234a6ce83f30bb42bbe8fd7a1be312e30831ee708149471
 
 
   boot: 
@@ -80,9 +80,11 @@ config_id: b3:9fd0dbcd09d20fe686595e4a9faeb937dc088a5f9dd964026b5bf07d58c350c0
       - "nano"
     file: {}
     repo: 
+      - "7zip"
       - "base"
       - "dracut"
       - "efibootmgr"
+      - "file-roller"
       - "fish"
       - "gdm"
       - "git"
@@ -95,6 +97,7 @@ config_id: b3:9fd0dbcd09d20fe686595e4a9faeb937dc088a5f9dd964026b5bf07d58c350c0
       - "intel-ucode"
       - "linux"
       - "linux-firmware"
+      - "nautilus"
       - "neovim"
       - "networkmanager"
       - "nvidia-open"

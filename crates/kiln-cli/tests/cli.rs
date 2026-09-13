@@ -280,7 +280,7 @@ fn explain_a_list_names_the_file_behind_each_element() {
     assert!(said.contains("unions into it"), "{said}");
     assert!(said.contains("neovim"), "{said}");
     assert!(said.contains("gnome-shell"), "{said}");
-    assert!(said.contains("@kiln/desktop/gnome:5"), "{said}");
+    assert!(said.contains("@kiln/desktop/gnome:8"), "{said}");
     // "overriding" would misdescribe a union.
     assert!(!said.contains("overriding"), "{said}");
 }
@@ -290,7 +290,7 @@ fn explain_an_element_answers_which_file_asked_for_it() {
     let out = workstation(&["explain", "packages.repo/gnome-shell"]);
     assert_eq!(code(&out), 0);
     assert!(
-        stdout(&out).contains("@kiln/desktop/gnome:5"),
+        stdout(&out).contains("@kiln/desktop/gnome:8"),
         "{}",
         stdout(&out)
     );

@@ -65,6 +65,11 @@ use std::path::{Path, PathBuf};
 /// apps (`gnome-console`, `gnome-calculator`, `gnome-calendar`) when the
 /// desktop modules split into minimal/normal/full — again only `workstation`,
 /// the one fixture that includes `@kiln/desktop/gnome`.
+///
+/// The fifth was the same module gaining `nautilus`, `file-roller`, and
+/// `7zip` — GNOME's file manager and an archive manager to go with it, which
+/// `@kiln/desktop/gnome` had been shipping without. Once again only
+/// `workstation` moved.
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
@@ -84,7 +89,7 @@ const FROZEN: &[(&str, &str)] = &[
     ),
     (
         "workstation",
-        "b3:9fd0dbcd09d20fe686595e4a9faeb937dc088a5f9dd964026b5bf07d58c350c0",
+        "b3:9ff41f8be71c3f465234a6ce83f30bb42bbe8fd7a1be312e30831ee708149471",
     ),
 ];
 

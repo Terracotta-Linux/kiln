@@ -618,10 +618,10 @@ boot
 $ kiln explain packages.repo
 packages.repo
   kind        a list — 9 files unions into it (rule 1)
-  22 elements, and who asked for each:
+  25 elements, and who asked for each:
     fish            system.toml:18
-    gdm             @kiln/desktop/gnome:5
-    gnome-console   @kiln/desktop/gnome:6
+    gdm             @kiln/desktop/gnome:8
+    gnome-console   @kiln/desktop/gnome:10
     nvidia-open     @kiln/gpu/nvidia-open:11
     ...
 
@@ -634,7 +634,7 @@ packages.repo
 ```console
 $ kiln explain packages.repo/gnome-shell
 packages.repo/gnome-shell
-  asked for   @kiln/desktop/gnome:5
+  asked for   @kiln/desktop/gnome:8
   in          packages.repo
 
   That is where it was written down. `kiln why gnome-shell` answers the other
