@@ -19,15 +19,17 @@
 //!
 //! Plus `bootcount`, which is not a step of its own: automatic rollback
 //! is three files, written alongside steps 6 and 7 because two of them are
-//! ordinary image content and the third is a unit like any other. Likewise
-//! `system` — hostname, timezone, keymap, locale — writes plain `/etc`
-//! content between steps 8 and 9, late enough that the toolchain
+//! ordinary image content and the third is a unit like any other. `boot`
+//! patches `GRUB_TIMEOUT` into `/etc/default/grub` alongside it, for the same
+//! reason. Likewise `system` — hostname, timezone, keymap, locale — writes
+//! plain `/etc` content between steps 8 and 9, late enough that the toolchain
 //! `locale-gen` needs is already installed and early enough that step 10
 //! still finds an `/etc` to move.
 //!
 //! Steps 5 and 8 are build scripts, which phase 3 owns.
 
 pub mod assemble;
+pub mod boot;
 pub mod bootcount;
 pub mod determinism;
 pub mod drain;

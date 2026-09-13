@@ -25,8 +25,8 @@
 
 use crate::tree::{self, Result};
 use crate::{
-    bootcount, drain, hooks, kernel, normalize, overlay, scripts, skeleton, system, uid, units,
-    verify,
+    boot, bootcount, drain, hooks, kernel, normalize, overlay, scripts, skeleton, system, uid,
+    units, verify,
 };
 use kiln_alpm::{RepoSpec, Session, Transaction};
 use kiln_manifest::{Manifest, ScriptPhase};
@@ -205,6 +205,11 @@ pub fn assemble(
     // Written for every image — `boot.loader` takes one value — and
     // inert where GRUB is absent.
     bootcount::install(root, bootcount::TRIES)?;
+    // Same slot, for the same reason: `/etc/default/grub` is ordinary
+    // package/overlay content by this point (steps 4 and 6 are both behind
+    // us), and patching `GRUB_TIMEOUT` into it here is the only place
+    // `boot.timeout` was ever meant to take effect.
+    boot::install(root, &manifest.boot)?;
 
     // 7 ─────────────────────────────────────────────────────────────────────
     let mut units = manifest.systemd.units.clone();
