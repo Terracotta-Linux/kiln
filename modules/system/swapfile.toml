@@ -7,7 +7,12 @@ kiln = 1
 [[systemd.unit]]
 name    = "kiln-swapfile-create.service"
 enable  = true
-content = "[Unit]\nDescription=Create the Kiln swap file\nConditionPathExists=!/var/swap/swapfile\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/bin/mkdir -p /var/swap\nExecStart=/usr/bin/fallocate -l 4G /var/swap/swapfile\nExecStart=/usr/bin/chmod 600 /var/swap/swapfile\nExecStart=/usr/bin/mkswap /var/swap/swapfile\n\n[Install]\nWantedBy=multi-user.target\n"
+# DefaultDependencies=no is load-bearing: swap.target runs before
+# sysinit.target, and the swap unit below must run after this one — a
+# plain service defaults to After=sysinit.target, which would make that a
+# cycle. RequiresMountsFor orders against whatever mounts /var, if anything
+# does.
+content = "[Unit]\nDescription=Create the Kiln swap file\nDefaultDependencies=no\nConditionPathExists=!/var/swap/swapfile\nRequiresMountsFor=/var\nBefore=var-swap-swapfile.swap\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/bin/mkdir -p /var/swap\nExecStart=/usr/bin/fallocate -l 4G /var/swap/swapfile\nExecStart=/usr/bin/chmod 600 /var/swap/swapfile\nExecStart=/usr/bin/mkswap /var/swap/swapfile\n\n[Install]\nWantedBy=swap.target\n"
 
 [[systemd.unit]]
 name    = "var-swap-swapfile.swap"
