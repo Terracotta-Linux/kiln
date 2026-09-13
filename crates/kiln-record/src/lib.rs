@@ -21,8 +21,8 @@
 pub mod record;
 
 pub use record::{
-    AurEntry, BuiltEntry, LocalFile, LocalPackage, Record, RecordedIds, RecordedUser, RepoEntry,
-    RepoSnapshot, SourceEntry, FORMAT, IN_IMAGE, METADATA_KEY,
+    AurEntry, BuiltEntry, ContentFile, LocalFile, LocalPackage, Record, RecordedIds, RecordedUser,
+    RepoEntry, RepoSnapshot, SourceEntry, FORMAT, IN_IMAGE, METADATA_KEY,
 };
 
 use std::fmt;

@@ -51,6 +51,16 @@ pub struct Record {
     pub local_packages: Vec<LocalPackage>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local_files: Vec<LocalFile>,
+    /// Every `files` entry, by the target path it deploys to — inline
+    /// content included. This is what `kiln check`/`kiln diff` compare
+    /// against a plan's `files` category, which is keyed the same way
+    /// (`target`, never the local source path). Keeping this apart from
+    /// `local_files` matters: `local_files` only exists for content that
+    /// came from a path under the config root, and is keyed by *that* path,
+    /// not where it lands — comparing one against the other's keys made
+    /// every deployed file look newly added on every `kiln check`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content_files: Vec<ContentFile>,
     /// Each build script's *text*, by name — the input side. This is
     /// what `kiln check` compares to report `scripts: 20-locale changed`
     /// rather than falling back to "config_id moved", which names nothing.
@@ -225,6 +235,17 @@ pub struct LocalFile {
     pub blake3: String,
 }
 
+/// A `files` entry, identified by where it lands — the target path, not
+/// where its bytes came from. Unlike `LocalFile`, this exists for inline
+/// content too: an inline file is still a real thing the image ships, and a
+/// diff against a plan (which is keyed by target for every `files` entry,
+/// inline or not) needs a matching key on this side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContentFile {
+    pub target: String,
+    pub blake3: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalPackage {
     pub path: String,
@@ -263,6 +284,7 @@ impl Record {
             built_packages: Vec::new(),
             local_packages: Vec::new(),
             local_files: Vec::new(),
+            content_files: Vec::new(),
             scripts: BTreeMap::new(),
             script_effects: BTreeMap::new(),
             uid_map: RecordedIds::from(&uid_map),
@@ -376,7 +398,21 @@ impl Record {
                         });
                     }
                 }
-                ResolvedInput::File { content, .. } | ResolvedInput::Unit { content, .. } => {
+                ResolvedInput::File {
+                    target, content, ..
+                } => {
+                    record.content_files.push(ContentFile {
+                        target: target.clone(),
+                        blake3: content.digest().to_string(),
+                    });
+                    if let kiln_resolve::ContentRef::Local { path, digest } = content {
+                        record.local_files.push(LocalFile {
+                            path: path.clone(),
+                            blake3: digest.to_string(),
+                        });
+                    }
+                }
+                ResolvedInput::Unit { content, .. } => {
                     if let kiln_resolve::ContentRef::Local { path, digest } = content {
                         record.local_files.push(LocalFile {
                             path: path.clone(),

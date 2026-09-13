@@ -168,9 +168,9 @@ impl Side {
                 .map(|p| (p.path.clone(), p.sha256.clone()))
                 .collect(),
             files: record
-                .local_files
+                .content_files
                 .iter()
-                .map(|f| (f.path.clone(), f.blake3.clone()))
+                .map(|f| (f.target.clone(), f.blake3.clone()))
                 .collect(),
             scripts: record.scripts.clone(),
             config_id: record.config_id.clone(),
@@ -552,7 +552,7 @@ fn short_commit(s: &str) -> String {
 mod tests {
     use super::*;
     use kiln_manifest::Hash;
-    use kiln_record::{AurEntry, BuiltEntry, LocalFile, RepoEntry, RepoSnapshot};
+    use kiln_record::{AurEntry, BuiltEntry, ContentFile, LocalFile, RepoEntry, RepoSnapshot};
     use kiln_resolve::{ContentRef, ImageRef, Provenance, UidMap};
 
     fn record() -> Record {
@@ -589,6 +589,10 @@ mod tests {
             local_packages: Vec::new(),
             local_files: vec![LocalFile {
                 path: "files/myapp.conf".into(),
+                blake3: "b3:aaaa1111".into(),
+            }],
+            content_files: vec![ContentFile {
+                target: "files/myapp.conf".into(),
                 blake3: "b3:aaaa1111".into(),
             }],
             scripts: Default::default(),
@@ -681,6 +685,60 @@ mod tests {
             ]),
         );
         insta::assert_snapshot!(report.render());
+    }
+
+    /// `files` is keyed by target, not by where the bytes came from. A record
+    /// built with the source path as the key (the bug this guards against)
+    /// would report every unchanged file whose target differs from its
+    /// source as added, and any unchanged `Local` file as removed under its
+    /// old, mismatched key on top of that.
+    #[test]
+    fn an_unchanged_file_is_not_reported_when_its_target_and_source_path_differ() {
+        let mut record = record();
+        record.content_files = vec![
+            kiln_record::ContentFile {
+                target: "/usr/local/bin/gigabytectl".into(),
+                blake3: "b3:eb15602d".into(),
+            },
+            kiln_record::ContentFile {
+                target: "/etc/docker/daemon.json".into(),
+                blake3: "b3:c92edcae".into(),
+            },
+        ];
+        record.local_files = vec![LocalFile {
+            path: "files/gigabytectl".into(),
+            blake3: "b3:eb15602d".into(),
+        }];
+
+        let report = diff(
+            &record,
+            &plan(vec![
+                ResolvedInput::File {
+                    target: "/usr/local/bin/gigabytectl".into(),
+                    content: ContentRef::Local {
+                        path: "files/gigabytectl".into(),
+                        digest: Hash("b3:eb15602d".into()),
+                    },
+                    mode: None,
+                },
+                // Inline content never has a `local_files` entry at all —
+                // this is the other half of the bug.
+                ResolvedInput::File {
+                    target: "/etc/docker/daemon.json".into(),
+                    content: ContentRef::Inline {
+                        digest: Hash("b3:c92edcae".into()),
+                    },
+                    mode: None,
+                },
+            ]),
+        );
+        let files = &report
+            .categories
+            .iter()
+            .find(|(c, _)| *c == "files")
+            .unwrap()
+            .1;
+        assert!(files.is_empty(), "unchanged files reported as: {files:?}");
     }
 
     /// identity is the git commit, not the version string. A maintainer

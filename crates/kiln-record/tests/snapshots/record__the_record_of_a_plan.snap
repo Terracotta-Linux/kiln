@@ -61,6 +61,12 @@ expression: "Record::of(&plan(), 42, uid_map()).to_json()"
       "blake3": "b3:6d2e"
     }
   ],
+  "content_files": [
+    {
+      "target": "/etc/motd",
+      "blake3": "b3:6d2e"
+    }
+  ],
   "uid_map": {
     "groups": {
       "http": 33,
