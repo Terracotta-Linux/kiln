@@ -13,6 +13,7 @@ mod deployments;
 mod disk;
 mod drift;
 mod explain;
+mod fmt;
 mod init;
 mod inspect;
 mod paths;
@@ -248,9 +249,9 @@ fn check_command(
         if deep_report.is_none() {
             pipeline::report_volatile(&plan);
         }
-        // Nothing is deployed, so nothing *changed*. reserves 10 for
-        // "found changes", and reporting changes against nothing would make the
-        // code useless in the one place it is read from — a timer.
+        // Nothing is deployed, so nothing *changed*. Exit code 10 is reserved
+        // for "found changes", and reporting changes against nothing would make
+        // it useless in the one place it is read from — a timer.
         return ExitCode::Ok;
     };
 
@@ -272,8 +273,8 @@ fn check_command(
     println!(
         "\nUpdate available.  gen {} → pending  (plan {} → {})",
         record.generation,
-        shorten(&record.plan_id),
-        shorten(&plan.plan_id().to_string())
+        fmt::hash(&record.plan_id),
+        fmt::hash(&plan.plan_id().to_string())
     );
     println!();
     print!("{}", report.render());
@@ -282,11 +283,4 @@ fn check_command(
     }
     println!("\nBuild it with:  kiln apply");
     ExitCode::ChangesFound
-}
-
-fn shorten(hash: &str) -> String {
-    match hash.strip_prefix("b3:") {
-        Some(hex) => format!("b3:{}…", &hex[..8.min(hex.len())]),
-        None => hash.to_string(),
-    }
 }

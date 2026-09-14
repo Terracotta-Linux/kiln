@@ -7,7 +7,11 @@ use crate::node::{Entry, Node, NodeKind};
 use crate::schema;
 use kiln_diag::{did_you_mean, Diag, Errors};
 
-pub const SCHEMA_VERSION: i64 = 1;
+/// The version a file must declare as `kiln = N`. The same number the
+/// `Manifest` records, read from the one place it is defined: two constants
+/// that must agree, in two crates, with nothing making them, is how a file
+/// gets accepted and then written out under a version it does not match.
+const SCHEMA_VERSION: i64 = kiln_manifest::SCHEMA_VERSION as i64;
 
 pub fn check(doc: &Node) -> Errors {
     let mut errs = Errors::new();
@@ -40,7 +44,7 @@ fn check_version(doc: &Node, errs: &mut Errors) {
         other => errs.push(
             Diag::error(
                 "kiln::structure",
-                format!("`kiln` must be an integer, found {}", type_name(other)),
+                format!("`kiln` must be an integer, found {}", other.type_name()),
             )
             .label(&entry.value.origin, "here")
             .help("write `kiln = 1`"),
@@ -68,16 +72,6 @@ fn check_version(doc: &Node, errs: &mut Errors) {
     }
 }
 
-fn type_name(k: &NodeKind) -> &'static str {
-    match k {
-        NodeKind::Str(_) => "string",
-        NodeKind::Int(_) => "integer",
-        NodeKind::Bool(_) => "boolean",
-        NodeKind::Array(_) => "array",
-        NodeKind::Table(_) => "table",
-    }
-}
-
 fn check_keys(node: &Node, path: &mut Vec<String>, errs: &mut Errors) {
     let Some(table) = node.as_table() else { return };
     for (key, entry) in table {
@@ -90,7 +84,7 @@ fn check_keys(node: &Node, path: &mut Vec<String>, errs: &mut Errors) {
             unknown_key(key, &dotted, entry, path, errs);
         } else if schema::is_list(&dotted) {
             check_list(&dotted, entry, errs);
-        } else if check_type(&dotted, entry, errs) && !schema::is_open_map(&dotted) {
+        } else if check_type(&dotted, entry, errs) && !schema::is_map(&dotted) {
             check_keys(&entry.value, path, errs);
         }
 
@@ -113,7 +107,7 @@ fn misplaced_include(entry: &Entry, dotted: &str, errs: &mut Errors) {
 
 fn unknown_key(key: &str, dotted: &str, entry: &Entry, path: &[String], errs: &mut Errors) {
     let parent = path[..path.len() - 1].join(".");
-    let siblings: Vec<&str> = schema::KEYS
+    let mut siblings: Vec<&str> = schema::KEYS
         .iter()
         .copied()
         .filter(|k| match k.rsplit_once('.') {
@@ -122,8 +116,6 @@ fn unknown_key(key: &str, dotted: &str, entry: &Entry, path: &[String], errs: &m
         })
         .map(|k| k.rsplit_once('.').map_or(k, |(_, last)| last))
         .collect();
-
-    let mut siblings = siblings;
     siblings.sort_unstable();
     let where_ = if parent.is_empty() {
         "at the top level".to_string()

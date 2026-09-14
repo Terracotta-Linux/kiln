@@ -11,9 +11,6 @@ use kiln_manifest::Manifest;
 pub struct Resolved {
     pub inputs: Vec<crate::ResolvedInput>,
     pub volatile: Vec<crate::VolatileInput>,
-    /// The trust seam: one line per AUR package, for `kiln build` to print
-    /// before it builds a stranger's code.
-    pub summaries: Vec<String>,
 }
 
 pub fn resolve(
@@ -25,7 +22,6 @@ pub fn resolve(
     let mut out = Resolved {
         inputs: Vec::new(),
         volatile: Vec::new(),
-        summaries: Vec::new(),
     };
     if manifest.packages.aur.is_empty() {
         return out;
@@ -72,23 +68,23 @@ pub fn resolve(
                 .help("it may still build and work; the flag is a note from other users"),
             );
         }
-        out.summaries.push(
-            // The source count is not known until the recipe is cloned, which
-            // resolution does not do — so the summary printed here carries what
-            // resolution honestly knows, and the build fills in the rest.
-            format!(
-                "{} {} — pkgbase {}, maintainer {}, commit {}{}",
-                package.name,
-                package.version,
-                package.pkgbase,
-                package.maintainer.as_deref().unwrap_or("ORPHANED"),
-                &package.commit[..package.commit.len().min(7)],
-                match &package.pulled_in_by {
-                    Some(by) => format!(", pulled in by {by}"),
-                    None => String::new(),
-                }
-            ),
-        );
+        // The one fact about an AUR package that `realize`'s per-job line
+        // cannot carry: it prints the name, pkgbase and commit from the plan,
+        // and the plan has no room for a maintainer without changing what
+        // `plan_id` hashes. An orphan is exactly the case a trust line exists
+        // for, so it is said here, where the RPC's answer is still in hand.
+        if package.maintainer.is_none() {
+            problems.push(
+                Diag::warning(
+                    "kiln::aur",
+                    format!("`{}` has no maintainer in the AUR", package.name),
+                )
+                .help(
+                    "an orphaned package is nobody's responsibility; read its PKGBUILD \
+                     before letting a build run it",
+                ),
+            );
+        }
         out.inputs.push(crate::ResolvedInput::AurPackage {
             name: package.name.clone(),
             pkgbase: package.pkgbase.clone(),

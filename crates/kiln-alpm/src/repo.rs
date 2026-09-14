@@ -22,8 +22,13 @@ impl RepoSpec {
     }
 }
 
-/// databases **and** packages required and trusted is the default, and
-/// there is deliberately no `TRUST_ALL`.
+/// Whether a repository's packages must be signed. `Required` is the default
+/// and there is deliberately no `TRUST_ALL`.
+///
+/// "Required" means every *package* signature; the *database* signature is
+/// optional, which is pacman's own default and not laxity — see `siglevel`,
+/// which explains at length why Arch leaves `core.db.sig` unpublished and what
+/// that does and does not cost.
 ///
 /// `Unsigned` exists for two honest cases — the in-tree test fixture, and a
 /// local repository the user has declared without a key — and is named rather

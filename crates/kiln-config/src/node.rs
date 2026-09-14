@@ -20,6 +20,20 @@ pub enum NodeKind {
     Table(Table),
 }
 
+impl NodeKind {
+    /// What to call this in a diagnostic: "expected a string, found an
+    /// integer".
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            NodeKind::Str(_) => "string",
+            NodeKind::Int(_) => "integer",
+            NodeKind::Bool(_) => "boolean",
+            NodeKind::Array(_) => "array",
+            NodeKind::Table(_) => "table",
+        }
+    }
+}
+
 pub type Table = BTreeMap<String, Entry>;
 
 #[derive(Debug, Clone)]
@@ -38,13 +52,7 @@ pub struct Entry {
 
 impl Node {
     pub fn type_name(&self) -> &'static str {
-        match self.kind {
-            NodeKind::Str(_) => "string",
-            NodeKind::Int(_) => "integer",
-            NodeKind::Bool(_) => "boolean",
-            NodeKind::Array(_) => "array",
-            NodeKind::Table(_) => "table",
-        }
+        self.kind.type_name()
     }
 
     pub fn as_table(&self) -> Option<&Table> {
@@ -80,7 +88,9 @@ impl Node {
     }
 
     /// Structural equality, ignoring provenance. This is what decides whether
-    /// two files "agree" (rule 3: identical values are fine).
+    /// two included files "agree": under the merge algebra's third rule,
+    /// siblings setting a key to *identical* values is fine and setting it to
+    /// different ones is an error.
     pub fn same_value(&self, other: &Node) -> bool {
         match (&self.kind, &other.kind) {
             (NodeKind::Str(a), NodeKind::Str(b)) => a == b,

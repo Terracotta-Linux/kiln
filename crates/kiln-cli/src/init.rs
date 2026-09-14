@@ -23,7 +23,9 @@ pub fn run(config: Option<&Path>) -> ExitCode {
     let dir: PathBuf = config
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from(kiln_config::discover::DEFAULT_CONFIG_DIR));
-    let entry = if dir.extension().is_some() {
+    // The same rule `discover::entry_point` uses, so `kiln init --config X`
+    // scaffolds exactly what `kiln check --config X` would then read.
+    let entry = if kiln_config::discover::names_a_file(&dir) {
         dir.clone()
     } else {
         dir.join(kiln_config::discover::ENTRY_FILE)

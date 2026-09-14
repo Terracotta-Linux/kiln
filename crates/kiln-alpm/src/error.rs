@@ -17,12 +17,20 @@ pub enum Error {
         /// The package that wants it, when libalpm says.
         wanted_by: Option<String>,
         dep: String,
+        /// The rest of the unsatisfied dependencies from the same solve,
+        /// already rendered as `pkg requires dep`. libalpm hands back the whole
+        /// list and Kiln used to keep only the first, so a configuration with
+        /// five missing dependencies took five runs to learn about them.
+        others: Vec<String>,
     },
     /// Two packages in the solution cannot coexist.
     Conflict {
         first: String,
         second: String,
         reason: String,
+        /// The remaining conflicts from the same solve, as `a and b`. Same
+        /// reason as `Unsatisfied::others`.
+        others: Vec<String>,
     },
     /// `packages.exclude` names something the solution contains anyway.
     /// Kiln refuses rather than dropping it: silently removing a dependency
@@ -45,7 +53,7 @@ pub enum Error {
         /// difference between a real answer and a confusing one.
         owner: Option<String>,
     },
-    /// builds run as root, always.
+    /// A transaction was attempted without root.
     NotRoot,
     /// libalpm reported the commit as successful while logging errors — the
     /// shape a failed scriptlet takes (see `Session::install`).
@@ -73,7 +81,9 @@ pub enum Error {
         at: std::path::PathBuf,
         message: String,
     },
-    /// Refreshing a sync database failed. `repo` names which one.
+    /// Refreshing the sync databases failed. libalpm updates every registered
+    /// repository in one call and does not say which one it tripped over, so
+    /// `repo` is the whole list — not the culprit.
     Refresh { repo: String, message: String },
     /// Anything libalpm reported that has no better shape here.
     Alpm {
@@ -97,10 +107,17 @@ impl fmt::Display for Error {
             Error::NotFound { name } => {
                 write!(f, "no package named `{name}` in any configured repository")
             }
-            Error::Unsatisfied { wanted_by, dep } => match wanted_by {
-                Some(w) => write!(f, "`{w}` requires `{dep}`, which nothing provides"),
-                None => write!(f, "nothing provides `{dep}`"),
-            },
+            Error::Unsatisfied {
+                wanted_by,
+                dep,
+                others,
+            } => {
+                match wanted_by {
+                    Some(w) => write!(f, "`{w}` requires `{dep}`, which nothing provides")?,
+                    None => write!(f, "nothing provides `{dep}`")?,
+                }
+                and_also(f, others)
+            }
             Error::Mount { at, message } => {
                 write!(f, "preparing {} for a transaction: {message}", at.display())
             }
@@ -113,7 +130,11 @@ impl fmt::Display for Error {
                 first,
                 second,
                 reason,
-            } => write!(f, "`{first}` and `{second}` conflict over `{reason}`"),
+                others,
+            } => {
+                write!(f, "`{first}` and `{second}` conflict over `{reason}`")?;
+                and_also(f, others)
+            }
             Error::Excluded { name, pulled_in_by } => {
                 write!(f, "`{name}` is excluded but the image would contain it")?;
                 if !pulled_in_by.is_empty() {
@@ -162,6 +183,14 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+/// "; and also: x, y" — the rest of a list libalpm reported in one go.
+fn and_also(f: &mut fmt::Formatter<'_>, others: &[String]) -> fmt::Result {
+    match others {
+        [] => Ok(()),
+        _ => write!(f, "; and also: {}", others.join(", ")),
+    }
+}
 
 fn join(names: &[String]) -> String {
     match names {

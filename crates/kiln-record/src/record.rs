@@ -368,10 +368,6 @@ impl Record {
                         sha256: sha256.clone(),
                     })
                 }
-                // A file or a unit whose bytes came from the configuration
-                // tree. Inline content is already covered by `config_id`; a
-                // local path is worth naming, because "which file on disk was
-                // this" is the question `kiln diff` gets asked.
                 ResolvedInput::BuildScript {
                     name,
                     content,
@@ -398,6 +394,10 @@ impl Record {
                         });
                     }
                 }
+                // A file or a unit whose bytes came from the configuration
+                // tree. Inline content is already covered by `config_id`; a
+                // local path is worth naming, because "which file on disk was
+                // this" is the question `kiln diff` gets asked.
                 ResolvedInput::File {
                     target, content, ..
                 } => {
@@ -423,9 +423,12 @@ impl Record {
             }
         }
 
-        // The plan is canonically ordered, so these come out ordered; a local
-        // file can be named by two entries, though, and the record should not
-        // say so twice.
+        // A local file can be named by two entries — the same tree used by a
+        // `[[file]]` and by a `[systemd.unit]`, say. Sorted before
+        // deduplicating, because the plan is ordered by input *variant*, so the
+        // two mentions are separated by every other entry in between and
+        // `dedup()`, which only collapses neighbours, would keep both.
+        record.local_files.sort_by(|a, b| a.path.cmp(&b.path));
         record.local_files.dedup();
         record
     }

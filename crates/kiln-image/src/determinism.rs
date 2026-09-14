@@ -2,9 +2,9 @@
 //!
 //! OSTree canonicalizes mtimes to 0 and stores only mode, ownership, xattrs and
 //! content checksums, which removes a large class of reproducibility problems
-//! for free. What is left is here — measured in the Phase 0 spike, where two
-//! consecutive builds of the same plan initially differed in 153 files, all but
-//! one of them for these reasons.
+//! for free. What is left is here: two consecutive builds of the same plan
+//! differ in these and only these, and each one is a value pacman or a package
+//! writes from the clock, the machine or the build order.
 
 use crate::tree::{self, Result};
 use std::path::Path;
@@ -12,7 +12,8 @@ use std::path::Path;
 /// Where the package database lives in the image. Duplicated from
 /// `kiln_alpm::session::DB_PATH` on purpose — that constant configures the
 /// *transaction*, this one is what the image's own `pacman.conf` must say, and
-/// the whole point of is that setting one without the other leaves a
+/// the whole point of keeping them apart is that setting one without the other
+/// leaves a
 /// booted system whose `pacman -Q` reports nothing.
 pub const IMAGE_DB_PATH: &str = "/usr/lib/sysimage/pacman";
 

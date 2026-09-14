@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 /// history: deleting it costs time, never correctness.
 pub const STATE: &str = "/var/lib/kiln";
 
-/// The sysroot to operate on. `/` unless `--sysroot` says otherwise, which is
-/// what exposes so an installer can be written against Kiln without
-/// Kiln having an installer.
+/// The sysroot to operate on. `/` unless `--sysroot` says otherwise — the one
+/// seam Kiln exposes so an installer can be written against it without Kiln
+/// having an installer.
 pub fn sysroot(flag: Option<&Path>) -> PathBuf {
     flag.map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("/"))

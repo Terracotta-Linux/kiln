@@ -36,8 +36,9 @@ const GIB: u64 = 1024 * 1024 * 1024;
 /// Free bytes on the filesystem holding `path`, and its total size.
 ///
 /// `None` when the path does not exist yet or the syscall fails. A disk check
-/// that cannot answer must not block a build: is a courtesy that turns a
-/// mid-transaction failure into a message, not a gate on whether Kiln runs.
+/// that cannot answer must not block a build: the check is a courtesy that
+/// turns a mid-transaction failure into a message, not a gate on whether Kiln
+/// runs.
 pub fn space(path: &Path) -> Option<Space> {
     // The nearest existing ancestor: `/var/lib/kiln/build/<plan>` is asked about
     // before it is created, and `statvfs` on a path that is not there fails.
@@ -77,22 +78,6 @@ pub fn cache_budget(total: u64) -> u64 {
 /// What a build of roughly `image` bytes needs free.
 pub fn build_needs(image: u64) -> u64 {
     (image as f64 * BUILD_HEADROOM) as u64
-}
-
-/// Human-readable, for the eye rather than for arithmetic.
-pub fn human(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} B")
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
 }
 
 /// One cached artifact, for the eviction order.

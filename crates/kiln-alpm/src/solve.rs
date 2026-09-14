@@ -66,7 +66,15 @@ pub struct Solution {
 }
 
 impl Solution {
+    /// Binary search, so `packages` must be sorted by name. `solve` sorts it;
+    /// anything that builds a `Solution` by hand — a test, a fixture — has to
+    /// as well, or this and everything built on it (`dependents_of`,
+    /// `chain_to`) answer confidently and wrongly.
     pub fn get(&self, name: &str) -> Option<&SolvedPackage> {
+        debug_assert!(
+            self.packages.windows(2).all(|w| w[0].name <= w[1].name),
+            "Solution::packages must be sorted by name"
+        );
         self.packages
             .binary_search_by(|p| p.name.as_str().cmp(name))
             .ok()
@@ -233,6 +241,11 @@ impl Session {
 
 /// `exclude` means "must not appear, even as a dependency".
 ///
+/// By package *name*, not by what a package provides: `exclude = ["sh"]` does
+/// not refuse `bash`. Matching providers would turn a virtual name into a
+/// refusal of whatever happens to satisfy it, and report the refusal under a
+/// name no package in the image actually has.
+///
 /// Enforced *after* the solve, deliberately. libalpm's `assume_installed` would
 /// make the dependency vanish and produce an image missing a library something
 /// links against — a broken image nobody asked for. Refusing, and naming what
@@ -251,28 +264,45 @@ fn check_excludes(solution: &Solution, exclude: &[String]) -> Result<()> {
 
 pub(crate) fn prepare_error(e: &alpm::PrepareError<'_>) -> Error {
     match e.data() {
-        Some(PrepareData::UnsatisfiedDeps(missing)) => missing
-            .into_iter()
-            .next()
-            .map(|m| Error::Unsatisfied {
-                // `target` is the package that has the unsatisfied dependency.
-                // `causing_pkg` is a different question — which *removal*
-                // broke it — and is null on the resolution path, so reading it
-                // here would produce "nothing provides x" with the one useful
-                // name dropped.
-                wanted_by: Some(m.target().to_string()),
-                dep: m.depend().to_string(),
-            })
-            .unwrap_or_else(|| Error::alpm("resolving dependencies", e.error())),
-        Some(PrepareData::ConflictingDeps(conflicts)) => conflicts
-            .into_iter()
-            .next()
-            .map(|c| Error::Conflict {
-                first: c.package1().name().to_string(),
-                second: c.package2().name().to_string(),
-                reason: c.reason().to_string(),
-            })
-            .unwrap_or_else(|| Error::alpm("resolving dependencies", e.error())),
+        // libalpm reports every unsatisfied dependency and every conflict it
+        // found, in one list each. All of them are carried across: a
+        // configuration with five missing dependencies should take one run to
+        // learn about, not five.
+        Some(PrepareData::UnsatisfiedDeps(missing)) => {
+            // `target` is the package that has the unsatisfied dependency.
+            // `causing_pkg` is a different question — which *removal* broke it
+            // — and is null on the resolution path, so reading it here would
+            // produce "nothing provides x" with the one useful name dropped.
+            let mut all = missing
+                .into_iter()
+                .map(|m| (m.target().to_string(), m.depend().to_string()));
+            match all.next() {
+                None => Error::alpm("resolving dependencies", e.error()),
+                Some((target, dep)) => Error::Unsatisfied {
+                    wanted_by: Some(target),
+                    dep,
+                    others: all.map(|(t, d)| format!("`{t}` requires `{d}`")).collect(),
+                },
+            }
+        }
+        Some(PrepareData::ConflictingDeps(conflicts)) => {
+            let mut all = conflicts.into_iter().map(|c| {
+                (
+                    c.package1().name().to_string(),
+                    c.package2().name().to_string(),
+                    c.reason().to_string(),
+                )
+            });
+            match all.next() {
+                None => Error::alpm("resolving dependencies", e.error()),
+                Some((first, second, reason)) => Error::Conflict {
+                    first,
+                    second,
+                    reason,
+                    others: all.map(|(a, b, _)| format!("`{a}` and `{b}`")).collect(),
+                },
+            }
+        }
         Some(PrepareData::PkgInvalidArch(pkgs)) => pkgs
             .into_iter()
             .next()

@@ -1,11 +1,10 @@
 //! Recipes in the configuration tree, and out-of-tree kernel modules.
 //!
-//!
 //! Resolution reads a recipe's **declared** metadata and computes its
-//! `build_key`; it builds nothing. is emphatic that a check downloads
-//! nothing, builds nothing and unpacks nothing, and executing a PKGBUILD to
-//! find out what it declares would quietly break that — a `.SRCINFO` is
-//! required instead, with a diagnostic that gives the command to produce one.
+//! `build_key`; it builds nothing. A check downloads nothing, builds nothing
+//! and unpacks nothing, and executing a PKGBUILD to find out what it declares
+//! would quietly break that — a `.SRCINFO` is required instead, with a
+//! diagnostic that gives the command to produce one.
 
 use kiln_build::key::Ingredients;
 use kiln_build::srcinfo::{self, Srcinfo};
@@ -44,8 +43,21 @@ pub fn read_all(manifest: &Manifest, config_root: &Path, problems: &mut Errors) 
     let mut out = Vec::new();
     for path in &manifest.packages.build {
         let dir = config_root.join(path);
-        // The frontend already proved the directory exists and hashed it.
+        // The frontend already proved the directory exists and hashed it, so
+        // this cannot happen — but skipping silently would drop the package
+        // from the plan and from the image with nothing said, which is the one
+        // outcome worse than the error. `modules` below reports the identical
+        // condition the same way.
         let Some(tree) = manifest.local_digests.get(path).cloned() else {
+            problems.push(at(
+                manifest,
+                path,
+                Diag::error(
+                    "kiln::resolution",
+                    format!("`{path}` names a source tree Kiln did not hash"),
+                )
+                .help("this is a bug in Kiln, not in your configuration"),
+            ));
             continue;
         };
 
@@ -64,11 +76,16 @@ pub fn read_all(manifest: &Manifest, config_root: &Path, problems: &mut Errors) 
         let text = match std::fs::read_to_string(dir.join(".SRCINFO")) {
             Ok(text) => text,
             Err(_) => {
-                // Deliberately not "run makepkg for them". resolution
-                // downloads nothing, builds nothing and unpacks nothing —
-                // sourcing a PKGBUILD to find out what it declares is running
-                // a shell script during what the user was told is a cheap
-                // metadata check.
+                // Deliberately not "run `makepkg --printsrcinfo` for them":
+                // resolution downloads nothing, builds nothing and unpacks
+                // nothing, and sourcing a PKGBUILD to find out what it declares
+                // is running a shell script during what the user was told is a
+                // cheap metadata check. `Recipe::read` in `kiln-build` *does*
+                // fall back that way, for a recipe Kiln cloned from the AUR
+                // during realization — by which point the network and a sandbox
+                // are both already in play. A `packages.build` recipe is
+                // resolved before either exists, so it reaches this arm first
+                // and the fallback never applies to it.
                 problems.push(
                     at(
                         manifest,
@@ -107,7 +124,7 @@ pub fn read_all(manifest: &Manifest, config_root: &Path, problems: &mut Errors) 
     out
 }
 
-/// an out-of-tree module compiled against the exact kernel in the image.
+/// An out-of-tree module compiled against the exact kernel in the image.
 ///
 /// Kiln synthesizes the recipe rather than asking for a PKGBUILD, so a module
 /// is a source directory and nothing else. The build key carries the resolved

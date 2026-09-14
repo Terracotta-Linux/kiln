@@ -52,7 +52,8 @@ pub fn install(root: &Path, system: &SystemDefaults) -> Result<()> {
     // `ln` equivalent here is worse, since a dangling `/etc/localtime` is not
     // even logged — the machine just silently reads as UTC. Checked against
     // the staging root's own `tzdata`, not the builder's, because that is the
-    // zoneinfo the booted image will actually have.
+    // zoneinfo the booted image will actually have — which is why this cannot
+    // move into the frontend, where only the *shape* of the name is knowable.
     let zoneinfo = root.join(ZONEINFO_DIR).join(&system.timezone);
     if !zoneinfo.is_file() {
         return Err(tree::shape(format!(

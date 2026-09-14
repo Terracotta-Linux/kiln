@@ -1,11 +1,16 @@
-//! The systemd-nspawn backend. for the pacman transaction,
-//! where scriptlets sometimes want a more complete environment, and for
-//! cgroup-based resource limits — which bubblewrap has no way to apply.
+//! The systemd-nspawn backend: used for the pacman transaction, where
+//! scriptlets sometimes want a more complete environment, and for cgroup-based
+//! resource limits — which bubblewrap has no way to apply.
 
 use crate::exec;
 use crate::spec::{inside, BindMode, Network, SandboxSpec, SandboxUser, SHIM_DIR, SHIM_LOG};
 use crate::{Error, Outcome, Result, Sandbox};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// The kernel filesystems `systemd-nspawn` mounts on its own, and the only
+/// paths at which a spec's `ProcFs`/`DevFs`/`SysFs`/`TmpFs` bind is already
+/// satisfied.
+const NSPAWN_PROVIDES: &[&str] = &["/proc", "/dev", "/sys", "/run", "/tmp"];
 
 #[derive(Debug, Clone)]
 pub struct Nspawn {
@@ -51,12 +56,29 @@ impl Nspawn {
         push(&["--register=no", "--keep-unit", "--as-pid2"]);
         push(&["--link-journal=no"]);
 
-        // nspawn already provides /proc, /dev, /sys, /run and /tmp. The kernel
-        // filesystem entries in the spec are therefore satisfied rather than
+        // nspawn already provides /proc, /dev, /sys, /run and /tmp, so a kernel
+        // filesystem entry at one of those paths is satisfied rather than
         // translated; only real binds have anything to add.
+        //
+        // At any *other* path it is not satisfied, and nspawn has no flag that
+        // would mount one — so it is refused rather than dropped, for the same
+        // reason `bwrap` refuses cgroup limits: a caller that asked for a
+        // private tmpfs somewhere and silently did not get one is worse off
+        // than one that never asked.
         for bind in &spec.binds {
             match bind.mode {
-                BindMode::ProcFs | BindMode::DevFs | BindMode::TmpFs | BindMode::SysFs => {}
+                BindMode::ProcFs | BindMode::DevFs | BindMode::TmpFs | BindMode::SysFs
+                    if NSPAWN_PROVIDES.iter().any(|p| bind.target == Path::new(p)) => {}
+                BindMode::ProcFs | BindMode::DevFs | BindMode::TmpFs | BindMode::SysFs => {
+                    return Err(Error::Unsupported {
+                        backend: "nspawn",
+                        what: format!(
+                            "a kernel filesystem at {} — nspawn provides one only at {}",
+                            bind.target.display(),
+                            NSPAWN_PROVIDES.join(", ")
+                        ),
+                    })
+                }
                 BindMode::ReadOnly => push(&[
                     "--bind-ro",
                     &format!("{}:{}", inside(&bind.source), inside(&bind.target)),

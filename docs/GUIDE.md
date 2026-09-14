@@ -456,6 +456,11 @@ kiln [global flags] <command> [arguments] [command flags]
 Arguments are parsed by hand; the surface is small and fixed. `--help`/`-h` and
 `--version`/`-V` are recognized at any position, not only as the first word.
 
+A flag a command does not take is an **error**, not something ignored — the same refusal the
+frontend gives a mistyped TOML key, and for the same reason. `kiln build --forse` says
+``does not take `--forse` — did you mean `--force`?`` and exits `1`, and a real flag typed on
+the wrong command says which command it belongs to.
+
 ### 5.1 Global flags
 
 | Flag | Meaning |
@@ -663,7 +668,9 @@ exits nonzero (`1`) with a did-you-mean suggestion.
 #### `kiln show [<gen>]`
 
 With no argument: the merged manifest built from the configuration on disk, in summary and in
-full, ending with `config_id`.
+full, ending with `config_id`. *Every* group the schema has is printed, including the ones
+that are usually empty — this is the command that answers "what did my includes add up to",
+so a group it never showed would be a group nobody could check.
 
 With a generation: the same thing read out of that generation's **commit**, plus its record.
 Works on a generation whose configuration has since been edited or deleted, and on one that
@@ -961,7 +968,15 @@ Arrays of tables merge by an identity key rather than by position:
 | `file` | `target` |
 
 Two files describing the same `[[file]]` target combine rather than duplicate, so collisions
-are impossible by construction.
+are impossible by construction. The three rules reach inside the combined entry too: an
+includer overriding one field of an entry its include declared wins, and two *siblings*
+setting the same field to different values is the same hard error as any other sibling
+conflict, naming both files:
+
+```text
+× conflicting values for `file[target="/etc/motd"].content`
+  ╭─[motd-a.toml:5:11]
+```
 
 There is **no unset operator**. `packages.exclude`, `systemd.disable` and `systemd.mask` cover
 the real cases. If you need to not have something, do not include the file that adds it.
@@ -1103,7 +1118,7 @@ pointing at `@kiln/profiles/minimal`.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `repos.snapshot` | string | `"latest"` | `"latest"` tracks live mirrors, like Arch. A `YYYY-MM-DD` date resolves everything from `archive.archlinux.org` instead. A pinned snapshot *replaces* the mirrors rather than adding to them, so an image is never half archived and half live |
+| `repos.snapshot` | string | `"latest"` | `"latest"` tracks live mirrors, like Arch. A `YYYY-MM-DD` date — with a real month and day — resolves everything from `archive.archlinux.org` instead. A pinned snapshot *replaces* the mirrors rather than adding to them, so an image is never half archived and half live |
 | `repos.mirrors` | list of strings | the Arch geo mirror | Server URL templates using pacman's `$repo` and `$arch`. Nothing else is substituted; this is a URL template, not a language. Ignored when `snapshot` names a date |
 | `repos.extra` | array of tables | `[]` | Additional repositories, in priority order after `core` and `extra` |
 
@@ -1142,8 +1157,8 @@ See [section 7](#7-packages).
 | `kernel.modules.blacklist` | list of strings | `[]` | Modules the booted system should not load. Written to `/etc/modprobe.d/kiln.conf` as `blacklist <name>` lines |
 | `kernel.modules.initramfs` | list of strings | `[]` | Drivers to put *in the initramfs* (dracut's `--add-drivers`). Verified after generation: a driver that did not make it in fails the build |
 | `kernel.modules.options` | table of string → string | `{}` | Module options. Keys are module names you choose, so the schema enumerates the table but never its contents. Written to `/etc/modprobe.d/kiln.conf` as `options <name> <value>` lines, alongside `blacklist` |
-| `kernel.module` | array of tables | `[]` | Out-of-tree modules built from source with `make`. Entry keys: `name`, `source` (both required) |
-| `kernel.dkms` | list of names, or array of tables | `[]` | DKMS drivers compiled at build time. Entry keys: `name` (required), `source` (optional) |
+| `kernel.module` | array of tables | `[]` | Out-of-tree modules built from source with `make`. Entry keys: `name`, `source` (both required). `name` becomes a `pkgname` in a recipe Kiln writes, so it has to be a legal one: lower-case letters, digits and `@ . _ + -` |
+| `kernel.dkms` | list of names, or array of tables | `[]` | DKMS drivers compiled at build time. Entry keys: `name` (required), `source` (optional). `name` has the same `pkgname` restriction as `kernel.module` |
 
 **On `kernel.headers`.** It defaults to `false`, is part of `config_id`, and is reported by
 `kiln show` and `kiln explain`. Nothing in assembly currently reads it: module and DKMS builds
@@ -1224,7 +1239,7 @@ See [section 8](#8-files-and-the-filesystem).
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `system.hostname` | string | unset | The image's hostname. Unset means systemd's own default applies |
-| `system.timezone` | string | `"UTC"` | Timezone name, as under `/usr/share/zoneinfo` |
+| `system.timezone` | string | `"UTC"` | Timezone name, as under `/usr/share/zoneinfo`. The frontend checks its shape; whether the zone exists is checked against the image's own `tzdata` during assembly |
 | `system.keymap` | string | `"us"` | Console keymap |
 | `system.locale.lang` | string | `"C.UTF-8"` | The default `LANG` |
 | `system.locale.generate` | list of strings | `[]` | Locales to generate, written the way `locale.gen` wants them (`"en_US.UTF-8 UTF-8"`) |
@@ -1337,8 +1352,15 @@ package nobody wrote down, so the closure deliberately stops at the AUR boundary
 against upstream, which resolution will not do. It is excluded from `plan_id`, reported
 separately, and answered by `kiln check --deep`.
 
+**A source is pinned by its `sha256sums`.** That is the only checksum list Kiln reads: a
+recipe that ships `b2sums` or `sha512sums` and nothing else parses fine, but each of its
+sources counts as volatile, so `kiln check` reports the package as unresolvable without
+fetching and `--deep` is what settles it.
+
 Packages the AUR itself has flagged out of date are reported once. That is not an error;
-plenty of working packages are flagged.
+plenty of working packages are flagged. A package with **no maintainer** is reported the same
+way — an orphan is nobody's responsibility, and it is worth reading the PKGBUILD before a
+build runs it.
 
 ### 7.4 Your own PKGBUILDs
 
@@ -1492,7 +1514,9 @@ silently not in the image, or in it and doing nothing.
 | `/mnt/**` | Refused. Not a directory the image has |
 | A relative path, a trailing slash with no filename, `..` components, a top-level file | Refused, each with its own message |
 
-Every refusal in a configuration is reported at once, not one per run.
+Every refusal in a configuration is reported at once, not one per run — and by `kiln check`,
+before anything is built. The frontend and the assembler answer this table the same way, so a
+target that `kiln check` accepts is one assembly will place.
 
 ### 8.3 Seeded targets
 
@@ -2763,11 +2787,12 @@ near the bootloader.
 
 ### `kiln-cli`
 
-The `kiln` binary. Hand-written argument parsing (`args.rs`), one module per command family
-(`check`, `build`, `deep`, `deployments`, `disk`, `drift`, `explain`, `init`, `inspect`,
-`realize`, `rebuild`, `show`, `completions`), and `pipeline.rs`, which is the one place
-`check`, `build` and `apply` are written as the same pipeline stopped at three different points
-so they cannot drift.
+The `kiln` binary. Hand-written argument parsing (`args.rs`, which also holds the one list of
+verbs and the table of flags each one takes), one module per command family (`check`, `build`,
+`deep`, `deployments`, `disk`, `drift`, `explain`, `init`, `inspect`, `realize`, `rebuild`,
+`show`, `completions`), `fmt.rs` for the renderers more than one command needs, and
+`pipeline.rs`, which is the one place `check`, `build` and `apply` are written as the same
+pipeline stopped at three different points so they cannot drift.
 
 ---
 

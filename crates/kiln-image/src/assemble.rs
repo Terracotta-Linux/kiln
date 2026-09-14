@@ -18,10 +18,10 @@
 //! 11 self-description  usr/lib/kiln/{manifest.json,record.json}
 //! ```
 //!
-//! Steps 5 and 8 run the same code with a different phase. They are two slots
+//! Steps 5 and 8 run the same code at a different point. They are two slots
 //! rather than one because a script that needs `[[file]]` content already in
-//! place and a script that has to run before it are different jobs, and
-//! makes the user say which — `after = "packages"` or `after = "files"`.
+//! place and a script that has to run before it are different jobs, and the
+//! configuration has to say which — `after = "packages"` or `after = "files"`.
 
 use crate::tree::{self, Result};
 use crate::{
@@ -105,9 +105,9 @@ pub struct Report {
     /// do what it thinks it did is worth knowing about.
     pub shimmed: Vec<String>,
     pub uid_drift: Vec<uid::Drift>,
-    /// Each script's record fills both slots. One value rather than two: a reader wants to know
-    /// what the scripts did, and which of the two phases a given one ran in is
-    /// already on every entry.
+    /// Both script slots (steps 5 and 8) in one value rather than two: a reader
+    /// wants to know what the scripts did, and which phase a given one ran in is
+    /// already recorded on the entry itself.
     pub scripts: scripts::Applied,
     pub files: overlay::Applied,
     pub units: units::Applied,
@@ -153,7 +153,11 @@ pub fn assemble(
 
         if !session.provides(BASE_PACKAGE) {
             return Err(tree::shape(format!(
-                "no package provides `{BASE_PACKAGE}`, which owns /etc/passwd. Kiln installs                  it alone and first so that the UID seed has account files to write into                  (step 2); without it the seed would either abort the transaction on a                  file conflict or be clobbered by the stock files"
+                "no package provides `{BASE_PACKAGE}`, which owns /etc/passwd. Kiln \
+                 installs it alone and first so that the UID seed has account \
+                 files to write into (step 2); without it the seed would either \
+                 abort the transaction on a file conflict or be clobbered by the \
+                 stock files"
             )));
         }
         let base = session.install(&Transaction::new([BASE_PACKAGE.to_string()]))?;
@@ -425,23 +429,18 @@ fn run(sandbox: &dyn Sandbox, spec: &SandboxSpec) -> Result<String> {
             "`{}` failed with exit status {} during assembly:\n{}",
             spec.command.join(" "),
             outcome.status,
-            tail(&outcome.stderr)
+            // The last few lines, not the whole log: dracut's stderr on a bad
+            // run is thousands of lines and the useful part is at the end.
+            kiln_sandbox::tail(&outcome.stderr, 20)
         )));
     }
     Ok(outcome.stdout)
 }
 
-/// Assembly step 11. The image describes itself, so `kiln status`, `kiln diff` and
-/// `kiln why` work on a booted machine whose configuration has since been
+/// Assembly step 11. The image describes itself, so `kiln status`, `kiln diff`
+/// and `kiln why` work on a booted machine whose configuration has since been
 /// edited or deleted — which is the normal case when debugging why the
 /// generation you rolled back to behaves differently.
-/// The last few lines of a failure, not all of it. dracut's stderr on a bad run
-/// is thousands of lines and the useful part is at the end.
-fn tail(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    lines[lines.len().saturating_sub(20)..].join("\n")
-}
-
 fn describe_self(root: &Path, manifest: &Manifest, record: &Record) -> Result<()> {
     // Both halves of step 11. The record says what the image was *made
     // of*; the manifest says what it was *asked to be*, and they answer
@@ -482,7 +481,8 @@ pub fn import_sync_databases(root: &Path, from: &Path) -> Result<usize> {
     }
     if copied == 0 {
         return Err(tree::shape(format!(
-            "no repository databases in {}: resolution has not refreshed them, and assembly              does no network of its own",
+            "no repository databases in {}: resolution has not refreshed them, \
+             and assembly does no network of its own",
             source.display()
         )));
     }

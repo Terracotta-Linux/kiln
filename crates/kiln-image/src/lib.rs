@@ -1,17 +1,18 @@
 //! `kiln-image` — filesystem tree assembly and normalization.
 //!
 //! Arch is not an OSTree distribution, and most of what could kill this project
-//! lives here. Phase 0 proved the contract is satisfiable; this crate is
-//! the real implementation of what the spike proved, with the findings from
-//! `spike/README.md` built in rather than rediscovered.
+//! lives here. The Arch→OSTree contract every step below serves is written out
+//! in `CLAUDE.md`; `assemble.rs` is the sequence itself.
 //!
 //! ```text
 //!  1 skeleton          usr/lib/sysimage/pacman and the mountpoints, nothing else
 //!  2 base transaction  `filesystem` alone, so step 3 has an /etc/passwd to seed
 //!  3 UID seed          replay the previous generation's ids
 //!  4 transaction       everything else, hooks shadowed
+//!  5 scripts           `after = "packages"` — an overlayfs changeset
 //!  6 overlay           [[file]], checked against the pacman file database
 //!  7 unit state        presets, masks
+//!  8 scripts           `after = "files"` — an overlayfs changeset
 //!  9 kernel            depmod, initramfs, /boot cleared
 //! 10 normalize         the OSTree contract: /etc, /var, the top level
 //! 11 self-description  usr/lib/kiln/{manifest.json,record.json}
@@ -25,8 +26,6 @@
 //! plain `/etc` content between steps 8 and 9, late enough that the toolchain
 //! `locale-gen` needs is already installed and early enough that step 10
 //! still finds an `/etc` to move.
-//!
-//! Steps 5 and 8 are build scripts, which phase 3 owns.
 
 pub mod assemble;
 pub mod boot;

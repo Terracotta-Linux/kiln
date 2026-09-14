@@ -1,4 +1,4 @@
-//! Step 1 of assembly: the empty staging root. step 1.
+//! Assembly step 1: the empty staging root.
 //!
 //! Almost nothing happens here, and *what does not happen* is the interesting
 //! part. The obvious reading of "lay out the tree" is to create the usr-merge

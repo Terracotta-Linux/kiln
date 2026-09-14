@@ -99,29 +99,42 @@ impl Errors {
     /// tests depend on this, and so does anyone diffing two runs.
     pub fn sorted(mut self) -> Errors {
         self.diags.sort_by(|a, b| {
-            let key = |d: &Diag| {
+            // Borrowed, not cloned: `sort_by` calls this twice per comparison,
+            // and the file name is a `String`.
+            fn key(d: &Diag) -> (&str, usize) {
                 d.labels
                     .first()
-                    .map(|l| (l.origin.file.name.clone(), l.origin.span.start))
+                    .map(|l| (l.origin.file.name.as_str(), l.origin.span.start))
                     .unwrap_or_default()
-            };
+            }
             key(a).cmp(&key(b)).then_with(|| a.code.cmp(b.code))
         });
         self
     }
 
+    /// `Err` if anything here is error-severity, `Ok(ok)` otherwise.
+    ///
+    /// The success arm **discards** the set, so a phase that also produces
+    /// warnings has to carry them somewhere `Result` can hold them —
+    /// `kiln_config::validate` returns `(Manifest, Errors)` for exactly that
+    /// reason. The assertion is what tells the next caller to do the same,
+    /// rather than losing a warning silently.
     pub fn into_result<T>(self, ok: T) -> Result<T, Errors> {
         if self.has_errors() {
-            Err(self.sorted())
-        } else {
-            Ok(ok)
+            return Err(self.sorted());
         }
+        debug_assert!(
+            self.is_empty(),
+            "into_result would drop {} warning(s); carry them beside the value instead",
+            self.len()
+        );
+        Ok(ok)
     }
 }
 
 /// Render one diagnostic to a string with no colour and a fixed width, so that
 /// `insta` snapshots of *rendered* diagnostics are stable across terminals and
-/// CI. diagnostics that nobody tests rot into `Error: InvalidConfig`.
+/// CI — which is what keeps them from rotting into `Error: InvalidConfig`.
 pub fn render(diag: &Diag) -> String {
     let handler = GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
         .with_width(90)

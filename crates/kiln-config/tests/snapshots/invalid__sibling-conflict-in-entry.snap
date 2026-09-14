@@ -1,0 +1,23 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::merge
+
+  × conflicting values for `file[target="/etc/motd"].content`
+   ╭─[motd-a.toml:5:11]
+ 4 │ target = "/etc/motd"
+ 5 │ content = "a"
+   ·           ─┬─
+   ·            ╰── set to "a" here
+   ╰────
+  help: `motd-a.toml` and `motd-b.toml` are both included by `system.toml`. Set
+        `file[target="/etc/motd"].content` in `system.toml` to resolve it — the includer
+        always wins.
+  × also in motd-b.toml
+   ╭─[motd-b.toml:5:11]
+ 4 │ target = "/etc/motd"
+ 5 │ content = "b"
+   ·           ─┬─
+   ·            ╰── and to "b" here
+   ╰────

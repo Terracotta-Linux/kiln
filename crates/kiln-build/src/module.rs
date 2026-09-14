@@ -1,11 +1,10 @@
 //! Out-of-tree kernel modules, as recipes.
 //!
-//! > `[[kernel.module]]` entries are compiled against the exact kernel in the
-//! > image and packaged. Kiln synthesizes a PKGBUILD-equivalent recipe and runs
-//! > it through the normal sandbox, so modules get the same caching,
-//! > isolation and failure reporting as everything else.
-//!
-//! So there is no module builder here, only a *recipe writer*. Everything after
+//! `[[kernel.module]]` entries are compiled against the exact kernel in the
+//! image and packaged. Kiln synthesizes a PKGBUILD-equivalent recipe and runs
+//! it through the normal sandbox, so modules get the same caching, isolation
+//! and failure reporting as everything else — which is why there is no module
+//! builder here, only a *recipe writer*. Everything after
 //! this file — the two phases, the build key, the cache, the failure report —
 //! is the same code a `packages.build` entry goes through, which is the whole
 //! point: a module is not a second kind of build.
@@ -61,6 +60,24 @@ pub fn version_of(kernel_evr: &str) -> String {
     kernel_evr.replace([':', '-'], "_")
 }
 
+/// Byte-for-byte the same in both synthesized recipes, because both compile
+/// against the one kernel the build root holds — see [`crate::dkms`].
+pub(crate) const KERNELRELEASE: &str = r#"# The one kernel in the build root. This puts the resolved kernel EVR in the
+# build key, so a root assembled for this key holds exactly one `-headers`
+# package — and reading the version out of the root rather than substituting it
+# in means the recipe cannot disagree with what it is compiling against.
+_kernelrelease() {
+  local build
+  for build in /usr/lib/modules/*/build; do
+    if [[ -d $build ]]; then
+      basename "$(dirname "$build")"
+      return 0
+    fi
+  done
+  echo "no kernel headers in the build root: /usr/lib/modules/*/build is empty" >&2
+  return 1
+}"#;
+
 fn pkgbuild(name: &str, arch: &str, kernel_package: &str, kernel_evr: &str) -> String {
     let version = version_of(kernel_evr);
     format!(
@@ -78,21 +95,7 @@ makedepends=('{kernel_package}-headers')
 # every crash dump want, and Arch's own module packages set this too.
 options=('!strip')
 
-# The one kernel in the build root. This puts the resolved kernel EVR in the
-# build key, so a root assembled for this key holds exactly one `-headers`
-# package — and reading the version out of the root rather than substituting it
-# in means the recipe cannot disagree with what it is compiling against.
-_kernelrelease() {{
-  local build
-  for build in /usr/lib/modules/*/build; do
-    if [[ -d $build ]]; then
-      basename "$(dirname "$build")"
-      return 0
-    fi
-  done
-  echo "no kernel headers in the build root: /usr/lib/modules/*/build is empty" >&2
-  return 1
-}}
+{KERNELRELEASE}
 
 prepare() {{
   rm -rf "$srcdir/{name}"

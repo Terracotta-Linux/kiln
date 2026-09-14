@@ -1,0 +1,8 @@
+# Rule 2 reaches inside an array-of-tables entry: `base.toml` declares the
+# `/etc/motd` entry, and the includer overrides one of its fields.
+kiln = 1
+include = ["base.toml"]
+
+[[file]]
+target = "/etc/motd"
+mode   = "0600"

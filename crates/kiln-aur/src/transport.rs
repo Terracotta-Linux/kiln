@@ -1,5 +1,5 @@
 //! Where the network actually happens — and the seam that keeps it out of the
-//! tests. *AUR uses recorded HTTP fixtures.*
+//! tests, which run against recorded HTTP fixtures.
 //!
 //! Three operations, all trivial, all isolated behind a trait: fetch a URL, ask
 //! a git remote for a ref, and — once a build is actually happening — take a
@@ -7,10 +7,10 @@
 //! batching, the dependency closure, cycle detection, volatile marking — is on
 //! the other side of this boundary and is tested without touching any of them.
 //!
-//! The third is deliberately here and not in a builder. *building is
-//! exactly the PKGBUILD path; there is no separate AUR builder.* Cloning
-//! is not building, it is the last piece of *fetching* — and fetching is what
-//! this file is.
+//! The third is deliberately here and not in a builder: building an AUR
+//! package is exactly the PKGBUILD path, so there is no separate AUR builder
+//! for it to live in. Cloning is not building — it is the last piece of
+//! *fetching*, which is what this file is.
 
 use std::collections::BTreeMap;
 use std::fmt;

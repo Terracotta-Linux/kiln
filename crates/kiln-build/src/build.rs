@@ -1,8 +1,8 @@
 //! The two-phase build.
 //!
-//! > The core problem: `makepkg` needs the network to fetch sources, and giving
-//! > arbitrary build scripts the network makes builds unreproducible and hard to
-//! > audit.
+//! The core problem: `makepkg` needs the network to fetch sources, and giving
+//! arbitrary build scripts the network makes builds unreproducible and hard to
+//! audit.
 //!
 //! **Phase 1 — fetch. Network on.** `makepkg --verifysource` downloads every
 //! `source=()` entry and checks it against the recipe's own `sha256sums`.
@@ -310,9 +310,9 @@ impl Builder {
             })?;
         }
 
-        // the full log is always written, and its path is printed on
-        // failure. Both phases append to the one file, because the story of a
-        // build is both of them.
+        // The full log is always written, and its path is printed on failure.
+        // Both phases append to the one file, because the story of a build is
+        // both of them.
         let log = self.cache.log_path(key);
         let _ = std::fs::remove_file(&log);
 
@@ -351,7 +351,7 @@ impl Builder {
 
         let artifacts = self.cache.store(key, &built).map_err(|source| Error::Io {
             doing: "storing the built packages in the cache",
-            path: self.cache.log_path(key),
+            path: self.cache.entry_path(key),
             source,
         })?;
 
@@ -402,8 +402,8 @@ fn artifacts_in(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
 
 #[derive(Debug)]
 pub enum Error {
-    /// build failure is normal and must be pleasant. The log path is
-    /// part of the message, not something to go looking for.
+    /// A build failure is normal and has to be pleasant to read. The log path
+    /// is part of the message, not something to go looking for.
     Phase {
         phase: &'static str,
         recipe: String,

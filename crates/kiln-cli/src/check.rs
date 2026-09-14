@@ -343,8 +343,8 @@ pub fn compare_sides(was: &Side, now: &Side) -> Report {
             "configuration",
             vec![Change::Updated {
                 name: "config_id".into(),
-                from: short(&was.config_id),
-                to: short(&now.config_id),
+                from: crate::fmt::hash(&was.config_id),
+                to: crate::fmt::hash(&now.config_id),
                 note: Some("settings changed with no change to any input".into()),
             }],
         ));
@@ -397,12 +397,12 @@ fn compare(was: &BTreeMap<String, String>, now: &BTreeMap<String, String>) -> Ve
         match was.get(name) {
             None => out.push(Change::Added {
                 name: name.clone(),
-                to: short(to),
+                to: crate::fmt::hash(to),
             }),
             Some(from) if from != to => out.push(Change::Updated {
                 name: name.clone(),
-                from: short(from),
-                to: short(to),
+                from: crate::fmt::hash(from),
+                to: crate::fmt::hash(to),
                 note: None,
             }),
             Some(_) => {}
@@ -412,7 +412,7 @@ fn compare(was: &BTreeMap<String, String>, now: &BTreeMap<String, String>) -> Ve
         if !now.contains_key(name) {
             out.push(Change::Removed {
                 name: name.clone(),
-                from: short(from),
+                from: crate::fmt::hash(from),
             });
         }
     }
@@ -448,8 +448,8 @@ fn compare_repo(
                 to: evr.clone(),
                 note: Some(format!(
                     "same version, rebuilt: {} → {}",
-                    short(old_sha256),
-                    short(sha256)
+                    crate::fmt::hash(old_sha256),
+                    crate::fmt::hash(sha256)
                 )),
             }),
             Some(_) => {}
@@ -484,8 +484,8 @@ fn compare_aur(
                 to: evr.clone(),
                 note: Some(format!(
                     "commit {} → {}",
-                    short_commit(old_commit),
-                    short_commit(commit)
+                    crate::fmt::commit(old_commit),
+                    crate::fmt::commit(commit)
                 )),
             }),
             Some(_) => {}
@@ -512,7 +512,7 @@ fn compare_built(
         match was.get(name) {
             None => out.push(Change::Added {
                 name: name.clone(),
-                to: short(key),
+                to: crate::fmt::hash(key),
             }),
             Some((old_key, old_kernel)) if old_key != key => out.push(Change::Rebuild {
                 name: name.clone(),
@@ -534,18 +534,6 @@ fn compare_built(
     }
     out.sort_by(|a, b| a.name().cmp(b.name()));
     out
-}
-
-fn short(s: &str) -> String {
-    match s.strip_prefix("b3:") {
-        Some(hex) => format!("b3:{}", &hex[..8.min(hex.len())]),
-        None if s.len() > 16 && s.chars().all(|c| c.is_ascii_hexdigit()) => s[..12].to_string(),
-        None => s.to_string(),
-    }
-}
-
-fn short_commit(s: &str) -> String {
-    s.chars().take(6).collect()
 }
 
 #[cfg(test)]
@@ -765,7 +753,7 @@ mod tests {
             .1;
         assert!(matches!(
             &aur[0],
-            Change::Updated { note: Some(n), .. } if n == "commit 3f1a9c → 88bd02"
+            Change::Updated { note: Some(n), .. } if n == "commit 3f1a9c8e → 88bd0244"
         ));
     }
 

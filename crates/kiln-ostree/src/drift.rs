@@ -1,10 +1,10 @@
-//! `/etc` drift: what the live `/etc` has that the image did not ship.
-//! and the hazard the OSTree merge raises it from.
+//! `/etc` drift: what the live `/etc` has that the image did not ship, and the
+//! hazard the OSTree merge raises it from.
 //!
-//! > A file Kiln ships to `/etc` becomes part of `/usr/etc`. If a user
-//! > hand-edits it on the live system, OSTree's 3-way merge treats it as a
-//! > local modification and that user's version wins *forever*, silently
-//! > ignoring future Kiln changes.
+//! A file Kiln ships to `/etc` becomes part of `/usr/etc`. If a user
+//! hand-edits it on the live system, OSTree's 3-way merge treats it as a
+//! local modification and that user's version wins *forever*, silently
+//! ignoring future Kiln changes.
 //!
 //! The comparison is the same one libostree's merge makes, run early: a
 //! deployment's `/usr/etc` is the default the image shipped, its `/etc` is what

@@ -100,9 +100,10 @@ pub fn spawn(spec: &SandboxSpec, argv: &[String], shim_log: Option<&Path>) -> Re
         .map(|s| s.lines().map(str::to_string).collect())
         .unwrap_or_default();
 
-    // *the full log is always written*. Here rather than in the caller,
-    // because a failing run is turned into `Error::Failed` carrying forty lines
-    // and the rest is gone by the time anyone else could write it.
+    // `SandboxSpec::log`'s promise: the full log is always written, whether the
+    // run succeeded or not. Here rather than in the caller, because a failing
+    // run is turned into `Error::Failed` carrying only the tail, and the rest
+    // is gone by the time anyone else could write it.
     if let Some(path) = &spec.log {
         write_log(path, &pretty, &stdout, &stderr);
     }
@@ -189,8 +190,8 @@ fn wait_with_timeout(
     }
 }
 
-/// The last `n` non-empty lines. A failing build step's useful output is at the
-/// end; puts the figure at forty.
+/// The last `n` non-empty lines of a captured log. A failing build step's
+/// useful output is at the end, and the preceding thousands are noise.
 pub fn tail(text: &str, n: usize) -> String {
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     lines[lines.len().saturating_sub(n)..].join("\n")

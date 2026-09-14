@@ -6,14 +6,17 @@
 //! produces — because a spec that says `Network::Disabled` and a backend that
 //! forgets `--unshare-net` is exactly the failure a spec-only test misses.
 //!
-//! It is a **namespace sandbox, not a VM**: a kernel LPE escapes it.
-//! states that plainly rather than implying it away.
+//! It is a **namespace sandbox, not a VM**: a kernel LPE escapes it. Saying so
+//! plainly is better than implying otherwise — what this buys is a build that
+//! cannot read the network or the host's filesystem by accident, not a
+//! guarantee against a hostile PKGBUILD.
 
 pub mod bwrap;
 pub mod nspawn;
 pub mod spec;
 
 pub use bwrap::Bubblewrap;
+pub use exec::tail;
 pub use nspawn::Nspawn;
 pub use spec::{
     Bind, BindMode, Limits, Network, SandboxSpec, SandboxUser, Shim, SHIM_DIR, SHIM_LOG,
@@ -117,4 +120,4 @@ pub trait Sandbox {
 /// Shared machinery: materialize the shims, spawn, enforce the wall clock,
 /// collect the shim log. Both backends want all four and neither should have
 /// its own version.
-pub(crate) mod exec;
+mod exec;

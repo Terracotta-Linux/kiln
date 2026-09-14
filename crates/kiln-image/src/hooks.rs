@@ -41,8 +41,7 @@ pub const SHADOWED: &[Shadowed] = &[
     },
     Shadowed {
         filename: "60-depmod.hook",
-        reason: "Kiln runs depmod itself, deterministically, after the transaction \
-.",
+        reason: "Kiln runs depmod itself, deterministically, after the transaction.",
     },
     Shadowed {
         filename: "nvidia-ctk-cdi.hook",
@@ -65,7 +64,7 @@ pub fn materialize(dir: &Path) -> Result<PathBuf> {
     tree::mkdir(dir)?;
     for hook in SHADOWED {
         let body = format!(
-            "# Shadowed by Kiln. \n\
+            "# Shadowed by Kiln.\n\
              #\n\
              # A package-shipped alpm hook cannot be disabled — libalpm scans\n\
              # /usr/share/libalpm/hooks unconditionally — so this file overrides it by\n\

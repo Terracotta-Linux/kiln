@@ -1,7 +1,7 @@
 //! `kiln show` and the `kiln check --offline` summary.
 //!
-//! never print an OSTree checksum where a generation number would do, and
-//! keep identities short outside `--verbose`.
+//! Never prints an OSTree checksum where a generation number would do, and
+//! keeps identities short outside `--verbose`.
 
 use kiln_manifest::*;
 
@@ -96,11 +96,36 @@ fn row(label: &str, parts: &[Option<String>]) {
 }
 
 /// The full merged manifest, for `kiln show`.
+///
+/// *Every* group a user can set is printed, including the ones that are almost
+/// always empty: this is the command that answers "what did my includes
+/// actually add up to", and a group that is silently never shown is one nobody
+/// can check.
 pub fn detail(m: &Manifest) {
     println!("\nimage        {} ({})", m.image.name, m.image.arch);
+    println!(
+        "repos        {}",
+        match &m.repos.snapshot {
+            Snapshot::Latest => "rolling".to_string(),
+            Snapshot::Date(d) => format!("pinned {d}"),
+        }
+    );
+    list("repos.mirrors", m.repos.mirrors.iter().cloned());
+    for (name, r) in &m.repos.extra {
+        let key = r
+            .key
+            .as_ref()
+            .map(|k| format!(" key={k}"))
+            .unwrap_or_default();
+        println!("repo         {name} {}{key}", r.server);
+    }
     list("packages.repo", m.packages.repo.iter().cloned());
     list("packages.aur", m.packages.aur.keys().cloned());
     list("packages.build", m.packages.build.iter().cloned());
+    list(
+        "packages.file",
+        m.packages.file.values().map(|p| p.path.clone()),
+    );
     list("packages.exclude", m.packages.exclude.iter().cloned());
     println!(
         "kernel       {} (headers: {})",
@@ -119,10 +144,29 @@ pub fn detail(m: &Manifest) {
         "kernel.dracut_modules",
         m.kernel.dracut_modules.iter().cloned(),
     );
+    list(
+        "kernel.module",
+        m.kernel
+            .out_of_tree
+            .values()
+            .map(|k| format!("{} ({})", k.name, k.source)),
+    );
     list("modules.load", m.kernel.modules.load.iter().cloned());
     list(
         "modules.blacklist",
         m.kernel.modules.blacklist.iter().cloned(),
+    );
+    list(
+        "modules.initramfs",
+        m.kernel.modules.initramfs.iter().cloned(),
+    );
+    list(
+        "modules.options",
+        m.kernel
+            .modules
+            .options
+            .iter()
+            .map(|(k, v)| format!("{k}=\"{v}\"")),
     );
     println!(
         "boot         {} timeout={} initramfs={}",
@@ -168,6 +212,7 @@ pub fn detail(m: &Manifest) {
             .map(|h| format!(" hostname={h}"))
             .unwrap_or_default()
     );
+    list("locale.generate", m.system.locale.generate.iter().cloned());
     println!("\nconfig_id    {}", m.config_id());
 }
 

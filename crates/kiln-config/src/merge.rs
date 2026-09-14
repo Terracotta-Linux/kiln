@@ -1,4 +1,4 @@
-//! The merge algebra. — exactly three rules:
+//! The merge algebra — exactly three rules:
 //!
 //! 1. **Lists union.** Duplicates collapse. Order is discarded.
 //! 2. **The includer wins.** If A includes B and both set a scalar, A's value is used.
@@ -113,7 +113,7 @@ fn merge_unit(unit: &Unit, errs: &mut Errors) -> Node {
     let own = strip_control_keys(&unit.doc);
     match acc {
         None => own,
-        Some(children) => overlay(children, own, &mut Vec::new()),
+        Some(children) => overlay(children, own, &mut Vec::new(), errs),
     }
 }
 
@@ -149,7 +149,13 @@ fn union_siblings(
                     Some(ea) => {
                         let dotted = path.join(".");
                         let merged = if schema::is_list(&dotted) {
-                            union_lists(&dotted, ea.value, eb.value)
+                            union_lists(
+                                &dotted,
+                                ea.value,
+                                eb.value,
+                                &Rule::Siblings(includer),
+                                errs,
+                            )
                         } else if matches!(ea.value.kind, NodeKind::Table(_)) {
                             union_siblings(ea.value, eb.value, path, includer, errs)
                         } else if ea.value.same_value(&eb.value) {
@@ -181,7 +187,7 @@ fn union_siblings(
     }
 }
 
-/// The diagnostic uses as its worked example.
+/// Rule 3's diagnostic: both origins, and the one file that can settle it.
 fn conflict(dotted: &str, a: &Entry, b: &Entry, includer: &Src, errs: &mut Errors) {
     errs.push(
         Diag::error("kiln::merge", format!("conflicting values for `{dotted}`"))
@@ -195,10 +201,21 @@ fn conflict(dotted: &str, a: &Entry, b: &Entry, includer: &Src, errs: &mut Error
     );
 }
 
+/// Which rule two lists are being combined under. The union itself is the same
+/// either way; only the *fields* of two entries sharing an identity key need to
+/// know, because that is where rules 2 and 3 disagree.
+enum Rule<'a> {
+    /// Rule 2: the includer's fields win, silently.
+    Overlay,
+    /// Rule 3: two siblings setting the same field to different values conflict,
+    /// exactly as they would outside a list.
+    Siblings(&'a Src),
+}
+
 /// Rule 1. Union, deduplicated, canonically sorted. Identity-keyed lists merge
 /// entry by entry so that two files describing the same `[[file]]` target
 /// combine rather than duplicate.
-fn union_lists(dotted: &str, a: Node, b: Node) -> Node {
+fn union_lists(dotted: &str, a: Node, b: Node, rule: &Rule<'_>, errs: &mut Errors) -> Node {
     let (NodeKind::Array(items_a), NodeKind::Array(items_b)) = (a.kind, b.kind) else {
         // A type error here was already reported by `structure::check`.
         return Node {
@@ -206,24 +223,23 @@ fn union_lists(dotted: &str, a: Node, b: Node) -> Node {
             origin: a.origin,
         };
     };
-    let spec = schema::list_spec(dotted);
-    let identity = spec.and_then(|s| s.identity);
+    let identity = schema::list_spec(dotted).and_then(|s| s.identity);
 
+    // Indexed rather than scanned: `list_key` allocates, so re-deriving the key
+    // of everything already placed for every element added is quadratic in the
+    // number of packages a profile include brings in.
     let mut out: Vec<Node> = Vec::new();
+    let mut at: BTreeMap<Option<String>, usize> = BTreeMap::new();
     for item in items_a.into_iter().chain(items_b) {
         let key = list_key(&item, identity);
-        match out.iter_mut().find(|e| list_key(e, identity) == key) {
-            None => out.push(item),
-            Some(existing) => {
-                // Same identity from two siblings: shallow-merge their fields.
-                // A genuine disagreement inside the entry surfaces as a
-                // duplicate-target semantic error later, with both origins.
-                if let (NodeKind::Table(et), NodeKind::Table(it)) = (&mut existing.kind, item.kind)
-                {
-                    for (k, v) in it {
-                        et.entry(k).or_insert(v);
-                    }
-                }
+        match at.get(&key) {
+            None => {
+                at.insert(key, out.len());
+                out.push(item);
+            }
+            Some(&i) => {
+                let entry = entry_path(dotted, &out[i], identity);
+                merge_entry(&entry, &mut out[i], item, rule, errs);
             }
         }
     }
@@ -234,8 +250,38 @@ fn union_lists(dotted: &str, a: Node, b: Node) -> Node {
     }
 }
 
-/// "iteration order is content-determined, not insertion-determined."
-/// Reordering lines in a TOML file must never change `config_id`.
+/// Shallow-merge one array-of-tables entry into another of the same identity.
+fn merge_entry(entry: &str, into: &mut Node, from: Node, rule: &Rule<'_>, errs: &mut Errors) {
+    let (NodeKind::Table(kept), NodeKind::Table(adding)) = (&mut into.kind, from.kind) else {
+        return;
+    };
+    for (key, new) in adding {
+        let Some(held) = kept.get_mut(&key) else {
+            kept.insert(key, new);
+            continue;
+        };
+        match rule {
+            Rule::Overlay => *held = new,
+            Rule::Siblings(includer) => {
+                if !held.value.same_value(&new.value) {
+                    conflict(&format!("{entry}.{key}"), held, &new, includer, errs);
+                }
+            }
+        }
+    }
+}
+
+/// How an entry inside an array of tables is named in a diagnostic:
+/// `file[target="/etc/motd"]`.
+fn entry_path(dotted: &str, entry: &Node, identity: Option<&str>) -> String {
+    let named = identity
+        .and_then(|field| Some((field, entry.as_table()?.get(field)?)))
+        .map(|(field, e)| format!("[{field}={}]", e.value.render()));
+    format!("{dotted}{}", named.unwrap_or_default())
+}
+
+/// Iteration order is content-determined, not insertion-determined: reordering
+/// lines in a TOML file must never change `config_id`.
 fn sort_items(items: &mut [Node], identity: Option<&str>) {
     items.sort_by_key(|n| list_key(n, identity).unwrap_or_default());
 }
@@ -251,7 +297,7 @@ fn list_key(node: &Node, identity: Option<&str>) -> Option<String> {
 }
 
 /// Rule 2. `top` is the including file; it wins, and we record what it displaced.
-fn overlay(base: Node, top: Node, path: &mut Vec<String>) -> Node {
+fn overlay(base: Node, top: Node, path: &mut Vec<String>, errs: &mut Errors) -> Node {
     match (base.kind, top.kind) {
         (NodeKind::Table(tb), NodeKind::Table(tt)) => {
             let mut out = tb;
@@ -264,9 +310,9 @@ fn overlay(base: Node, top: Node, path: &mut Vec<String>) -> Node {
                     }
                     Some(eb) => {
                         let merged = if schema::is_list(&dotted) {
-                            union_lists(&dotted, eb.value, et.value)
+                            union_lists(&dotted, eb.value, et.value, &Rule::Overlay, errs)
                         } else if matches!(et.value.kind, NodeKind::Table(_)) {
-                            overlay(eb.value, et.value, path)
+                            overlay(eb.value, et.value, path, errs)
                         } else {
                             // Rule 2, the whole of it: the includer's value wins,
                             // silently and without ceremony.

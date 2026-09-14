@@ -219,21 +219,7 @@ _sourcetree() {{
   echo "{sourcetree}"
 }}
 
-# The one kernel in the build root. This puts the resolved kernel EVR in the
-# build key, so a root assembled for this key holds exactly one `-headers`
-# package — and reading the version out of the root rather than substituting it
-# in means the recipe cannot disagree with what it is compiling against.
-_kernelrelease() {{
-  local build
-  for build in /usr/lib/modules/*/build; do
-    if [[ -d $build ]]; then
-      basename "$(dirname "$build")"
-      return 0
-    fi
-  done
-  echo "no kernel headers in the build root: /usr/lib/modules/*/build is empty" >&2
-  return 1
-}}
+{KERNELRELEASE}
 
 # The one `dkms.conf` in the source tree. Found by looking rather than by name:
 # a DKMS source directory is `<module>-<version>`, which is neither the package
@@ -314,6 +300,7 @@ package() {{
 "#,
         dest = DEST,
         label = sources.name(),
+        KERNELRELEASE = crate::module::KERNELRELEASE,
     )
 }
 

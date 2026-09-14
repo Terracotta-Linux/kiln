@@ -104,9 +104,9 @@ pub const DIR_MODE: u32 = 0o755;
 /// calling process's umask, so `create_dir_all` puts the *builder's* umask into
 /// the image: the same configuration built by a shell at `umask 022` and one at
 /// `umask 0` produces `0755` and `0777` directories respectively, and the two
-/// commits differ. exists to stop exactly that — a build must not be able
-/// to tell anything about the machine it ran on — and this was the last place
-/// it could.
+/// commits differ. This function exists to stop exactly that — a build must not
+/// be able to tell anything about the machine it ran on — and `create_dir_all`
+/// was the last place it could.
 ///
 /// It surfaced as a snapshot test that flapped between two mode columns
 /// depending on how the suite was invoked, which reads like a flaky test and

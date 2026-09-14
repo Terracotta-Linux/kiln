@@ -83,7 +83,7 @@ fn reports_an_unsatisfiable_dependency_and_who_wanted_it() {
         .solve(&Request::new(["fixture-broken".to_string()]))
         .unwrap_err();
     match err {
-        Error::Unsatisfied { wanted_by, dep } => {
+        Error::Unsatisfied { wanted_by, dep, .. } => {
             assert_eq!(wanted_by.as_deref(), Some("fixture-broken"));
             assert_eq!(dep, "fixture-nonexistent");
         }
@@ -105,6 +105,7 @@ fn reports_a_conflict_between_two_requested_packages() {
             first,
             second,
             reason,
+            ..
         } => {
             let mut pair = [first, second];
             pair.sort();

@@ -134,8 +134,8 @@ pub fn status(sysroot: Option<&Path>, verbose: bool) -> ExitCode {
     println!("generation  {}", g.number);
     println!("image       {}", g.image);
     println!("built       {}", g.built_at);
-    // never print a checksum where a generation number would do. It is
-    // the identity `kiln show` and a bug report need, and noise everywhere else.
+    // Never a checksum where a generation number would do: it is the identity
+    // `kiln show` and a bug report need, and noise everywhere else.
     if verbose {
         println!("commit      {}", g.checksum);
     }
@@ -316,8 +316,8 @@ fn deploy_committed(sysroot: &Sysroot, generation: u64) -> ExitCode {
             );
             if deployed.baseline {
                 println!(
-                    "Pinned as the baseline: `kiln clean` keeps it without `--remove-baseline` \
-."
+                    "Pinned as the baseline: `kiln clean` keeps it without \
+                     `--remove-baseline`."
                 );
             }
             if deployed.backend == kiln_ostree::Backend::None && sysroot.path() != Path::new("/") {
@@ -410,20 +410,17 @@ pub fn rm(sysroot: Option<&Path>, wanted: &[u64], remove_baseline: bool) -> Exit
         Err(e) => return fail(&e),
     };
 
+    let plan = Removal::requested(&generations, wanted, remove_baseline);
+
     // Named but not there at all. Distinct from "named and refused", and worth
     // its own message: a typo and a protected generation are different
     // mistakes, and the explanation of what a generation is belongs to the
     // first one.
-    let unknown: Vec<u64> = wanted
-        .iter()
-        .filter(|w| !generations.iter().any(|g| g.number == **w))
-        .copied()
-        .collect();
-    if !unknown.is_empty() {
+    if !plan.unknown.is_empty() {
         let have: Vec<String> = generations.iter().map(|g| g.number.to_string()).collect();
         eprintln!(
             "\x1b[1;31merror\x1b[0m no deployment for generation {}; this machine has {}",
-            numbers(&unknown),
+            numbers(&plan.unknown),
             if have.is_empty() {
                 "none".to_string()
             } else {
@@ -433,7 +430,6 @@ pub fn rm(sysroot: Option<&Path>, wanted: &[u64], remove_baseline: bool) -> Exit
         return ExitCode::System;
     }
 
-    let plan = Removal::requested(&generations, wanted, remove_baseline);
     report_removal(&plan, 0);
     if plan.is_empty() {
         // Everything asked for was protected. That is a refusal, not a
@@ -476,8 +472,8 @@ fn trim_cache(state: &Path, dry_run: bool) {
         if held > 0 {
             println!(
                 "Artifact cache {} of {} budget.",
-                disk::human(held),
-                disk::human(budget)
+                crate::fmt::bytes(held),
+                crate::fmt::bytes(budget)
             );
         }
         return;
@@ -485,11 +481,11 @@ fn trim_cache(state: &Path, dry_run: bool) {
     let freed: u64 = evicted.iter().map(|c| c.bytes).sum();
     println!(
         "Artifact cache {} over its {} budget: dropping {} oldest package{}, {}.",
-        disk::human(held.saturating_sub(budget)),
-        disk::human(budget),
+        crate::fmt::bytes(held.saturating_sub(budget)),
+        crate::fmt::bytes(budget),
         evicted.len(),
         if evicted.len() == 1 { "" } else { "s" },
-        disk::human(freed)
+        crate::fmt::bytes(freed)
     );
     if dry_run {
         return;
@@ -549,8 +545,8 @@ fn open(root: &Path) -> Result<Sysroot, ExitCode> {
         eprintln!("\x1b[1;31merror\x1b[0m {e}");
         if !paths::is_initialized(root) {
             eprintln!(
-                "\n`kiln sysroot init --sysroot {}` creates the layout this needs \
-                .",
+                "\n`kiln sysroot init --sysroot {}` creates the layout this \
+                 needs.",
                 root.display()
             );
             // The commits are fine — they are in the repository and keep their

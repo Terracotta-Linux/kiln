@@ -2,8 +2,13 @@
 //!
 //! A PKGBUILD is a bash script, so reading its metadata means executing it.
 //! `.SRCINFO` is the same information already flattened — no expansion, no
-//! subshells, no `pkgver()` — which is why Kiln prefers it and only falls back
-//! to `makepkg --printsrcinfo` in a sandbox when a recipe does not ship one.
+//! subshells, no `pkgver()` — which is why Kiln prefers it. A recipe Kiln
+//! cloned from the AUR during realization may not ship one, and
+//! `recipe::read` then falls back to `makepkg --printsrcinfo` in a sandbox. A
+//! `packages.build` recipe under the configuration root never reaches that
+//! fallback: resolution runs first and requires the file (see
+//! `kiln_resolve::recipes::read_all`), because a `kiln check` must not source
+//! a stranger's bash.
 //!
 //! The format is `key = value`, indented under a `pkgbase` or `pkgname`
 //! section, with architecture-suffixed variants (`source_x86_64`). Two things
@@ -15,6 +20,14 @@
 //!   parallel lists. Zipping the wrong pair silently pins the wrong bytes.
 //! - **`SKIP` is not a checksum.** It means the source is unverifiable, which
 //!   makes the package volatile rather than merely unpinned.
+//!
+//! Only `sha256sums` is read. A recipe that ships `b2sums` or `sha512sums`
+//! instead — increasingly common upstream — parses fine, but every one of its
+//! sources comes out unpinned and therefore volatile, so `kiln check` reports
+//! the package as unresolvable without fetching. Carrying the other digests
+//! would mean putting an algorithm tag into `SourcePin` and so into the
+//! `plan_id` encoding, which is a hash-epoch bump; until then, `sha256sums` is
+//! what pins a recipe.
 
 use std::collections::BTreeMap;
 
@@ -23,7 +36,9 @@ use std::collections::BTreeMap;
 pub struct Source {
     /// As written: a URL, a `filename::url` rename, or a local filename.
     pub spec: String,
-    /// `None` where the recipe wrote `SKIP`.
+    /// `None` where the recipe wrote `SKIP`, and also where it gave only a
+    /// non-sha256 digest — see the module doc. Either way the source cannot be
+    /// pinned without fetching it.
     pub sha256: Option<String>,
 }
 
@@ -163,6 +178,8 @@ pub fn parse(text: &str, arch: &str) -> Result<Srcinfo, Error> {
             "checkdepends" => out.checkdepends.push(value.to_string()),
             "provides" => out.provides.push(value.to_string()),
             "source" => sources.entry(suffix).or_default().push(value.to_string()),
+            // sha256 only: see the module doc for why the other three lists
+            // `split_arch_suffix` knows about are parsed and then dropped.
             "sha256sums" => sums.entry(suffix).or_default().push(value.to_string()),
             _ => {}
         }

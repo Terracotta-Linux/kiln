@@ -20,8 +20,8 @@ pub struct Report {
     /// Installed package names, sorted.
     pub installed: Vec<String>,
     /// Scriptlet output, keyed by the package whose scriptlet produced it.
-    /// captured per package, so a failure names the package and the last
-    /// forty lines rather than a wall of undifferentiated text.
+    /// Captured per package, so a failure names the package and the last forty
+    /// lines rather than handing over a wall of undifferentiated text.
     pub scriptlets: Vec<ScriptletOutput>,
     /// Package-shipped alpm hooks that ran. They always run and cannot be
     /// disabled, so the honest thing is to record which ones did.
@@ -99,8 +99,11 @@ impl Session {
     /// Download every package the transaction needs into the cache, and nothing
     /// else. **This is the only step in assembly that touches the network.**
     ///
-    /// Returns the cached file paths, so realization can hand assembly a set of
-    /// artifacts rather than a promise.
+    /// Returns the cached file path of each package the transaction *names* —
+    /// not of the dependency closure, which is downloaded too but whose members
+    /// the caller never asked about by name. The list is what realization hands
+    /// assembly instead of a promise; the rest is in the cache either way, and
+    /// the transaction that installs from it resolves them again.
     ///
     /// The locals are added here too, even though a file on disk needs no
     /// downloading. They are what pulls their *dependencies* into the cache: an
@@ -110,7 +113,6 @@ impl Session {
     /// resolve that dependency and then fail reaching for a mirror that is not
     /// there.
     pub fn fetch(&mut self, transaction: &Transaction) -> Result<Vec<PathBuf>> {
-        let files = RefCell::new(Vec::new());
         self.run_transaction(
             transaction,
             TransFlag::DOWNLOAD_ONLY,
@@ -126,20 +128,21 @@ impl Session {
             .first()
             .cloned()
             .unwrap_or_else(|| PathBuf::from("/var/cache/pacman/pkg"));
+        let mut files = Vec::new();
         for name in &transaction.packages {
             if let Some(pkg) = self.alpm.syncdbs().find_satisfier(name.as_str()) {
                 if let Some(filename) = pkg.filename() {
-                    files.borrow_mut().push(cache.join(filename));
+                    files.push(cache.join(filename));
                 }
             }
         }
-        Ok(files.into_inner())
+        Ok(files)
     }
 
     /// Install into the root. Assumes every package is already in the cache —
     /// see `fetch`. Runs with no network in the caller's namespace.
     pub fn install(&mut self, transaction: &Transaction) -> Result<Report> {
-        // builds run as root, always. This is not ceremony. As an
+        // A transaction needs root, always, and this is not ceremony. As an
         // ordinary user libalpm extracts the archive, fails every `chown`, logs
         // "Can't set user=0/group=0" as a *warning*, and reports the commit as
         // successful — producing a tree whose ownership, setuid bits and file
@@ -281,7 +284,7 @@ impl Session {
     }
 }
 
-/// The last `n` lines a scriptlet or hook printed, newest bucket last.
+/// The last `n` lines a scriptlet or hook printed, across every bucket.
 ///
 /// Hook output arrives through the same `ScriptletInfo` event as a package's,
 /// so this covers both — which matters, because a hook failure is the case
@@ -299,8 +302,9 @@ fn tail(report: &Report, n: usize) -> Vec<String> {
 }
 
 /// The effective uid, read from `/proc`. Kiln is Linux-only — it builds OSTree
-/// images from pacman packages — so this is not worth a libc dependency.
-/// Field two of `Uid:` is the effective uid.
+/// images from pacman packages — so `/proc/self/status` is always there, and
+/// one line of parsing is cheaper than giving this crate a `libc` dependency it
+/// otherwise has no use for. Field two of `Uid:` is the effective uid.
 fn effective_uid() -> u32 {
     std::fs::read_to_string("/proc/self/status")
         .ok()
@@ -368,10 +372,10 @@ fn record(report: &mut Report, event: &Event<'_>) {
 ///
 /// Both `Conflict` and `FileConflict` are `#[repr(transparent)]` newtypes over
 /// their respective C structs, so reinterpreting a reference whose pointee is
-/// genuinely an `alpm_fileconflict_t` is well-defined. This is the only
-/// `unsafe` in Kiln, it exists to work around an upstream mistyping, and it
-/// should be deleted the moment `alpm` fixes the signature — at which point
-/// this function stops compiling, which is the right way to be reminded.
+/// genuinely an `alpm_fileconflict_t` is well-defined. It exists only to work
+/// around an upstream mistyping, and it should be deleted the moment `alpm`
+/// fixes the signature — at which point this function stops compiling, which is
+/// the right way to be reminded.
 fn as_file_conflict(c: &alpm::Conflict) -> &alpm::FileConflict {
     unsafe { &*(c as *const alpm::Conflict as *const alpm::FileConflict) }
 }

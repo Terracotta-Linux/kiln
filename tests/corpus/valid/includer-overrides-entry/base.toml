@@ -1,0 +1,6 @@
+kiln = 1
+
+[[file]]
+target  = "/etc/motd"
+content = "from base\n"
+mode    = "0644"

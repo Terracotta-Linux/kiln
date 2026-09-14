@@ -66,12 +66,8 @@ pub struct Provenance {
 ///
 /// Every variant's encoding is tagged by name, so a plan containing none of a
 /// given kind encodes exactly as it would have before that kind existed —
-/// which is what let phase 3 add four variants without disturbing a single
+/// which is what let four variants be added without disturbing a single
 /// `plan_id`. There is a frozen test for precisely that claim.
-///
-/// `BuildScript` is absent: a script's effect is an overlayfs changeset over
-/// the staging root, so it has nothing to resolve *to* until assembly
-/// exists.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ResolvedInput {
     RepoPackage {
@@ -194,8 +190,8 @@ pub enum ResolvedInput {
     /// frontend already knew. It is in the plan anyway, because a script is an
     /// input whose effect is arbitrary: leaving it out would mean `plan_id`
     /// moved on an edited script only through `config_id`, and would leave
-    /// `kiln check` with no way to say *which* script changed — which is
-    /// exactly what promises it says.
+    /// `kiln check` with no way to say *which* script changed, which is
+    /// exactly what it promises to say.
     BuildScript {
         name: String,
         /// Which of the two assembly slots it runs in. Part of the identity
@@ -341,7 +337,8 @@ pub struct VolatileInput {
     pub what: Volatile,
 }
 
-/// The two things names, and the only two there are.
+/// What cannot be pinned without fetching. Two kinds, and there are no
+/// others.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Volatile {
     /// A `source=()` entry in a recipe under the config root: a `SKIP`
@@ -436,7 +433,9 @@ impl BuildPlan {
         self.volatile.sort();
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = &ResolvedInput> {
+    /// The inputs that came from a configured pacman repository — not AUR,
+    /// built, DKMS or file packages, each of which is its own variant.
+    pub fn repo_packages(&self) -> impl Iterator<Item = &ResolvedInput> {
         self.inputs
             .iter()
             .filter(|i| matches!(i, ResolvedInput::RepoPackage { .. }))

@@ -271,18 +271,24 @@ fn provenance(record: &Record, name: &str) -> Vec<String> {
             // pulled AUR package is marked with what required it.
             Some(by) => format!(
                 "from the AUR at commit {}, pulled in by {by}",
-                short(&p.aur_commit)
+                crate::fmt::commit(&p.aur_commit)
             ),
-            None => format!("from the AUR at commit {}", short(&p.aur_commit)),
+            None => format!(
+                "from the AUR at commit {}",
+                crate::fmt::commit(&p.aur_commit)
+            ),
         });
     }
     if let Some(p) = record.built_packages.iter().find(|p| p.name == name) {
         out.push(match &p.kernel_evr {
             Some(kernel) => format!(
                 "built from source against kernel {kernel} (build key {})",
-                short(&p.build_key)
+                crate::fmt::hash(&p.build_key)
             ),
-            None => format!("built from source (build key {})", short(&p.build_key)),
+            None => format!(
+                "built from source (build key {})",
+                crate::fmt::hash(&p.build_key)
+            ),
         });
     }
     out
@@ -469,13 +475,6 @@ fn join(names: &[String]) -> String {
         // part past a handful.
         n if n > 6 => format!("{} and {} others", names[..6].join(", "), n - 6),
         _ => names.join(", "),
-    }
-}
-
-fn short(hash: &str) -> String {
-    match hash.strip_prefix("b3:") {
-        Some(hex) => format!("b3:{}", &hex[..8.min(hex.len())]),
-        None => hash.chars().take(8).collect(),
     }
 }
 

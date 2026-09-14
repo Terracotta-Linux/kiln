@@ -10,9 +10,11 @@ use std::collections::BTreeMap;
 
 pub const ENDPOINT: &str = "https://aur.archlinux.org/rpc/v5/info";
 
-/// The subset of the RPC's reply Kiln uses. This names `Version`, `Depends`,
-/// `MakeDepends` and `LastModified`; the rest is carried because the trust
-/// summary prints a maintainer and a source count.
+/// The subset of the RPC's reply Kiln uses: the version and the three
+/// dependency lists that the closure walks, `Provides`/`Conflicts` because
+/// they go into the commit identity, `Maintainer` and `OutOfDate` because they
+/// are what a person needs to know before building a stranger's code, and
+/// `LastModified` because it is how an unchanged package is recognized.
 ///
 /// Not `deny_unknown_fields`: the AUR adds fields, and a Kiln that stopped
 /// resolving because the RPC learned a new key would be a worse tool than one
@@ -43,10 +45,6 @@ pub struct Info {
     pub provides: Vec<String>,
     #[serde(rename = "Conflicts", default)]
     pub conflicts: Vec<String>,
-    #[serde(rename = "License", default)]
-    pub license: Vec<String>,
-    #[serde(rename = "URL")]
-    pub url: Option<String>,
 }
 
 impl Info {
@@ -60,21 +58,6 @@ impl Info {
             .chain(&self.check_depends)
             .map(String::as_str)
             .collect()
-    }
-
-    /// The trust summary, printed on the first build of any new AUR package.
-    /// Arbitrary code from a stranger deserves one line of daylight.
-    pub fn trust_summary(&self, commit: &str, sources: usize) -> String {
-        format!(
-            "{} {} — pkgbase {}, maintainer {}, commit {}, {} source{}",
-            self.name,
-            self.version,
-            self.package_base,
-            self.maintainer.as_deref().unwrap_or("ORPHANED"),
-            &commit[..commit.len().min(7)],
-            sources,
-            if sources == 1 { "" } else { "s" }
-        )
     }
 }
 

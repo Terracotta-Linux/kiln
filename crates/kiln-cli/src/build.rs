@@ -1,8 +1,8 @@
 //! `kiln build` and `kiln apply`.
 //!
 //! `build` produces a commit. `apply` produces a commit and stages it for the
-//! next boot. There is no third thing: rules out live-apply, so the only
-//! way a change reaches a running system is one image and one reboot.
+//! next boot. There is no third thing — live-apply is out of scope — so the
+//! only way a change reaches a running system is one image and one reboot.
 
 use crate::pipeline::{self, Context};
 use crate::{disk, paths};
@@ -33,7 +33,7 @@ pub fn run(
         return ExitCode::System;
     }
 
-    // The installer's table is an order, and nothing used to enforce it. `kiln build`
+    // The order matters, and nothing used to enforce it. `kiln build`
     // creates `ostree/repo` on its own, so building into a target that was
     // never initialized succeeds, commits real generations, and then fails at
     // `kiln deploy` with libostree's `fstatat(ostree/deploy)` — several minutes
@@ -254,14 +254,14 @@ pub fn stage(
                 kiln_ostree::Counter::ImageCannotBless => {}
                 kiln_ostree::Counter::Unwritable(why) => eprintln!(
                     "\x1b[1;33mwarning\x1b[0m the boot counter could not be armed, so \
-                     automatic rollback on boot\n          failure is off for this generation \
-: {why}"
+                     automatic rollback on boot\n          failure is off for this \
+                     generation: {why}"
                 ),
             }
             if deployed.baseline {
                 println!(
-                    "Pinned as the baseline: `kiln clean` keeps it without `--remove-baseline` \
-."
+                    "Pinned as the baseline: `kiln clean` keeps it without \
+                     `--remove-baseline`."
                 );
             }
             ExitCode::Ok
@@ -303,10 +303,10 @@ fn headroom(ctx: &Context) -> Option<String> {
         "\x1b[1;33mwarning\x1b[0m {} free where a build of this image wants about {}.\n\
          \x20         {}\n\
          \x20         `kiln clean` frees old generations and trims the artifact cache.",
-        disk::human(space.free),
-        disk::human(needed),
+        crate::fmt::bytes(space.free),
+        crate::fmt::bytes(needed),
         match previous {
-            Some(size) => format!("The last generation is {}.", disk::human(size)),
+            Some(size) => format!("The last generation is {}.", crate::fmt::bytes(size)),
             None => "No previous generation to measure, so this is an estimate.".to_string(),
         }
     ))
@@ -343,14 +343,22 @@ fn describe(report: &assemble::Report, verbose: bool) {
     for ran in &report.scripts.ran {
         let n = ran.changeset.wrote.len();
         let deleted = ran.changeset.deleted.len();
-        print!("  script {:<24} wrote {n} path{}", ran.name, plural(n));
+        print!(
+            "  script {:<24} wrote {n} path{}",
+            ran.name,
+            crate::fmt::plural(n)
+        );
         if deleted > 0 {
             print!(", removed {deleted}");
         }
         println!();
         if verbose {
             for written in &ran.changeset.wrote {
-                println!("    {:<52}{}", written.path, size(written.bytes));
+                println!(
+                    "    {:<52}{}",
+                    written.path,
+                    crate::fmt::bytes(written.bytes)
+                );
             }
             for path in &ran.changeset.deleted {
                 println!("    {path} (removed)");
@@ -372,11 +380,6 @@ fn describe(report: &assemble::Report, verbose: bool) {
     for note in &report.scripts.notes {
         eprintln!("\x1b[1;33mwarning\x1b[0m {note}");
     }
-    for note in &report.files.notes {
-        if verbose {
-            println!("  note: {note}");
-        }
-    }
     if verbose {
         for call in &report.shimmed {
             println!("  shimmed: {call}");
@@ -384,32 +387,6 @@ fn describe(report: &assemble::Report, verbose: bool) {
         for hook in &report.hooks_shadowed {
             println!("  shadowed hook: {hook}");
         }
-    }
-}
-
-fn plural(n: usize) -> &'static str {
-    if n == 1 {
-        ""
-    } else {
-        "s"
-    }
-}
-
-/// Sizes are for the eye, not for arithmetic: a locale archive is the reason
-/// this prints one at all, and `19293696` does not read as
-/// "that is most of what this script did".
-fn size(bytes: u64) -> String {
-    const UNITS: [&str; 4] = ["B", "KiB", "MiB", "GiB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} B")
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
     }
 }
 

@@ -123,6 +123,8 @@ bottom ones need root and run only in privileged CI containers.
 - `kiln-manifest` — the canonical IR, its hand-written canonical encoding, and `config_id`.
   No dependency on `kiln-config`.
 - `kiln-cli` — bin `kiln`. Hand-written argument parsing; the surface is small and fixed.
+  `args.rs` holds the one list of verbs and the table of flags each takes (an unlisted flag is
+  an error, with a suggestion); `fmt.rs` holds the renderers more than one command needs.
 - `kiln-alpm` — libalpm: solver + transaction, including `.pkg.tar.zst` files loaded from
   disk, and the `owns`/`installed_package` queries behind `kiln owns` and `kiln why`.
 - `kiln-resolve` — `BuildPlan`, `plan_id`.

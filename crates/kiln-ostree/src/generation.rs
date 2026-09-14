@@ -153,7 +153,7 @@ impl Metadata {
         let record = dict
             .lookup_value(&format!("{KEY_PREFIX}record"), None)
             .and_then(|v| v.get::<Vec<u8>>())
-            .and_then(|packed| decompress(&packed).ok())
+            .and_then(|packed| decompress("kiln.record", &packed).ok())
             .and_then(|json| Record::parse(&json).ok());
 
         // Same tolerance, same reason: a generation built by a Kiln that did
@@ -162,7 +162,7 @@ impl Metadata {
         let manifest = dict
             .lookup_value(&format!("{KEY_PREFIX}manifest"), None)
             .and_then(|v| v.get::<Vec<u8>>())
-            .and_then(|packed| decompress(&packed).ok())
+            .and_then(|packed| decompress("kiln.manifest", &packed).ok())
             .and_then(|json| serde_json::from_str::<Manifest>(&json).ok());
 
         Ok(Metadata {
@@ -204,15 +204,19 @@ pub fn compress(key: &str, bytes: &[u8]) -> Result<Vec<u8>> {
     })
 }
 
-pub fn decompress(bytes: &[u8]) -> Result<String> {
+/// The inverse. `key` names which blob, for the same reason `compress` takes
+/// one: both the record and the manifest come through here, and "the build
+/// record would not decompress" about the manifest sends the reader to the
+/// wrong place.
+pub fn decompress(key: &str, bytes: &[u8]) -> Result<String> {
     let out = zstd::decode_all(bytes).map_err(|source| Error::Io {
-        doing: "decompressing the build record from",
-        path: "kiln.record".into(),
+        doing: "decompressing the metadata blob",
+        path: key.into(),
         source,
     })?;
     String::from_utf8(out).map_err(|e| Error::Io {
-        doing: "decoding the build record from",
-        path: "kiln.record".into(),
+        doing: "decoding the metadata blob",
+        path: key.into(),
         source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
     })
 }

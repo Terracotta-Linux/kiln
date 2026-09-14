@@ -1,8 +1,8 @@
 //! What the merge algebra needs to know about the schema, and nothing more.
 //!
-//! "Array-of-table entries merge by their identity key —
-//! `target` for files, `name` for the rest." Merge is otherwise generic, so the
-//! identity keys live here as data rather than being spread through the code.
+//! Array-of-table entries merge by their identity key — `target` for files,
+//! `name` for the rest. Merge is otherwise generic, so the identity keys live
+//! here as data rather than being spread through the code.
 
 /// How one array-valued key merges.
 pub struct ListSpec {
@@ -54,10 +54,14 @@ pub const LISTS: &[ListSpec] = &[
 ];
 
 /// Keys whose value is a table of names the *user* chooses, so the schema can
-/// enumerate the key but never its contents. `deny_unknown_fields` has to stop
-/// at one of these, and `kiln explain kernel.modules` has to call an empty one
-/// "empty" rather than "unset" — a map that nothing wrote to is not the same
-/// shape of nothing as a scalar nobody set.
+/// enumerate the key but never its contents. `kernel.modules.options` maps a
+/// module name to an option string.
+///
+/// Two things follow from being one of these, and they used to be two
+/// predicates that could disagree: the unknown-key check has to stop here
+/// rather than walk in, and `kiln explain kernel.modules.options` has to call
+/// an empty one "empty" rather than "unset" — a map that nothing wrote to is
+/// not the same shape of nothing as a scalar nobody set.
 pub const MAPS: &[&str] = &["kernel.modules.options"];
 
 pub fn is_map(path: &str) -> bool {
@@ -136,12 +140,6 @@ pub fn entry_keys(path: &str) -> Option<&'static [&'static str]> {
         "script" => &["name", "source", "content", "after"],
         _ => return None,
     })
-}
-
-/// `kernel.modules.options` is a free-form map of module name to option string,
-/// so its keys cannot be validated against a list.
-pub fn is_open_map(path: &str) -> bool {
-    path == "kernel.modules.options"
 }
 
 /// The type a scalar key takes. Checking this in the *structure* phase rather

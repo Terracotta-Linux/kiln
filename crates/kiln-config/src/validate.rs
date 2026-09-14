@@ -14,8 +14,14 @@ use kiln_manifest::*;
 use std::collections::BTreeMap;
 
 /// Targets Kiln will not write to, and why. `/etc` and `/usr` are the whole
-/// legitimate surface: everything else is either owned by OSTree, drained at
-/// build time, or a runtime mount.
+/// legitimate surface, plus the seeded ones below: everything else is either
+/// owned by OSTree, drained at build time, or a runtime mount.
+///
+/// This has to agree with `kiln_image::overlay::route`, which answers the same
+/// question at assembly time and cannot be called from here — it lives in a
+/// crate that runs as root, several layers down. A target the two disagree
+/// about passes `kiln check` and fails in the middle of a build, which is the
+/// failure the plan/realize split exists to move earlier.
 const FORBIDDEN_TARGETS: &[(&str, &str)] = &[
     (
         "/boot",
@@ -64,11 +70,11 @@ const FORBIDDEN_TARGETS: &[(&str, &str)] = &[
 /// done. `/opt` and `/srv` are relocated into `/var` before the drain, so they
 /// take the same route.
 ///
-/// Not an error, which is what this used to be. This table is explicit that
-/// these are accepted "with an informational note", and `kiln-image`'s
-/// `overlay::route` has always implemented exactly that — the refusal here made
-/// that path unreachable, and made the one obvious way to ship a default
-/// database or a seed file impossible to express.
+/// Accepted with a note rather than refused: a seed file is the one obvious way
+/// to ship a default database or a default config, and refusing it made that
+/// impossible to express. The note is emitted here, at the line that wrote it;
+/// `kiln_image::overlay::route` performs the routing and says nothing, so the
+/// user hears it once.
 const SEEDED_TARGETS: &[(&str, &str)] = &[
     (
         "/var",
@@ -106,8 +112,9 @@ const UNIT_SUFFIXES: &[&str] = &[
 /// mean what they look like, which the caller surfaces as warnings.
 ///
 /// Notes are separate from `errs` rather than a severity inside it because
-/// `Errors::into_result` turns a non-empty set into a failure. A note that
-/// failed the build would not be a note.
+/// `Errors::into_result` keeps only the error arm: a set that succeeds is
+/// dropped, warnings and all. Returning them beside the manifest is what lets
+/// a note be a note rather than a build failure.
 pub fn validate(merged: &Merged, loader: &mut Loader) -> Result<(Manifest, Errors), Errors> {
     let mut v = Validator {
         errs: Errors::new(),
@@ -116,8 +123,7 @@ pub fn validate(merged: &Merged, loader: &mut Loader) -> Result<(Manifest, Error
         digests: BTreeMap::new(),
         item_origins: BTreeMap::new(),
     };
-    let m = v.manifest(&merged.doc, merged.origins.clone());
-    let mut m = m;
+    let mut m = v.manifest(&merged.doc, merged.origins.clone());
     m.local_digests = std::mem::take(&mut v.digests);
     let notes = std::mem::take(&mut v.notes);
     v.errs.into_result((m, notes))
@@ -355,7 +361,7 @@ impl Validator<'_> {
             };
             let key = self.field(e, "key");
             if let Some(k) = &key {
-                self.hash_local(k, e, "repos.extra key");
+                self.hash_local(k, e, "key", "repos.extra key");
             }
             self.note_item("repos.extra", &name, e, "name");
             extra.insert(name.clone(), ExtraRepo { name, server, key });
@@ -393,7 +399,7 @@ impl Validator<'_> {
             let Some(path) = self.required(e, "path", "a PKGBUILD") else {
                 continue;
             };
-            self.hash_local(&path, e, "PKGBUILD directory");
+            self.hash_local(&path, e, "path", "PKGBUILD directory");
             self.note_item("packages.build", &path, e, "path");
             build.insert(path);
         }
@@ -403,7 +409,8 @@ impl Validator<'_> {
             let Some(path) = self.required(e, "path", "a local package") else {
                 continue;
             };
-            // "an optional integrity guarantee is not a guarantee".
+            // Required, not optional: an optional integrity guarantee is not
+            // a guarantee.
             let Some(sha256) = self.required(e, "sha256", "a local package") else {
                 continue;
             };
@@ -423,7 +430,7 @@ impl Validator<'_> {
                 // frontend never touches the network. `sha256` is what carries
                 // its identity into `config_id` instead of a local digest.
             } else {
-                self.hash_local(&path, e, "local package");
+                self.hash_local(&path, e, "path", "local package");
             }
             if sha256.contains("://") && !is_url(&sha256) {
                 self.errs.push(
@@ -475,7 +482,8 @@ impl Validator<'_> {
             ) else {
                 continue;
             };
-            self.hash_local(&source, e, "kernel module source");
+            self.check_pkgname(e, &name, "a kernel module");
+            self.hash_local(&source, e, "source", "kernel module source");
             self.note_item("kernel.module", &name, e, "name");
             out_of_tree.insert(name.clone(), OutOfTreeModule { name, source });
         }
@@ -488,9 +496,10 @@ impl Validator<'_> {
             let Some(name) = self.required(e, "name", "a DKMS module") else {
                 continue;
             };
+            self.check_pkgname(e, &name, "a DKMS module");
             let source = self.field(e, "source");
             if let Some(source) = &source {
-                self.hash_local(source, e, "DKMS module source");
+                self.hash_local(source, e, "source", "DKMS module source");
             }
             self.note_item("kernel.dkms", &name, e, "name");
             dkms.insert(name.clone(), DkmsModule { name, source });
@@ -561,7 +570,11 @@ impl Validator<'_> {
                         )
                         .label(&n.origin, "not available")
                         .help(
-                            "the sysroot pivot needs an initramfs hook, and upstream ostree                              ships one for dracut (`50ostree`, in the `ostree` package) and                              none for mkinitcpio. Writing and maintaining a boot-critical                              hook is not something Kiln does; remove this                              line to get dracut.",
+                            "the sysroot pivot needs an initramfs hook, and upstream ostree \
+                             ships one for dracut (`50ostree`, in the `ostree` package) and \
+                             none for mkinitcpio. Writing and maintaining a boot-critical \
+                             hook is not something Kiln does; remove this line to get \
+                             dracut.",
                         ),
                     );
                 }
@@ -617,7 +630,7 @@ impl Validator<'_> {
             let content = self.field(e, "content");
             self.check_source_xor_content(e, source.as_deref(), content.as_deref(), "unit");
             if let Some(s) = &source {
-                self.hash_local(s, e, "unit file");
+                self.hash_local(s, e, "source", "unit file");
             }
             let enable = e
                 .as_table()
@@ -648,8 +661,17 @@ impl Validator<'_> {
             ("systemd.mask", &state.mask),
         ] {
             for n in names {
-                if let Some(node) = self.node(doc, list) {
-                    self.check_unit_name_at(n, &node.origin);
+                // `str_set` recorded each element's own span; underlining
+                // `nvidai.service` is the whole point of having kept it. The
+                // array's origin is the fallback for a name that reached the
+                // set some other way.
+                let origin = self
+                    .item_origins
+                    .get(&format!("{list}/{n}"))
+                    .cloned()
+                    .or_else(|| self.node(doc, list).map(|node| node.origin.clone()));
+                if let Some(origin) = origin {
+                    self.check_unit_name_at(n, &origin);
                 }
             }
         }
@@ -696,7 +718,7 @@ impl Validator<'_> {
             let content = self.field(e, "content");
             self.check_source_xor_content(e, source.as_deref(), content.as_deref(), "file");
             if let Some(s) = &source {
-                self.hash_local(s, e, "file source");
+                self.hash_local(s, e, "source", "file source");
             }
             let mode = self.mode(e);
             self.note_item("file", &target, e, "target");
@@ -713,8 +735,8 @@ impl Validator<'_> {
         out
     }
 
-    /// "Modes are strings. TOML has no octal literal and `0755` would be a
-    /// parse error or, worse, decimal 755."
+    /// Modes are strings. TOML has no octal literal, so `0755` would be a parse
+    /// error or, worse, decimal 755.
     fn mode(&mut self, entry: &Node) -> Option<u32> {
         let e = entry.as_table()?.get("mode")?;
         let text = match &e.value.kind {
@@ -736,9 +758,7 @@ impl Validator<'_> {
         };
         let valid = {
             let digits = text.strip_prefix('0').unwrap_or(&text);
-            (3..=4).contains(&digits.len())
-                && digits.chars().all(|c| ('0'..='7').contains(&c))
-                && !text.is_empty()
+            (3..=4).contains(&digits.len()) && digits.bytes().all(|c| (b'0'..=b'7').contains(&c))
         };
         if !valid {
             self.errs.push(
@@ -797,6 +817,42 @@ impl Validator<'_> {
                 return;
             }
         }
+
+        // Everything the table did not name. The top-level directory decides:
+        // a target lands somewhere in the image or it does not, and
+        // `overlay::route` refuses the same set at assembly time.
+        let top = target[1..].split('/').next().unwrap_or("");
+        let has_a_name = target[1..].contains('/') && !target.ends_with('/');
+        let why = if !has_a_name {
+            Some(
+                "nothing is written at the top level of the image. Give the file a \
+                 directory: `/etc/…` or `/usr/…`"
+                    .to_string(),
+            )
+        } else if top == "usr" && target[5..].starts_with("etc") {
+            Some(format!(
+                "/usr/etc is where Kiln puts /etc, not somewhere to write. Write \
+                 `/{}` instead",
+                &target[5..]
+            ))
+        } else if !matches!(top, "usr" | "etc" | "var" | "opt" | "srv") {
+            Some(format!(
+                "/{top} is not a directory the image has. Image content lives under \
+                 /usr and /etc; /var, /opt and /srv are seeded"
+            ))
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            self.errs.push(
+                Diag::error(
+                    "kiln::semantic",
+                    format!("Kiln cannot ship a file to `{target}`"),
+                )
+                .label(at, "here")
+                .help(why),
+            );
+        }
     }
 
     /// A file with neither is empty by accident; a file with both is ambiguous.
@@ -837,7 +893,7 @@ impl Validator<'_> {
             let content = self.field(e, "content");
             self.check_source_xor_content(e, source.as_deref(), content.as_deref(), "script");
             if let Some(s) = &source {
-                self.hash_local(s, e, "script");
+                self.hash_local(s, e, "source", "script");
             }
             let after = match self.field(e, "after").as_deref() {
                 None | Some("files") => ScriptPhase::Files,
@@ -866,15 +922,77 @@ impl Validator<'_> {
     }
 
     fn system(&mut self, doc: &Node) -> SystemDefaults {
+        let timezone = self.string(doc, "system.timezone", "UTC");
+        self.check_timezone(doc, &timezone);
         SystemDefaults {
             hostname: self.opt_string(doc, "system.hostname"),
-            timezone: self.string(doc, "system.timezone", "UTC"),
+            timezone,
             keymap: self.string(doc, "system.keymap", "us"),
             locale: Locale {
                 lang: self.string(doc, "system.locale.lang", "C.UTF-8"),
                 generate: self.str_set(doc, "system.locale.generate"),
             },
         }
+    }
+
+    /// A name that becomes a `pkgname` in a recipe Kiln writes.
+    ///
+    /// `[[kernel.module]]` and `kernel.dkms` names are interpolated straight
+    /// into generated bash (`kiln_build::module`, `kiln_build::dkms`), so a
+    /// name with a space or a `$` in it produces a recipe that fails somewhere
+    /// unrelated. pacman's own `pkgname` charset is the right limit, and it is
+    /// checkable here where there is a line to point at.
+    fn check_pkgname(&mut self, entry: &Node, name: &str, what: &str) {
+        let legal = !name.is_empty()
+            && !name.starts_with(['-', '.'])
+            && name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "@._+-".contains(c));
+        if legal {
+            return;
+        }
+        let at = self.at(entry, "name").clone();
+        self.errs.push(
+            Diag::error(
+                "kiln::semantic",
+                format!("`{name}` is not a usable package name"),
+            )
+            .label(&at, "here")
+            .help(format!(
+                "Kiln builds {what} as a package, so its name has to be one: lower-case \
+                 letters, digits and `@ . _ + -`, not starting with `-` or `.`"
+            )),
+        );
+    }
+
+    /// The *shape* of a zone name, which is all the frontend can know.
+    ///
+    /// Whether `Europe/Lisbon` exists is a question about the `tzdata` in the
+    /// image, and `kiln_image::system::install` asks it there — against the
+    /// staging root rather than the builder's own zoneinfo, which is a
+    /// different set of files on a host that does not track the same release.
+    /// What is checkable here is that the value is a relative path with no
+    /// escape in it, which is also what stops `system.timezone` from reaching
+    /// through the symlink it becomes.
+    fn check_timezone(&mut self, doc: &Node, tz: &str) {
+        let bad = tz.is_empty()
+            || tz.starts_with('/')
+            || tz.ends_with('/')
+            || tz.split('/').any(|c| c.is_empty() || c == "." || c == "..");
+        if !bad {
+            return;
+        }
+        let Some(n) = self.node(doc, "system.timezone") else {
+            return;
+        };
+        self.errs.push(
+            Diag::error("kiln::semantic", format!("`{tz}` is not a time zone name"))
+                .label(&n.origin, "here")
+                .help(
+                    "a zone is a relative path under the zoneinfo database, like \
+                 `Europe/Lisbon` or `UTC`",
+                ),
+        );
     }
 
     /// `/etc/hostname` and `/etc/locale.gen` are the two `[system]` targets
@@ -926,15 +1044,14 @@ impl Validator<'_> {
 
     /// Resolve a `source`/`path` against the config root, enforce the security
     /// boundary, and fold its digest into the configuration identity.
-    fn hash_local(&mut self, rel: &str, entry: &Node, what: &str) {
+    /// `field` is the key of `entry` the path was read from, so the diagnostic
+    /// underlines it. Passed in rather than inferred: every caller already
+    /// knows, and probing `source`/`path`/`key` in order attributed the error
+    /// to the wrong key whenever an entry carried more than one of them.
+    fn hash_local(&mut self, rel: &str, entry: &Node, field: &str, what: &str) {
         if self.digests.contains_key(rel) {
             return;
         }
-        let field = ["source", "path", "key"]
-            .iter()
-            .find(|k| entry.as_table().is_some_and(|t| t.contains_key(**k)))
-            .copied()
-            .unwrap_or("source");
         let at = self.at(entry, field).clone();
         let joined = self.loader.config_root.join(rel.trim_end_matches('/'));
         let resolved = match joined.canonicalize() {
@@ -967,12 +1084,42 @@ impl Validator<'_> {
     }
 }
 
+/// `YYYY-MM-DD`, with the month and day in range.
+///
+/// Checking the shape alone let `2026-13-45` through the frontend, where there
+/// is a span to underline, and out the other side into resolution — which
+/// turns it into an Archive URL that serves nothing and a libalpm "failed to
+/// retrieve some files" with no line number attached. Day 31 in a 30-day month
+/// is left to the Archive: a calendar here would be the only place in the
+/// frontend that knows what year it is.
 fn is_iso_date(s: &str) -> bool {
     let b = s.as_bytes();
-    b.len() == 10
-        && b[4] == b'-'
-        && b[7] == b'-'
-        && b.iter()
-            .enumerate()
-            .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return false;
+    }
+    if !b
+        .iter()
+        .enumerate()
+        .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+    {
+        return false;
+    }
+    let num = |from: usize, to: usize| s[from..to].parse::<u32>().unwrap_or(0);
+    (1..=12).contains(&num(5, 7)) && (1..=31).contains(&num(8, 10))
+}
+
+#[cfg(test)]
+mod date_tests {
+    use super::is_iso_date;
+
+    #[test]
+    fn a_date_shaped_nonsense_is_not_a_date() {
+        assert!(is_iso_date("2026-08-24"));
+        assert!(is_iso_date("2026-01-01"));
+        assert!(!is_iso_date("2026-13-45"));
+        assert!(!is_iso_date("2026-00-01"));
+        assert!(!is_iso_date("2026-01-00"));
+        assert!(!is_iso_date("2026-8-24"));
+        assert!(!is_iso_date("latest"));
+    }
 }

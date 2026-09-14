@@ -183,10 +183,12 @@ pub struct Placed {
 pub struct Applied {
     pub placed: Vec<Placed>,
     /// The `C` lines written to `usr/lib/tmpfiles.d/kiln.conf`, in order.
+    ///
+    /// A `/var` target is realized as a *default* rather than as a file, which
+    /// is a surprise worth saying out loud — but it is said by the frontend,
+    /// at the line that wrote the target (`SEEDED_TARGETS`), rather than again
+    /// here where there is no file or line to name.
     pub tmpfiles: Vec<String>,
-    /// a `/var` target is realized as a default rather than as a file,
-    /// which is a surprise worth saying out loud rather than a problem.
-    pub notes: Vec<String>,
 }
 
 /// Realize every `[[file]]` entry into the staging root.
@@ -215,10 +217,6 @@ pub fn apply(
 
         if let Route::Factory { restores, .. } = &route {
             applied.tmpfiles.push(format!("C {restores} - - - -"));
-            applied.notes.push(format!(
-                "{target} is under /var, which is not in the image: it becomes a \
-                 default restored on a machine that has none"
-            ));
         }
 
         let items = match materialize(config_root, entry, route.at()) {

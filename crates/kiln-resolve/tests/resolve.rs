@@ -8,7 +8,10 @@ use kiln_resolve::{ContentRef, EnableState, ResolvedInput};
 #[test]
 fn resolves_the_smallest_bootable_image() {
     let plan = plan("resolve-bootable", BOOTABLE);
-    let names: Vec<&str> = plan.packages().filter_map(|i| i.package_name()).collect();
+    let names: Vec<&str> = plan
+        .repo_packages()
+        .filter_map(|i| i.package_name())
+        .collect();
     assert_eq!(names, ["fixture-init", "fixture-linux"]);
     assert_eq!(plan.image.ostree_ref(), "kiln/fixture/x86_64");
 }
@@ -143,7 +146,7 @@ fn masking_beats_disabling_beats_enabling() {
 #[test]
 fn every_resolved_package_carries_its_filename_and_checksum() {
     let plan = plan("resolve-checksums", BOOTABLE);
-    for input in plan.packages() {
+    for input in plan.repo_packages() {
         match input {
             ResolvedInput::RepoPackage {
                 name,

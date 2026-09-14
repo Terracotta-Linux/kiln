@@ -520,17 +520,24 @@ fn walk(base: &Path, at: &Path, out: &mut Vec<Change>) -> Result<()> {
             walk(base, &path, out)?;
             continue;
         }
-        let bytes = std::fs::read(&path).map_err(tree::io("reading", &path))?;
         out.push(Change::File {
             rel,
             mode: md.permissions().mode() & 0o7777,
             uid: md.uid(),
             gid: md.gid(),
             bytes: md.len(),
-            digest: Hash::of(&bytes),
+            digest: hash_file(&path)?,
         });
     }
     Ok(())
+}
+
+/// blake3 of a file, streamed. A script is free to write something large — a
+/// locale archive, a firmware blob — and reading it whole just to hash it makes
+/// the builder's resident set track the biggest thing any script produced.
+fn hash_file(path: &Path) -> Result<Hash> {
+    let file = std::fs::File::open(path).map_err(tree::io("reading", path))?;
+    Hash::of_reader(std::io::BufReader::new(file)).map_err(tree::io("reading", path))
 }
 
 /// `trusted.overlay.opaque` — set when a directory was removed and recreated,

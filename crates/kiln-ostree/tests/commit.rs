@@ -253,7 +253,10 @@ fn the_record_round_trips_through_compression() {
     let json = record.to_json();
     let packed = generation::compress("kiln.record", json.as_bytes()).unwrap();
     assert!(packed.len() < json.len(), "compression should compress");
-    assert_eq!(generation::decompress(&packed).unwrap(), json);
+    assert_eq!(
+        generation::decompress("kiln.record", &packed).unwrap(),
+        json
+    );
 }
 
 /// A record that will not decompress is a broken commit, not a reason for

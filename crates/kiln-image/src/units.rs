@@ -1,4 +1,4 @@
-//! Step 7: unit state. step 7.
+//! Assembly step 7: unit state.
 //!
 //! Enablement is realized as **preset files**, not by running `systemctl enable`
 //! in a chroot. `systemctl preset-all --root=<staging>` materializes the

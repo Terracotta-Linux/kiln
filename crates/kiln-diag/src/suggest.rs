@@ -1,6 +1,8 @@
-//! "did you mean" support. `enabeld = true` must be an error
-//! that says `did you mean `enabled`?`, not a silently ignored key. This single
-//! decision eliminates the most common failure mode of declarative TOML systems.
+//! "did you mean" support.
+//!
+//! `enabeld = true` has to be an error that says ``did you mean `enabled`?``,
+//! not a silently ignored key. That one decision removes the most common
+//! failure mode of declarative TOML systems.
 
 /// Levenshtein distance, iterative with a single row.
 fn distance(a: &str, b: &str) -> usize {
@@ -34,9 +36,10 @@ pub fn nearest<'a>(input: &str, candidates: impl IntoIterator<Item = &'a str>) -
         .into_iter()
         .map(|c| (distance(input, c), c))
         .filter(|(d, _)| *d <= limit)
-        // Ties are common (`enabeld` is two edits from both `enable` and
-        // `enabled`). Break them on closeness in length, then lexicographically
-        // so the suggestion never depends on iteration order.
+        // Ties happen — `flase` is one edit from `false` and from `flush`
+        // among longer key sets. Break them on closeness in length, then
+        // lexicographically, so the suggestion never depends on iteration
+        // order.
         .min_by_key(|(d, c)| (*d, c.len().abs_diff(input.len()), *c))
         .map(|(_, c)| c)
 }

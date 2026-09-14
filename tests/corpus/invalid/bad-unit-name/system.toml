@@ -1,7 +1,7 @@
 kiln = 1
 
 [systemd]
-enable = ["NetworkManager"]
+enable = ["sshd.service", "NetworkManager", "fstrim.timer"]
 
 [[systemd.unit]]
 name    = "backup.tmier"

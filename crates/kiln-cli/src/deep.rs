@@ -203,7 +203,7 @@ fn resolve_aur(
     if !outcome.ok() {
         return Err(format!(
             "`makepkg --verifysource` failed:\n{}",
-            tail(&outcome.stderr, 12)
+            kiln_sandbox::tail(&outcome.stderr, 12)
         ));
     }
 
@@ -250,7 +250,7 @@ fn resolve_recipe(
     // here instead.
     let work = scratch.join(path.replace('/', "_"));
     let _ = std::fs::remove_dir_all(&work);
-    copy_tree(&source, &work)?;
+    crate::fmt::copy_tree(&source, &work)?;
 
     let before = read_recipe(&work, path, manifest, sandbox)?;
     let spec = builder.fetch_spec(&Recipe {
@@ -263,7 +263,7 @@ fn resolve_recipe(
     if !outcome.ok() {
         return Err(format!(
             "`makepkg --verifysource` failed:\n{}",
-            tail(&outcome.stderr, 12)
+            kiln_sandbox::tail(&outcome.stderr, 12)
         ));
     }
 
@@ -371,32 +371,6 @@ fn revision(path: &Path) -> Option<String> {
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .filter(|s| !s.is_empty())
-}
-
-fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
-    if let Some(parent) = to.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("creating {}: {e}", parent.display()))?;
-    }
-    let out = std::process::Command::new("cp")
-        .arg("-a")
-        .arg(from)
-        .arg(to)
-        .output()
-        .map_err(|e| format!("running cp: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "copying {} : {}",
-            from.display(),
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    Ok(())
-}
-
-fn tail(text: &str, n: usize) -> String {
-    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-    lines[lines.len().saturating_sub(n)..].join("\n")
 }
 
 /// What the caller does with the answer. `kiln check` exits 10 when

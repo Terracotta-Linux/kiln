@@ -46,18 +46,8 @@ impl SourceFile {
     pub fn line_col(&self, offset: usize) -> (usize, usize) {
         let upto = &self.text[..offset.min(self.text.len())];
         let line = upto.matches('\n').count() + 1;
-        let col = upto.rsplit('\n').next().map_or(0, str::chars_count_) + 1;
+        let col = upto.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1;
         (line, col)
-    }
-}
-
-// Tiny extension so `line_col` reads cleanly; `str::chars().count()` inline is noisier.
-trait CharsCount {
-    fn chars_count_(&self) -> usize;
-}
-impl CharsCount for str {
-    fn chars_count_(&self) -> usize {
-        self.chars().count()
     }
 }
 
@@ -160,7 +150,10 @@ pub struct Provenance {
     /// Nearest first. Values the effective one displaced (scalar), or the rest
     /// of the contributors (list).
     pub others: Vec<Origin>,
-    /// Whether this key unions (rule 1) rather than overriding (rule 2).
+    /// Whether this key *unions* across files rather than being overridden by
+    /// the nearest one. A list has contributors, not a winner, and `kiln
+    /// explain` must not call that "overriding" — see `kiln_config::merge` for
+    /// the algebra.
     pub is_list: bool,
 }
 

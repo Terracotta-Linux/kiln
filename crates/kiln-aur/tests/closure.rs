@@ -300,5 +300,11 @@ fn an_absurd_dependency_chain_is_refused() {
         &nothing_official,
     )
     .unwrap_err();
-    assert!(err.to_string().contains("more than 10 deep"), "{err}");
+    assert!(
+        err.to_string().contains("more than 10 levels deep"),
+        "{err}"
+    );
+    // The cap is the number the message names: `link10` is level ten and is
+    // where it stops, rather than one level past it.
+    assert!(err.to_string().contains("reached 10"), "{err}");
 }

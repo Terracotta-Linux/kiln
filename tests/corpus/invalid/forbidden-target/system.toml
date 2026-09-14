@@ -11,3 +11,18 @@ content = "x\n"
 [[file]]
 target  = "/etc/locale.conf"
 content = "LANG=en_US.UTF-8\n"
+
+# /usr/etc is the *result* of normalization, not somewhere to write, and
+# /nonsense is not a directory the image has. Both used to pass the frontend
+# and fail in the middle of a build.
+[[file]]
+target  = "/usr/etc/motd"
+content = "x\n"
+
+[[file]]
+target  = "/nonsense/thing"
+content = "x\n"
+
+[[file]]
+target  = "/toplevel"
+content = "x\n"

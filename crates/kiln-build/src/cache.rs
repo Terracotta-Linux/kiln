@@ -13,7 +13,12 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct Cache {
+    /// `<state>/cache/build`.
     root: PathBuf,
+    /// Kept rather than recovered from `root` by walking up two parents:
+    /// `log_path` needs it, and deriving it from the entry layout means
+    /// changing that layout silently moves the logs.
+    state: PathBuf,
 }
 
 /// What a cache lookup found, kept distinct from `Option` so that callers — and
@@ -26,11 +31,18 @@ pub enum Lookup {
 }
 
 impl Cache {
-    /// `<state_dir>/cache/build`.
+    /// Artifacts live in `<state_dir>/cache/build`, logs in `<state_dir>/logs`.
     pub fn new(state_dir: impl AsRef<Path>) -> Cache {
+        let state = state_dir.as_ref().to_path_buf();
         Cache {
-            root: state_dir.as_ref().join("cache/build"),
+            root: state.join("cache/build"),
+            state,
         }
+    }
+
+    /// Where a key's artifacts live, for a diagnostic that has to name it.
+    pub fn entry_path(&self, key: &Hash) -> PathBuf {
+        self.entry(key)
     }
 
     fn entry(&self, key: &Hash) -> PathBuf {
@@ -85,13 +97,17 @@ impl Cache {
 
         std::fs::remove_dir_all(&final_dir).ok();
         std::fs::rename(&staging, &final_dir)?;
-        Ok(self.expect_hit(key))
-    }
-
-    fn expect_hit(&self, key: &Hash) -> Vec<PathBuf> {
         match self.lookup(key) {
-            Lookup::Hit(paths) => paths,
-            Lookup::Miss => Vec::new(),
+            Lookup::Hit(paths) => Ok(paths),
+            // The rename succeeded and the artifact list was not empty, so the
+            // entry has to be readable. Returning an empty `Vec` here would
+            // report a successful store of nothing, which is the same silent
+            // package-dropping `lookup` refuses to serve on the way in.
+            Lookup::Miss => Err(std::io::Error::other(format!(
+                "stored {} artifact(s) under {} and then found none there",
+                artifacts.len(),
+                final_dir.display()
+            ))),
         }
     }
 
@@ -99,14 +115,9 @@ impl Cache {
     /// is printed on failure, so it is part of the interface rather than an
     /// implementation detail.
     pub fn log_path(&self, key: &Hash) -> PathBuf {
-        self.root
-            .parent()
-            .and_then(Path::parent)
-            .unwrap_or(&self.root)
-            .join("logs")
-            .join(format!(
-                "{}.log",
-                key.0.strip_prefix("b3:").unwrap_or(&key.0)
-            ))
+        self.state.join("logs").join(format!(
+            "{}.log",
+            key.0.strip_prefix("b3:").unwrap_or(&key.0)
+        ))
     }
 }

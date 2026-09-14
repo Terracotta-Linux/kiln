@@ -244,6 +244,19 @@ impl Session {
         self.alpm.syncdbs().find_satisfier(dep).is_some()
     }
 
+    /// The version a registered repository holds for `name`, without solving.
+    ///
+    /// By name rather than by `provides`: the caller is asking about one
+    /// specific package, and something else that happens to satisfy the name is
+    /// not an answer to that question.
+    pub fn sync_version(&self, name: &str) -> Option<String> {
+        self.alpm
+            .syncdbs()
+            .into_iter()
+            .find_map(|db| db.pkg(name).ok())
+            .map(|p| p.version().to_string())
+    }
+
     /// Every package name the registered repositories hold, sorted and
     /// deduplicated. Built only when a resolution has already failed and a
     /// "did you mean" suggestion needs a namespace to draw from — it is a few

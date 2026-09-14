@@ -1,9 +1,7 @@
 //! `kiln-aur` — AUR resolution.
 //!
-//! > The AUR is the largest security and reproducibility hole in the design, so
-//! > it is handled with visible seams.
-//!
-//! The seams, concretely:
+//! The AUR is the largest security and reproducibility hole Kiln has, so it is
+//! handled with visible seams:
 //!
 //! - **Identity is the git commit**, not the version string, so a force-push
 //!   with an unchanged `pkgver` is a detected change.

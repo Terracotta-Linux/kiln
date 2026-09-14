@@ -1,4 +1,4 @@
-//! UID pinning: steps 3 and 4b of assembly. step 3.
+//! UID pinning: assembly step 3, and the readback after step 4.
 //!
 //! Arch allocates service-account IDs in `sysusers.d` fragments and package
 //! scriptlets, first come first served. Nothing makes the order stable across

@@ -1,10 +1,10 @@
 //! What the isolation actually is.
 //!
-//! asks for tests that assert on the exact `SandboxSpec` — "that
-//! the build phase really has `Network::Disabled`". These go one step further
-//! and assert on the **argv each backend produces**, because a spec that says
-//! `Network::Disabled` and a backend that forgets `--unshare-net` is precisely
-//! the failure a spec-only test cannot see.
+//! A spec-only test would assert that the build phase really has
+//! `Network::Disabled`. These go one step further and assert on the **argv each
+//! backend produces**, because a spec that says `Network::Disabled` and a
+//! backend that forgets `--unshare-net` is precisely the failure a spec-only
+//! test cannot see.
 //!
 //! None of this needs root, a container, or the backends to be installed.
 
@@ -218,6 +218,24 @@ fn bubblewrap_refuses_limits_it_cannot_enforce() {
     // nspawn can, and says so in the argv rather than in a comment.
     assert!(render(&Nspawn::new("/tmp/s").argv(&s).unwrap())
         .contains("--property MemoryMax=2147483648"));
+}
+
+/// The same rule the other way round: nspawn mounts `/proc`, `/dev`, `/sys`,
+/// `/run` and `/tmp` itself and has no flag for one anywhere else, so a spec
+/// asking for a private tmpfs elsewhere is refused rather than quietly dropped.
+#[test]
+fn nspawn_refuses_a_kernel_filesystem_it_cannot_mount() {
+    let mut s = spec();
+    s.binds.push(kiln_sandbox::Bind {
+        source: std::path::PathBuf::new(),
+        target: std::path::PathBuf::from("/scratch"),
+        mode: kiln_sandbox::BindMode::TmpFs,
+    });
+    let err = Nspawn::new("/tmp/s").argv(&s).unwrap_err();
+    assert!(err.to_string().contains("/scratch"), "got: {err}");
+
+    // The five it does provide are satisfied, not refused.
+    assert!(Nspawn::new("/tmp/s").argv(&spec()).is_ok());
 }
 
 /// The reverse: an unprivileged user is bubblewrap's job, because nspawn's

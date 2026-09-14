@@ -1,4 +1,7 @@
-//! Step 9: kernel placement and the initramfs.
+//! Assembly step 9: kernel placement and the initramfs.
+//!
+//! The numbered steps inside this module are its own — "kernel step 2" is the
+//! second thing *this* step does, not assembly's step 2.
 //!
 //! The initramfs is generated **inside the staging root, against the staging
 //! root's kernel and modules** — never the host's. The host runs a different
@@ -64,13 +67,16 @@ pub fn find(root: &Path) -> Result<Kernel> {
              so there is nothing to boot"
                 .to_string(),
         )),
-        1 => Ok(Kernel {
-            moddir: format!("usr/lib/modules/{}", found[0]),
-            version: found.remove(0),
-        }),
+        1 => {
+            let version = found.remove(0);
+            Ok(Kernel {
+                moddir: format!("usr/lib/modules/{version}"),
+                version,
+            })
+        }
         // Two kernels mean two initramfs images, two BLS entries and a choice
-        // about which one boots — a real feature, and not one phase 2 has. Say
-        // so rather than picking the alphabetically first one.
+        // about which one boots — a real feature, and not one Kiln has. Say so
+        // rather than picking the alphabetically first one.
         _ => Err(tree::shape(format!(
             "the image contains {} kernels ({}); Kiln builds a single-kernel image",
             found.len(),
@@ -79,7 +85,7 @@ pub fn find(root: &Path) -> Result<Kernel> {
     }
 }
 
-/// Kernel step 2. On a current Arch this is a no-op — the `linux` package ships
+/// Kernel step 2 (of assembly step 9). On a current Arch this is a no-op — the `linux` package ships
 /// `vmlinuz` next to `pkgbase` already, and `/boot/vmlinuz-linux` is a pacman
 /// hook's *copy*. Kept as a fallback for a kernel package that
 /// does not, and deliberately not designed around.
@@ -220,7 +226,7 @@ pub fn initramfs_is_bootable(listing: &str) -> std::result::Result<(), String> {
     ))
 }
 
-/// Kernel step 6. OSTree owns `/boot`; the deployment's `/boot` comes from the
+/// Kernel step 6 (of assembly step 9). OSTree owns `/boot`; the deployment's `/boot` comes from the
 /// sysroot, and anything the transaction left in the staging root's is a
 /// conflict at commit time.
 ///

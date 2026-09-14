@@ -196,6 +196,11 @@ pub fn resolve(
     let declared = recipes::read_all(manifest, config_root, &mut problems);
     let modules = recipes::modules(manifest, &mut problems);
     let aur = aur::resolve(manifest, inputs.aur, &session, &mut problems);
+    let content_inputs: Vec<ResolvedInput> = files(manifest, &mut problems)
+        .into_iter()
+        .chain(units(manifest, &mut problems))
+        .chain(scripts(manifest, &mut problems))
+        .collect();
 
     // the exact versions of every build-time dependency. This is the
     // ingredient that makes the build cache correct rather than merely fast,
@@ -235,9 +240,7 @@ pub fn resolve(
     resolved.extend(locals);
     resolved.extend(aur.inputs);
     resolved.extend(build_inputs);
-    resolved.extend(files(manifest));
-    resolved.extend(units(manifest));
-    resolved.extend(scripts(manifest));
+    resolved.extend(content_inputs);
 
     let mut volatile = aur.volatile;
     volatile.extend(declared.iter().flat_map(volatile_sources));
@@ -332,7 +335,6 @@ fn bootability(manifest: &Manifest, solution: &kiln_alpm::Solution) -> Result<()
 /// > Including `makedep_evrs` in the key is what makes the cache *correct*
 /// > rather than merely fast — a package built against `gcc 15.1` is not the
 /// > same artifact as one built against `gcc 15.2`.
-#[allow(clippy::too_many_arguments)]
 fn build_keys(
     manifest: &Manifest,
     session: &mut Session,
@@ -495,15 +497,17 @@ fn build_sources(origin: &DkmsOrigin) -> dkms::Sources<'_> {
 /// discovers the same thing an hour later.
 fn dkms_version(
     manifest: &Manifest,
-    session: &mut Session,
+    session: &Session,
     aur: &[ResolvedInput],
     package: &str,
     problems: &mut Errors,
 ) -> Option<(String, DkmsSource)> {
-    if let Ok(solved) = session.solve(&Request::new([package.to_string()])) {
-        if let Some(p) = solved.get(package) {
-            return Some((p.version.clone(), DkmsSource::Repositories));
-        }
+    // A database query, not a solve. Solving for one version dragged the
+    // package's whole dependency graph in, and the failure was swallowed — so
+    // an unrelated unsatisfiable dependency came out as "no package named
+    // `nvidia-open-dkms`", pointing the reader at the wrong line.
+    if let Some(version) = session.sync_version(package) {
+        return Some((version, DkmsSource::Repositories));
     }
     if let Some(evr) = aur.iter().find_map(|i| match i {
         ResolvedInput::AurPackage { name, evr, .. } if name == package => Some(evr.clone()),
@@ -545,15 +549,12 @@ fn closure_evrs(
     recipe: &str,
     problems: &mut Errors,
 ) -> Option<Vec<String>> {
-    // the build root holds `base-devel` plus the resolved makedepends,
-    // so base-devel's own closure is part of what a package was built against
-    // and belongs in the key.
-    //
-    // `base-devel` is a real package in current Arch. It was a package *group*
-    // until 2022, which `find_satisfier` would not resolve — worth knowing
-    // before debugging a "no package named base-devel" against an old snapshot.
+    // The build root holds `base-devel` plus the resolved makedepends, so
+    // base-devel's own closure is part of what a package was built against and
+    // belongs in the key. The name comes from the crate that assembles the
+    // root, so the two cannot name different things.
     let mut names: Vec<String> = wanted.to_vec();
-    names.push("base-devel".to_string());
+    names.push(kiln_build::root::BASE_DEVEL.to_string());
 
     match session.solve(&Request::new(names)) {
         Ok(closure) => Some(
@@ -570,7 +571,9 @@ fn closure_evrs(
                     format!("`{recipe}` cannot be built: {e}"),
                 )
                 .help(
-                    "its `makedepends` must resolve against the same repositories as the                      image, so that the toolchain it is built against is the one recorded                      in its build key",
+                    "its `makedepends` must resolve against the same repositories as the \
+                     image, so that the toolchain it is built against is the one \
+                     recorded in its build key",
                 ),
             );
             None
@@ -774,14 +777,20 @@ fn label(manifest: &Manifest, list: &str, item: &str, diag: Diag, text: &str) ->
 /// files and executables are one concept. The plan carries their content
 /// *identity*, not their bytes — assembly reads the bytes, and `kiln check`
 /// only needs to know whether they changed.
-fn files(manifest: &Manifest) -> Vec<ResolvedInput> {
+fn files(manifest: &Manifest, problems: &mut Errors) -> Vec<ResolvedInput> {
     manifest
         .files
         .values()
         .filter_map(|f| {
             Some(ResolvedInput::File {
                 target: f.target.clone(),
-                content: content_ref(manifest, f.source.as_deref(), f.content.as_deref())?,
+                content: content_ref(
+                    manifest,
+                    &f.target,
+                    f.source.as_deref(),
+                    f.content.as_deref(),
+                    problems,
+                )?,
                 mode: f.mode,
             })
         })
@@ -793,7 +802,7 @@ fn files(manifest: &Manifest) -> Vec<ResolvedInput> {
 /// translation, not a resolution step. It earns its place by putting the script
 /// *by name* into the plan, which is what lets `kiln check` say
 /// `scripts: 20-locale changed` instead of falling back to `config_id`.
-fn scripts(manifest: &Manifest) -> Vec<ResolvedInput> {
+fn scripts(manifest: &Manifest, problems: &mut Errors) -> Vec<ResolvedInput> {
     manifest
         .scripts
         .values()
@@ -801,13 +810,19 @@ fn scripts(manifest: &Manifest) -> Vec<ResolvedInput> {
             Some(ResolvedInput::BuildScript {
                 name: s.name.clone(),
                 phase: s.after,
-                content: content_ref(manifest, s.source.as_deref(), s.content.as_deref())?,
+                content: content_ref(
+                    manifest,
+                    &s.name,
+                    s.source.as_deref(),
+                    s.content.as_deref(),
+                    problems,
+                )?,
             })
         })
         .collect()
 }
 
-fn units(manifest: &Manifest) -> Vec<ResolvedInput> {
+fn units(manifest: &Manifest, problems: &mut Errors) -> Vec<ResolvedInput> {
     let s = &manifest.systemd;
     let mut out: Vec<ResolvedInput> = s
         .units
@@ -815,7 +830,13 @@ fn units(manifest: &Manifest) -> Vec<ResolvedInput> {
         .filter_map(|u| {
             Some(ResolvedInput::Unit {
                 name: u.name.clone(),
-                content: content_ref(manifest, u.source.as_deref(), u.content.as_deref())?,
+                content: content_ref(
+                    manifest,
+                    &u.name,
+                    u.source.as_deref(),
+                    u.content.as_deref(),
+                    problems,
+                )?,
                 enable: state_of(manifest, &u.name, u.enable),
             })
         })
@@ -856,19 +877,36 @@ fn state_of(manifest: &Manifest, name: &str, inline_enable: bool) -> EnableState
     }
 }
 
+/// Where an entry's bytes come from, as the plan records it.
+///
+/// `what` names the entry — a target path, a unit or a script name — for the
+/// one case that should be impossible: a `source` the frontend did not hash.
+/// Dropping such an entry quietly would take a file out of the image with
+/// nothing said anywhere, so it is reported instead.
 fn content_ref(
     manifest: &Manifest,
+    what: &str,
     source: Option<&str>,
     content: Option<&str>,
+    problems: &mut Errors,
 ) -> Option<ContentRef> {
     match (source, content) {
-        (Some(path), _) => manifest
-            .local_digests
-            .get(path)
-            .map(|digest| ContentRef::Local {
+        (Some(path), _) => match manifest.local_digests.get(path) {
+            Some(digest) => Some(ContentRef::Local {
                 path: path.to_string(),
                 digest: digest.clone(),
             }),
+            None => {
+                problems.push(
+                    Diag::error(
+                        "kiln::resolution",
+                        format!("`{what}` reads `{path}`, which Kiln did not hash"),
+                    )
+                    .help("this is a bug in Kiln, not in your configuration"),
+                );
+                None
+            }
+        },
         (None, Some(text)) => Some(ContentRef::Inline {
             digest: kiln_manifest::Hash::of(text.as_bytes()),
         }),

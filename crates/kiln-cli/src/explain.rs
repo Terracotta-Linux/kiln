@@ -1,8 +1,8 @@
 //! `kiln explain <key>`.
 //!
-//! > `kiln explain kernel.cmdline` answering *"set in `hardware.toml:14`,
-//! > overriding `@kiln/hardware/nvidia:9`"* is the payoff for carrying spans
-//! > through the whole frontend.
+//! Answering *"set in `hardware.toml:14`, overriding
+//! `@kiln/hardware/nvidia:9`"* is the payoff for carrying spans through the
+//! whole frontend.
 //!
 //! Four things can be asked about, and the argument alone says which. They are
 //! tried in order of how specific they are:
@@ -58,7 +58,10 @@ pub fn run(fe: &Frontend, key: &str) -> ExitCode {
 fn includes(fe: &Frontend) -> ExitCode {
     heading("include");
     println!("  kind        the include graph, not a value");
-    println!("  {}, entry point first:", plural(fe.files.len(), "file"));
+    println!(
+        "  {}, entry point first:",
+        crate::fmt::counted(fe.files.len(), "file")
+    );
     for f in &fe.files {
         println!("    {}", f.name);
     }
@@ -86,7 +89,7 @@ fn exact(fe: &Frontend, key: &str) -> ExitCode {
     if prov.is_list {
         println!(
             "  kind        a list — {} unions into it (rule 1)",
-            plural(prov.others.len() + 1, "file")
+            crate::fmt::counted(prov.others.len() + 1, "file")
         );
         let items = value.and_then(Node::as_array).unwrap_or(&[]);
         // The per-element origins name the same files, one line each, and also
@@ -188,7 +191,7 @@ fn prefix(fe: &Frontend, key: &str) -> Option<ExitCode> {
                 // turns a listing into a wall. The count is what a listing is
                 // for; `kiln explain <that key>` prints the elements.
                 let value = match prov.is_list {
-                    true => plural(count(fe, k), "element"),
+                    true => crate::fmt::counted(count(fe, k), "element"),
                     false => node::get(&fe.merged.doc, k)
                         .map(|e| render(&e.value, k))
                         .unwrap_or_default(),
@@ -348,7 +351,7 @@ fn elements(fe: &Frontend, key: &str, items: &[Node]) -> bool {
         // manifest, so the two disagree and the origins cannot be trusted to
         // line up with the values. Print the values and let the caller name
         // the files.
-        println!("  {}:", plural(items.len(), "element"));
+        println!("  {}:", crate::fmt::counted(items.len(), "element"));
         for i in items {
             println!("    {}", render(i, key));
         }
@@ -357,7 +360,7 @@ fn elements(fe: &Frontend, key: &str, items: &[Node]) -> bool {
 
     println!(
         "  {}, and who asked for each:",
-        plural(items.len(), "element")
+        crate::fmt::counted(items.len(), "element")
     );
     let width = named.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
     for (name, origin) in &named {
@@ -378,13 +381,6 @@ fn elements_of<'a>(fe: &'a Frontend, key: &str) -> Vec<(&'a str, &'a Origin)> {
         .iter()
         .filter_map(|(k, o)| k.strip_prefix(&prefix).map(|name| (name, o)))
         .collect()
-}
-
-fn plural(n: usize, noun: &str) -> String {
-    match n {
-        1 => format!("1 {noun}"),
-        _ => format!("{n} {noun}s"),
-    }
 }
 
 fn heading(key: &str) {
@@ -459,5 +455,64 @@ fn render(n: &Node, key: &str) -> String {
             format!("{{ {} }}", parts.join(", "))
         }
         _ => n.render(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `default_for` is a third copy of the schema's defaults — after
+    /// `kiln-manifest`'s `Default` impls and `kiln-config`'s literal fallbacks
+    /// — and the only one a user ever reads. This is what keeps it honest: a
+    /// default changed in the schema and not here now fails a test rather than
+    /// making `kiln explain` confidently wrong.
+    #[test]
+    fn every_documented_default_is_the_one_validation_produces() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(std::path::Path::parent)
+            .expect("crates/kiln-cli has a workspace root");
+        let opts = kiln_config::Options {
+            allow_external_sources: false,
+            module_root: Some(root.join("modules")),
+        };
+        // `minimal` sets nothing but its include, so every key below is at its
+        // default.
+        let fe = kiln_config::load(Some(&root.join("tests/corpus/valid/minimal")), &opts)
+            .expect("the minimal corpus configuration loads");
+        let m = &fe.manifest;
+
+        let quoted = |s: &str| format!("\"{s}\"");
+        let actual: &[(&str, String)] = &[
+            ("image.name", quoted(&m.image.name)),
+            ("image.arch", quoted(&m.image.arch)),
+            ("kernel.package", quoted(&m.kernel.package)),
+            ("kernel.headers", m.kernel.headers.to_string()),
+            ("boot.timeout", m.boot.timeout.to_string()),
+            ("system.timezone", quoted(&m.system.timezone)),
+            ("system.keymap", quoted(&m.system.keymap)),
+            ("system.locale.lang", quoted(&m.system.locale.lang)),
+        ];
+        for (key, value) in actual {
+            let documented = default_for(key)
+                .unwrap_or_else(|| panic!("`kiln explain` documents no default for `{key}`"));
+            assert_eq!(
+                &documented.value, value,
+                "`kiln explain` says `{key}` defaults to {} but validation produces {value}",
+                documented.value
+            );
+        }
+
+        // The keys whose default is described rather than shown, because there
+        // is no single value to print.
+        for key in ["repos.snapshot", "repos.mirrors", "system.hostname"] {
+            assert!(
+                default_for(key).is_some(),
+                "`kiln explain` documents no default for `{key}`"
+            );
+        }
+        assert!(m.system.hostname.is_none());
+        assert_eq!(m.repos.snapshot, kiln_manifest::Snapshot::Latest);
     }
 }

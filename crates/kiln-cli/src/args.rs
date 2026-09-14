@@ -128,6 +128,10 @@ Storage
 Shell
   kiln completions <bash|zsh|fish>    print a completion script
 
+About
+  kiln help                           show this text
+  kiln version                        print the version
+
 Global
   --config <path>                 entry point, or a directory containing system.toml
   --sysroot <path>                operate on another root
@@ -136,6 +140,65 @@ Global
   -v, --verbose
   -V, --version                   print the version and exit
 ";
+
+/// Every verb `kiln` accepts. One list, read by did-you-mean and by
+/// `verb_flags`; `completions.rs`'s three scripts and `HELP` are checked
+/// against it by `tests/cli.rs` rather than kept in step by hand.
+pub const VERBS: &[&str] = &[
+    "check",
+    "build",
+    "apply",
+    "rebuild",
+    "explain",
+    "show",
+    "init",
+    "list",
+    "status",
+    "rollback",
+    "deploy",
+    "diff",
+    "why",
+    "owns",
+    "pin",
+    "unpin",
+    "rm",
+    "clean",
+    "sysroot",
+    "completions",
+    "help",
+    "version",
+];
+
+/// Flags that mean the same thing whatever the verb.
+pub const GLOBAL_FLAGS: &[&str] = &[
+    "--config",
+    "-c",
+    "--sysroot",
+    "--module-root",
+    "--allow-external-sources",
+    "--verbose",
+    "-v",
+    "--version",
+    "-V",
+    "--help",
+    "-h",
+];
+
+/// What each verb takes beyond the global flags.
+///
+/// Unlisted flags are an error. They used to be collected and ignored, which
+/// made `kiln build --forse` build without forcing and say nothing — the one
+/// place in the tool where a typo was silent, in a project whose frontend
+/// refuses a mistyped TOML key with a suggestion.
+pub fn verb_flags(verb: &str) -> &'static [&'static str] {
+    match verb {
+        "check" => &["--offline", "--deep"],
+        "build" | "apply" => &["--force", "--offline", "--keep-failed"],
+        "clean" => &["--keep", "--dry-run", "--remove-baseline"],
+        "rm" => &["--remove-baseline"],
+        _ => &[],
+    }
+}
 
 pub fn parse(argv: &[String]) -> Result<Cli, String> {
     let mut global = Global::default();
@@ -165,6 +228,10 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
                 keep = value.parse().map_err(|_| {
                     format!("`--keep {value}` is not a number of generations to keep")
                 })?;
+                // Recorded as well as consumed: it is global only because its
+                // *value* would otherwise be read as a generation number, and
+                // `kiln apply --keep 9` still has to be refused.
+                flags.push(a.clone());
             }
             // `--version`/`-V` and `--help`/`-h` answer regardless of position,
             // like every other CLI they'll be typed alongside — not just as the
@@ -189,6 +256,33 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
 
     let has = |f: &str| flags.iter().any(|x| x == f);
     let verb = positional.first().map(String::as_str).unwrap_or("help");
+
+    // An unknown verb is a better answer than an unknown flag on it, so this
+    // runs only once the verb is known to be real.
+    if VERBS.contains(&verb) {
+        let accepted = verb_flags(verb);
+        if let Some(flag) = flags.iter().find(|f| !accepted.contains(&f.as_str())) {
+            // A real flag typed on the wrong verb is a different mistake from a
+            // typo, and "did you mean `--help`?" about `--keep` helps nobody.
+            let elsewhere = VERBS
+                .iter()
+                .find(|v| verb_flags(v).contains(&flag.as_str()));
+            let hint = match elsewhere {
+                Some(other) => format!(" — that is `kiln {other}`'s"),
+                None => kiln_diag::did_you_mean(flag, accepted.iter().chain(GLOBAL_FLAGS).copied())
+                    .map(|h| format!(" — {h}"))
+                    .unwrap_or_default(),
+            };
+            let takes = match accepted {
+                [] => "takes no flags of its own".to_string(),
+                _ => format!("takes {}", accepted.join(", ")),
+            };
+            return Err(format!(
+                "`kiln {verb}` does not take `{flag}`{hint}\n\n`kiln {verb}` {takes}; \
+                 run `kiln help` for the global flags"
+            ));
+        }
+    }
 
     let command = match verb {
         "help" | "" => Command::Help,
@@ -346,29 +440,7 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
         }
 
         other => {
-            let known = [
-                "check",
-                "build",
-                "apply",
-                "rebuild",
-                "explain",
-                "show",
-                "init",
-                "list",
-                "status",
-                "rollback",
-                "deploy",
-                "diff",
-                "why",
-                "owns",
-                "pin",
-                "unpin",
-                "rm",
-                "clean",
-                "sysroot",
-                "completions",
-            ];
-            let hint = kiln_diag::did_you_mean(other, known)
+            let hint = kiln_diag::did_you_mean(other, VERBS.iter().copied())
                 .map(|h| format!(" — {h}"))
                 .unwrap_or_default();
             return Err(format!(
@@ -413,7 +485,9 @@ pub const DEFAULT_KEEP: usize = 3;
 
 /// One or more generations, for `kiln rm`.
 fn generations(positional: &[String], verb: &str) -> Result<Vec<u64>, String> {
-    let rest = &positional[1.min(positional.len())..];
+    // `positional[0]` is the verb: `generations` only runs because it was read
+    // from there.
+    let rest = &positional[1..];
     if rest.is_empty() {
         return Err(format!(
             "`kiln {verb}` needs at least one generation, for example `kiln {verb} 38 39`. \

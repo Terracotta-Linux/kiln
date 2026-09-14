@@ -26,8 +26,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// | 1 | the first frozen encoding |
 /// | 2 | `boot.loader` defaults to `grub2` rather than `systemd-boot`. A different bootloader is a genuinely different image, so every identity moving is correct rather than incidental. |
 /// | 3 | the UID seed became a users/groups pair carrying `home` and `shell`, not a flat map of numbers. Writing the assembler showed that the flat shape cannot say whether a user owns a group of its own name, and that a seed omitting home and shell decides them by omission. |
-/// | 5 | `kernel.modules.initramfs` joined `KernelModules`' canonical encoding. Which drivers are *in* the initramfs decides what the machine can do before it has a root filesystem — whether the panel has a KMS driver for the splash, most visibly — and dracut's non-hostonly selection does not put a GPU driver there on its own. |
 /// | 4 | `kernel.dracut_modules` joined `Kernel`'s canonical encoding. dracut's default, non-hostonly module selection does not include every module whose package is installed — a module can be present but excluded unless named — so which dracut modules are requested is genuinely part of what is inside the image, not incidental to it. |
+/// | 5 | `kernel.modules.initramfs` joined `KernelModules`' canonical encoding. Which drivers are *in* the initramfs decides what the machine can do before it has a root filesystem — whether the panel has a KMS driver for the splash, most visibly — and dracut's non-hostonly selection does not put a GPU driver there on its own. |
 /// | 6 | `kernel.dkms` joined `Kernel`'s canonical encoding. A DKMS package's modules are compiled into the image at build time rather than on the machine at install time, so which DKMS packages a configuration names decides what drivers the image contains. |
 /// | 7 | `kernel.dkms` became entries carrying an optional `source` rather than a flat set of package names, so a DKMS tree in the configuration itself can be built the same way. A tree the user wrote is a different input from a package with the same name, and a set of strings has nowhere to say which one it is. |
 pub const HASH_EPOCH: u32 = 7;
@@ -81,6 +81,10 @@ pub struct Manifest {
 /// comparison would say they were. It also cannot be derived — `Origin` carries
 /// a `NamedSource` and has no equality of its own — but that is the smaller
 /// reason.
+///
+/// Not the cheap operation `==` usually is: each side is canonically encoded
+/// and hashed. Fine for the handful of comparisons Kiln makes; not something to
+/// put in a loop.
 impl PartialEq for Manifest {
     fn eq(&self, other: &Manifest) -> bool {
         self.config_id() == other.config_id()
@@ -112,7 +116,7 @@ pub fn host_arch() -> &'static str {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Snapshot {
-    /// rolling, like Arch. The default.
+    /// Track live mirrors, rolling, the way Arch does. The default.
     Latest,
     Date(String),
 }
@@ -147,7 +151,7 @@ pub struct PackageSet {
     pub aur: BTreeMap<String, AurPackage>,
     pub build: BTreeSet<String>,
     pub file: BTreeMap<String, LocalPackage>,
-    /// must not appear, even as a dependency.
+    /// Names that must not appear in the image, even as a dependency.
     pub exclude: BTreeSet<String>,
 }
 
@@ -180,8 +184,10 @@ pub fn is_url(path: &str) -> bool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Kernel {
     pub package: String,
-    /// headers are a *build-time* dependency installed inside the sandbox.
-    /// Shipping ~150 MB of them in an immutable image is pure waste.
+    /// Whether to ship the kernel headers *in the image*. Off by default:
+    /// headers are a build-time dependency, installed into a build root that is
+    /// never the image, and ~150 MB of them in an immutable system that never
+    /// rebuilds a module at runtime is pure waste.
     pub headers: bool,
     pub cmdline: BTreeSet<String>,
     /// dracut modules to `--add` beyond the `ostree` one Kiln always requests.
@@ -210,7 +216,9 @@ impl Default for Kernel {
     }
 }
 
-/// three different things, three different keys.
+/// Three different things a configuration can say about a module, and three
+/// different keys for them: load it at boot, refuse to load it, or configure
+/// it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KernelModules {
     pub load: BTreeSet<String>,
@@ -273,15 +281,15 @@ pub enum BootLoader {
     Grub2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-/// One value, for the same shape of reason `BootLoader` has one:
-/// upstream `ostree` ships a dracut module that handles the sysroot pivot, and
+/// One value, for the same shape of reason `BootLoader` has one: upstream
+/// `ostree` ships a dracut module that handles the sysroot pivot, and
 /// mkinitcpio has no equivalent.
 ///
 /// It stays an enum rather than collapsing into nothing because `boot.initramfs`
 /// is a real key a user can write, and the value they are most likely to write
-/// deserves a diagnostic that explains itself rather than an
-/// unknown-key message.
+/// deserves a diagnostic that explains itself rather than an unknown-key
+/// message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Initramfs {
     Dracut,
 }
@@ -360,7 +368,7 @@ impl Default for Locale {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemDefaults {
-    /// unset by default; systemd's own default applies.
+    /// Unset by default, at which point systemd's own default applies.
     pub hostname: Option<String>,
     pub timezone: String,
     pub keymap: String,

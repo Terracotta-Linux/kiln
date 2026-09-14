@@ -217,7 +217,7 @@ pub fn realize(
     println!(
         "  {} package{} to realize from source",
         jobs.len(),
-        plural(jobs.len())
+        crate::fmt::plural(jobs.len())
     );
 
     let builder = Builder::new(&opts.ctx.state);
@@ -277,7 +277,7 @@ pub fn realize(
     eprintln!(
         "\n\x1b[1;31merror\x1b[0m {} package{} failed to build:\n",
         failures.len(),
-        plural(failures.len())
+        crate::fmt::plural(failures.len())
     );
     for (name, why) in &failures {
         eprintln!("\x1b[1m{name}\x1b[0m");
@@ -537,7 +537,7 @@ fn build_one(
             // root somewhere Kiln reads and never writes, and `makepkg` writes
             // to the directory it runs in.
             let _ = std::fs::remove_dir_all(&scratch);
-            copy_tree(&opts.ctx.config_root.join(path), &scratch)?;
+            crate::fmt::copy_tree(&opts.ctx.config_root.join(path), &scratch)?;
             (scratch.clone(), Some(key.clone()))
         }
         Job::Module {
@@ -749,10 +749,13 @@ fn describe(name: &str, produced: &Produced) {
     if produced.from_cache {
         println!(
             "    {kind} {name}: {n} package{} from the build cache",
-            plural(n)
+            crate::fmt::plural(n)
         );
     } else {
-        println!("    {kind} {name}: built {n} package{}", plural(n));
+        println!(
+            "    {kind} {name}: built {n} package{}",
+            crate::fmt::plural(n)
+        );
     }
 }
 
@@ -770,35 +773,6 @@ fn highlight(text: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
-    if let Some(parent) = to.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("creating {}: {e}", parent.display()))?;
-    }
-    let out = std::process::Command::new("cp")
-        .arg("-a")
-        .arg(from)
-        .arg(to)
-        .output()
-        .map_err(|e| format!("running cp: {e}"))?;
-    if out.status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "copying {}: {}",
-        from.display(),
-        String::from_utf8_lossy(&out.stderr).trim()
-    ))
-}
-
-fn plural(n: usize) -> &'static str {
-    if n == 1 {
-        ""
-    } else {
-        "s"
-    }
 }
 
 #[cfg(test)]

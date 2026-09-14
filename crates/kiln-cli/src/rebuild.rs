@@ -163,10 +163,10 @@ fn report_inputs(record: &Record, plan: &BuildPlan) {
 /// nothing else in Kiln can find it.
 ///
 /// Exits **3** — build failure — when the rebuild did not reproduce, even
-/// though a commit was written. has no code for "succeeded but the audit
-/// found something", and 3 is the honest one of the codes that exist: the
+/// though a commit was written. There is no exit code for "succeeded but the
+/// audit found something", and 3 is the honest one of the codes that exist: the
 /// command's job is to reproduce a generation, and it did not. It is
-/// deliberately not 10, which reserves for `kiln check` finding changes —
+/// deliberately not 10, which is reserved for `kiln check` finding changes —
 /// a `kiln rebuild` in a CI job should fail the job, not be read as "an update
 /// is available".
 fn report_result(
@@ -197,8 +197,11 @@ fn report_result(
         println!("\n\x1b[1;33mwarning\x1b[0m these build scripts are not reproducible:\n");
         for name in &unreproducible {
             println!("  script {name}");
-            println!("    was {}", short(&record.script_effects[*name]));
-            println!("    now {}", short(&now[*name]));
+            println!(
+                "    was {}",
+                crate::fmt::hash(&record.script_effects[*name])
+            );
+            println!("    now {}", crate::fmt::hash(&now[*name]));
         }
         println!(
             "\nEach one produced a different changeset from the same text over the same tree,\n\
@@ -249,11 +252,6 @@ fn report_result(
 fn original_content(ctx: &Context, checksum: &str) -> Result<String, kiln_ostree::Error> {
     let repo = commit::open_or_create(&paths::repo(&ctx.sysroot))?;
     commit::content_checksum(&repo, checksum)
-}
-
-fn short(hash: &str) -> String {
-    let hex = hash.strip_prefix("b3:").unwrap_or(hash);
-    format!("b3:{}", &hex[..hex.len().min(12)])
 }
 
 fn fail(e: &kiln_ostree::Error) -> ExitCode {

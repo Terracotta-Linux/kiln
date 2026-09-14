@@ -15,11 +15,13 @@ pub struct Loader {
     pub config_root: PathBuf,
     /// Shipped module library, `/usr/share/kiln/modules`.
     pub module_root: PathBuf,
-    /// escaping the config root requires this, and warns.
+    /// `--allow-external-sources`: leaving the config root requires it, and
+    /// warns even then.
     pub allow_external: bool,
     cache: BTreeMap<PathBuf, Src>,
-    /// Every path that escaped the config root, for the warning.
-    pub escapes: Vec<(PathBuf, Origin)>,
+    /// Every path that escaped the config root, for the warning. Keyed so the
+    /// warning is one per path however many entries reference it.
+    pub escapes: BTreeMap<PathBuf, Origin>,
 }
 
 /// Resolved entry point plus its root.
@@ -38,10 +40,10 @@ pub fn entry_point(config: Option<&Path>) -> Result<Entry, Diag> {
             .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_DIR)),
     };
 
-    let path = if candidate.is_dir() {
-        candidate.join(ENTRY_FILE)
-    } else {
+    let path = if names_a_file(&candidate) {
         candidate
+    } else {
+        candidate.join(ENTRY_FILE)
     };
 
     if !path.exists() {
@@ -64,15 +66,33 @@ pub fn entry_point(config: Option<&Path>) -> Result<Entry, Diag> {
     Ok(Entry { path, config_root })
 }
 
+/// Does this `--config` argument name the entry point itself, or the directory
+/// holding it?
+///
+/// What is on disk decides when the path exists. When it does not — which is
+/// the case `kiln init` is always in, and the case a typo puts `kiln check` in
+/// — the `.toml` extension decides, so `--config /etc/kiln.d` scaffolds a
+/// directory rather than a file called `kiln.d`, and `--config /nope/` reports
+/// the missing `system.toml` rather than a missing file named `nope`.
+pub fn names_a_file(candidate: &Path) -> bool {
+    if candidate.is_dir() {
+        return false;
+    }
+    if candidate.is_file() {
+        return true;
+    }
+    candidate.extension().is_some_and(|e| e == "toml")
+}
+
 /// A root as it will be compared against the paths of files actually loaded.
 ///
 /// Every file the loader opens is canonicalized, so a root that is not — a
 /// relative `--module-root ./modules`, or a `..` left in by a test's
 /// `repo_root().join("modules")` — never prefixes any of them. The visible
 /// consequence was `kiln explain kernel.cmdline` naming
-/// `/home/you/kiln/modules/gpu/nvidia-open.toml:14` where promises
-/// `@kiln/gpu/nvidia-open:14`, and it is not only cosmetic: the same prefix
-/// test is what tells the config root apart from outside it.
+/// `/home/you/kiln/modules/gpu/nvidia-open.toml:14` where the display name
+/// promises `@kiln/gpu/nvidia-open:14`, and it is not only cosmetic: the same
+/// prefix test is what tells inside the config root from outside it.
 ///
 /// Falls back to the path as given when it does not exist, because the default
 /// module root is absent on a machine where Kiln has not been installed, and
@@ -102,7 +122,7 @@ impl Loader {
             ),
             allow_external: false,
             cache: BTreeMap::new(),
-            escapes: Vec::new(),
+            escapes: BTreeMap::new(),
         }
     }
 
@@ -261,8 +281,6 @@ impl Loader {
     /// Record a `source`/`path` that left the config root, so the run can warn
     /// once per path rather than per use.
     pub fn note_escape(&mut self, path: PathBuf, at: Origin) {
-        if !self.escapes.iter().any(|(p, _)| *p == path) {
-            self.escapes.push((path, at));
-        }
+        self.escapes.entry(path).or_insert(at);
     }
 }

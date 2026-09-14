@@ -1,17 +1,16 @@
 //! The AUR dependency closure.
 //!
-//! > **AUR dependency resolution** is recursive over `Depends`/`MakeDepends`
-//! > that are not in the official repos, with a cycle check and a depth cap.
-//! > Every transitively pulled AUR package appears in the lock and in
-//! > `kiln check` output, explicitly marked as *pulled in by* whatever required
-//! > it. Nothing enters the image anonymously.
+//! Recursive over the `Depends`/`MakeDepends` that the official repositories
+//! cannot satisfy, with a cycle check and a depth cap. Every transitively
+//! pulled AUR package appears in the plan and in `kiln check`'s output, marked
+//! with whatever required it: nothing enters the image anonymously.
 
 use crate::rpc::{self, Info};
 use crate::transport::Transport;
 use kiln_manifest::Hash;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-/// "a cycle check and a depth cap".
+/// How many levels of AUR dependency are walked.
 ///
 /// The cycle check makes the cap unnecessary for correctness, so what the cap
 /// actually guards is a *chain* — a legitimate but absurd dependency ladder, or
@@ -53,8 +52,13 @@ pub struct Closure {
 }
 
 impl Closure {
+    /// Binary search: `packages` is sorted by name, and `chain_to` calls this
+    /// once per link.
     pub fn get(&self, name: &str) -> Option<&Resolved> {
-        self.packages.iter().find(|p| p.name == name)
+        self.packages
+            .binary_search_by(|p| p.name.as_str().cmp(name))
+            .ok()
+            .map(|i| &self.packages[i])
     }
 
     /// The chain from something the configuration asked for down to `name`.
@@ -118,7 +122,10 @@ pub fn resolve(
         // per package.
         let level: Vec<(String, Option<String>, usize)> = frontier.drain(..).collect();
         let depth = level.first().map(|(_, _, d)| *d).unwrap_or(0);
-        if depth > MAX_DEPTH {
+        // `>=`, because the requested packages are depth 0: `MAX_DEPTH` levels
+        // of dependency put the deepest at `MAX_DEPTH`, and `>` walked one more
+        // than the message then claimed.
+        if depth >= MAX_DEPTH {
             return Err(Error::TooDeep {
                 depth,
                 at: level.iter().map(|(n, ..)| n.clone()).collect(),
@@ -250,8 +257,8 @@ impl std::fmt::Display for Error {
             },
             Error::TooDeep { depth, at } => write!(
                 f,
-                "the AUR dependency chain is more than {MAX_DEPTH} deep (reached {depth} at \
-                 {}) — this is almost certainly not a real dependency graph",
+                "the AUR dependency chain is more than {MAX_DEPTH} levels deep (reached \
+                 {depth} at {}) — this is almost certainly not a real dependency graph",
                 at.join(", ")
             ),
             Error::Transport(e) => write!(f, "{e}"),

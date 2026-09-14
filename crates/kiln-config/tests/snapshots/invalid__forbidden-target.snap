@@ -1,6 +1,5 @@
 ---
 source: crates/kiln-config/tests/corpus.rs
-assertion_line: 131
 expression: rendered
 ---
 kiln::semantic
@@ -37,5 +36,41 @@ kiln::semantic
     ╰────
   help: `system.locale.lang` always writes this, defaulting to "C.UTF-8" — there is no
         `[[file]]` route to it
+kiln::semantic
 
-3 problems found.
+  × Kiln cannot ship a file to `/usr/etc/motd`
+    ╭─[system.toml:19:11]
+ 18 │ [[file]]
+ 19 │ target  = "/usr/etc/motd"
+    ·           ───────┬───────
+    ·                  ╰── here
+ 20 │ content = "x\n"
+    ╰────
+  help: /usr/etc is where Kiln puts /etc, not somewhere to write. Write `/etc/motd`
+        instead
+kiln::semantic
+
+  × Kiln cannot ship a file to `/nonsense/thing`
+    ╭─[system.toml:23:11]
+ 22 │ [[file]]
+ 23 │ target  = "/nonsense/thing"
+    ·           ────────┬────────
+    ·                   ╰── here
+ 24 │ content = "x\n"
+    ╰────
+  help: /nonsense is not a directory the image has. Image content lives under /usr and /
+        etc; /var, /opt and /srv are seeded
+kiln::semantic
+
+  × Kiln cannot ship a file to `/toplevel`
+    ╭─[system.toml:27:11]
+ 26 │ [[file]]
+ 27 │ target  = "/toplevel"
+    ·           ─────┬─────
+    ·                ╰── here
+ 28 │ content = "x\n"
+    ╰────
+  help: nothing is written at the top level of the image. Give the file a directory: `/
+        etc/…` or `/usr/…`
+
+6 problems found.

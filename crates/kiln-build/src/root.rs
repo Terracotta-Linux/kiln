@@ -1,9 +1,9 @@
 //! The build root.
 //!
-//! > `makepkg --noextract --nodeps` runs as an unprivileged build user against
-//! > a build root that contains only `base-devel` plus the resolved
-//! > `makedepends`, installed from the same pinned repository snapshot as the
-//! > image itself.
+//! `makepkg --noextract --nodeps` runs as an unprivileged build user against
+//! a build root that contains only `base-devel` plus the resolved
+//! `makedepends`, installed from the same pinned repository snapshot as the
+//! image itself.
 //!
 //! One root per `build_key`, not one shared by every recipe in a build. A
 //! shared root is faster and wrong in a way that only shows up later: a recipe
@@ -11,7 +11,7 @@
 //! happened to pull the missing package in, and then fails on a machine where
 //! the two are built in the other order — or, worse, links against something
 //! its `build_key` does not mention, which is exactly the silently-wrong
-//! artifact exists to prevent.
+//! artifact the key exists to prevent.
 //!
 //! What goes in is `base-devel`, the recipe's `makedepends` and
 //! `checkdepends` — and its `depends` too. Convention names only the first two, but
@@ -24,8 +24,11 @@ use kiln_alpm::{Config, Mounts, RepoSpec, Session, Transaction};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-/// A real package in current Arch — it was a package *group* until 2022,
-/// which `find_satisfier` would not resolve.
+/// What every build root contains before the recipe's own dependencies.
+///
+/// A real package in current Arch. It was a package *group* until 2022, which
+/// `find_satisfier` will not resolve — worth knowing before debugging a "no
+/// package named base-devel" against an old `repos.snapshot`.
 pub const BASE_DEVEL: &str = "base-devel";
 
 /// Hook files the `dkms` package ships, and that a build root must not unpack.
@@ -178,26 +181,15 @@ impl BuildRoot {
 /// world-writable directory inside a root that also runs package scriptlets is
 /// a wider statement than the one being made.
 pub fn own(path: &Path) -> Result<(), Error> {
-    let out = std::process::Command::new("chown")
-        .arg(format!(
-            "{}:{}",
-            crate::build::BUILD_UID,
-            crate::build::BUILD_GID
-        ))
-        .arg(path)
-        .output()
-        .map_err(|source| Error::Io {
-            doing: "running chown for",
-            path: path.to_path_buf(),
-            source,
-        })?;
-    if out.status.success() {
-        return Ok(());
-    }
-    Err(Error::Io {
+    std::os::unix::fs::chown(
+        path,
+        Some(crate::build::BUILD_UID),
+        Some(crate::build::BUILD_GID),
+    )
+    .map_err(|source| Error::Io {
         doing: "giving the build user",
         path: path.to_path_buf(),
-        source: std::io::Error::other(String::from_utf8_lossy(&out.stderr).trim().to_string()),
+        source,
     })
 }
 

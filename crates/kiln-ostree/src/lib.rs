@@ -7,7 +7,7 @@
 //! becomes a wrong boot.
 //!
 //! Two things about libostree that the CLI documents and the library inherits,
-//! both verified against ostree 2026.4 in the phase 0 spike:
+//! both verified against ostree 2026.4:
 //!
 //! - **There is no `rollback` verb.** `set-default`, `undeploy` and `pin` are
 //!   what exist. `kiln rollback` is Kiln's own operation over the deployment

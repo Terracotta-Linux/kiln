@@ -160,3 +160,55 @@ complete -c kiln -n "__fish_seen_subcommand_from clean rm" -l remove-baseline
 complete -c kiln -n "__fish_seen_subcommand_from sysroot; and not __fish_seen_subcommand_from init" -a init
 complete -c kiln -n "__fish_seen_subcommand_from completions" -a "bash zsh fish"
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::args::{verb_flags, VERBS};
+
+    /// The verb list exists once, in `args::VERBS`; these scripts are written
+    /// by hand and cannot read it. This is what stops them drifting: adding a
+    /// verb and forgetting one of the three fails here rather than at a user's
+    /// prompt.
+    #[test]
+    fn every_script_offers_every_verb() {
+        for shell in SHELLS {
+            let text = script(shell).expect("a supported shell has a script");
+            for verb in VERBS {
+                assert!(
+                    text.contains(verb),
+                    "the {shell} completions do not offer `{verb}`"
+                );
+            }
+        }
+    }
+
+    /// The same for each verb's own flags. `--keep` is written `-l keep` by
+    /// fish and `--keep[...]` by zsh, so the leading dashes are stripped before
+    /// looking.
+    #[test]
+    fn every_script_offers_every_verb_flag() {
+        for shell in SHELLS {
+            let text = script(shell).expect("a supported shell has a script");
+            for verb in VERBS {
+                for flag in verb_flags(verb) {
+                    let bare = flag.trim_start_matches('-');
+                    assert!(
+                        text.contains(bare),
+                        "the {shell} completions do not offer `{flag}` for `{verb}`"
+                    );
+                }
+            }
+        }
+    }
+
+    /// And that `kiln help` names each verb, so the three places a user can
+    /// learn a verb exists agree.
+    #[test]
+    fn help_names_every_verb() {
+        let help = crate::args::help();
+        for verb in VERBS {
+            assert!(help.contains(verb), "`kiln help` does not name `{verb}`");
+        }
+    }
+}

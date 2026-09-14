@@ -39,7 +39,11 @@ pub fn to_diag(manifest: &Manifest, err: &AlpmError, known: &[String]) -> Diag {
             )
         }
 
-        AlpmError::Unsatisfied { wanted_by, dep } => {
+        AlpmError::Unsatisfied {
+            wanted_by,
+            dep,
+            others,
+        } => {
             let mut d = Diag::error(
                 "kiln::resolution",
                 match wanted_by {
@@ -53,16 +57,19 @@ pub fn to_diag(manifest: &Manifest, err: &AlpmError, known: &[String]) -> Diag {
             {
                 d = d.label(o, "requested here");
             }
-            d.help(
-                "the package exists but its dependency does not resolve — usually a \
-                 repository that is not enabled, or a partial mirror",
-            )
+            let why = "the package exists but its dependency does not resolve — usually a \
+                       repository that is not enabled, or a partial mirror";
+            d.help(match others.as_slice() {
+                [] => why.to_string(),
+                _ => format!("{why}. Also unsatisfied: {}", others.join(", ")),
+            })
         }
 
         AlpmError::Conflict {
             first,
             second,
             reason,
+            others,
         } => {
             let mut d = Diag::error(
                 "kiln::resolution",
@@ -77,13 +84,17 @@ pub fn to_diag(manifest: &Manifest, err: &AlpmError, known: &[String]) -> Diag {
             // adds nothing the labels have not already said. It is worth a
             // sentence only when the conflict runs through a third name — a
             // virtual package — because then neither label explains itself.
-            d.help(if reason == first || reason == second {
+            let why = if reason == first || reason == second {
                 "remove one of them, or exclude one with `packages.exclude`".to_string()
             } else {
                 format!(
                     "they both lay claim to `{reason}`; remove one, or exclude one with \
                      `packages.exclude`"
                 )
+            };
+            d.help(match others.as_slice() {
+                [] => why,
+                _ => format!("{why}. Also conflicting: {}", others.join(", ")),
             })
         }
 
@@ -115,14 +126,20 @@ pub fn to_diag(manifest: &Manifest, err: &AlpmError, known: &[String]) -> Diag {
             })
         }
 
-        AlpmError::WrongArch { name, arch } => Diag::error(
-            "kiln::resolution",
-            format!("`{name}` is built for {arch}, not {}", manifest.image.arch),
-        )
-        .maybe_help(
-            origin_of(manifest, "packages.repo", name)
-                .map(|_| format!("`image.arch` is {}", manifest.image.arch)),
-        ),
+        AlpmError::WrongArch { name, arch } => {
+            let mut d = Diag::error(
+                "kiln::resolution",
+                format!("`{name}` is built for {arch}, not {}", manifest.image.arch),
+            );
+            if let Some(o) = origin_of(manifest, "packages.repo", name) {
+                d = d.label(o, format!("requested here, and only exists for {arch}"));
+            }
+            d.help(format!(
+                "`image.arch` is {}; a package built for another architecture cannot go \
+                 in this image",
+                manifest.image.arch
+            ))
+        }
 
         AlpmError::Refresh { repo, message } => Diag::error(
             "kiln::resolution",

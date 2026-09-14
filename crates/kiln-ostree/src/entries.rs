@@ -6,9 +6,8 @@
 //! `/boot/loader/entries`. The entry that *boots* is the one with the highest
 //! BLS `version` field — which is the highest-numbered file. Sorting entries by
 //! filename and taking the first one therefore selects the **rollback**
-//! deployment. That cost one wrong boot in the phase 0 spike, and it would cost
-//! more in a boot-acceptance test that silently asserted against the wrong
-//! image.
+//! deployment. That has already cost one wrong boot, and it would cost more in
+//! a boot-acceptance test that silently asserted against the wrong image.
 //!
 //! Pure, and separate from libostree, because the whole point is that this
 //! decision can be checked without booting anything.

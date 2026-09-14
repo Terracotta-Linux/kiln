@@ -4,6 +4,10 @@
 //! execute anything. `.SRCINFO` is the declared form and is used when present;
 //! otherwise `makepkg --printsrcinfo` runs in a sandbox with `CLONE_NEWNET` and
 //! no interfaces, because sourcing a PKGBUILD is running a stranger's bash.
+//!
+//! The fallback is reachable only for a recipe Kiln cloned from the AUR — a
+//! `packages.build` recipe is required to ship a `.SRCINFO` by resolution,
+//! which runs before any sandbox exists.
 
 use crate::srcinfo::{self, Srcinfo};
 use kiln_manifest::Hash;

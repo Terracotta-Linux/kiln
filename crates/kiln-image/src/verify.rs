@@ -2,8 +2,8 @@
 //!
 //! Defence in depth: fail the build rather than commit a tree that libostree
 //! will refuse to manage, or — worse — will manage badly. Every assertion here
-//! corresponds to something that went wrong at least once in the Phase 0 spike,
-//! and several of them fail *after a successful boot*, which is the most
+//! corresponds to something that has gone wrong at least once, and several of
+//! them would otherwise surface *after a successful boot*, which is the most
 //! expensive place to find a problem.
 
 use crate::tree;
@@ -133,7 +133,7 @@ pub fn check(root: &Path) -> Vec<Problem> {
         }
     }
 
-    // Assembly step 5.
+    // Assembly step 9 cleared it; see `kernel::clear_boot`.
     if !tree::entries(&root.join("boot"))
         .unwrap_or_default()
         .is_empty()
@@ -144,7 +144,9 @@ pub fn check(root: &Path) -> Vec<Problem> {
         );
     }
 
-    // The half that is not about determinism at all.
+    // `determinism.rs` truncates `machine-id` because a build has to be
+    // reproducible; this checks it for a reason that has nothing to do with
+    // determinism, so it is checked here too.
     match std::fs::metadata(root.join("usr/etc/machine-id")) {
         Ok(md) if md.len() > 0 => bad(
             "/usr/etc/machine-id is not empty".into(),
@@ -160,7 +162,9 @@ pub fn check(root: &Path) -> Vec<Problem> {
     if !has_os_identity(root) {
         bad(
             "/usr/lib/os-release has no ID or PRETTY_NAME".into(),
-            "libostree titles the boot entry from one of them and refuses to deploy              without either, so this image would commit and then fail to deploy",
+            "libostree titles the boot entry from one of them and refuses to \
+             deploy without either, so this image would commit and then fail \
+             to deploy",
         );
     }
 

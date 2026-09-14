@@ -259,7 +259,9 @@ fn a_var_target_becomes_a_factory_default_and_says_so() {
         conf.contains("C /var/lib/myapp/seed.db - - - -\n"),
         "{conf}"
     );
-    insta::assert_snapshot!(applied.notes.join("\n"));
+    // `C`, not `f`: the file is restored where there is none and left alone
+    // where the machine has its own. That is what makes it a default.
+    assert_eq!(applied.tmpfiles, ["C /var/lib/myapp/seed.db - - - -"]);
 }
 
 /// The drain owns `kiln-var.conf`; the overlay owns `kiln.conf`. Keeping them

@@ -1,8 +1,9 @@
 //! Hashing local files and trees into `local_digests`.
 //!
-//! "Putting `local_digests` in the Manifest is why editing `files/motd` changes
-//! `config_id` even though no TOML changed. Local files are free to hash, so
-//! they belong to the configuration identity rather than the resolution identity."
+//! Putting `local_digests` in the `Manifest` is why editing `files/motd`
+//! changes `config_id` even though no TOML changed. Local files are free to
+//! hash, so they belong to the configuration identity rather than to the
+//! resolution identity.
 
 use kiln_manifest::Hash;
 use std::path::Path;
@@ -44,12 +45,18 @@ pub fn digest(path: &Path) -> std::io::Result<Hash> {
 fn collect(root: &Path, dir: &Path, out: &mut Vec<String>) -> std::io::Result<()> {
     for e in std::fs::read_dir(dir)? {
         let e = e?;
+        if SKIP.iter().any(|s| e.file_name() == *s) {
+            continue;
+        }
         let p = e.path();
-        let md = e.metadata()?;
-        if md.is_dir() {
-            if SKIP.iter().any(|s| e.file_name() == *s) {
-                continue;
-            }
+        // `file_type()` comes from the directory entry and does not follow
+        // symlinks, which matters twice: a link to a directory must not be
+        // descended into (`ln -s . loop` would recurse forever, and a link
+        // pointing outside the config root would be walked without ever
+        // passing the boundary check), and a dangling link must not abort the
+        // whole digest. Either way the link itself is an entry, and `hash_one`
+        // hashes it by its target path.
+        if e.file_type()?.is_dir() {
             collect(root, &p, out)?;
         } else {
             out.push(

@@ -119,10 +119,24 @@ impl Hash {
         Hash(format!("b3:{}", blake3::hash(bytes).to_hex()))
     }
 
-    /// `b3:7f2a…` — Kiln never prints a full digest where a short one does.
+    /// The same digest, without holding the input in memory. For anything a
+    /// build might produce at arbitrary size — a locale archive, a firmware
+    /// blob — where reading the file whole makes the builder's resident set
+    /// track the largest artifact it has ever seen.
+    pub fn of_reader(mut r: impl std::io::Read) -> std::io::Result<Hash> {
+        let mut hasher = blake3::Hasher::new();
+        std::io::copy(&mut r, &mut hasher)?;
+        Ok(Hash(format!("b3:{}", hasher.finalize().to_hex())))
+    }
+
+    /// `b3:7f2a3b4c` — the prefix and eight hex characters, no ellipsis. Kiln
+    /// never prints a full digest where a short one does.
     pub fn short(&self) -> String {
-        let hex = self.0.strip_prefix("b3:").unwrap_or(&self.0);
-        format!("b3:{}", &hex[..hex.len().min(8)])
+        match self.0.strip_prefix("b3:") {
+            Some(hex) => format!("b3:{}", &hex[..hex.len().min(8)]),
+            // Not a blake3 digest at all; prefixing one on would be a lie.
+            None => self.0.chars().take(8).collect(),
+        }
     }
 }
 

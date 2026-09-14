@@ -61,10 +61,10 @@ pub struct Generation {
     pub checksum: String,
     pub built_at: String,
     pub image: String,
-    /// libostree's index *today*. Deliberately not shown to the user and not
-    /// accepted from them: indices renumber as deployments come and go, so
-    /// today's 1 is tomorrow's 0.
-    pub index: i32,
+    /// Position in libostree's deployment list *today*. Deliberately not shown
+    /// to the user and not accepted from them: positions renumber as
+    /// deployments come and go, so today's 1 is tomorrow's 0.
+    pub index: usize,
     pub booted: bool,
     pub pinned: bool,
     /// The one that boots next: position 0 in the deployment list.
@@ -314,15 +314,8 @@ impl Sysroot {
     /// and `kiln show` and `kiln rebuild` both work on it. Only the questions
     /// that need a filesystem need this.
     pub fn deployment_root(&self, generation: u64) -> Result<PathBuf> {
-        let generations = self.generations()?;
-        let position = generations
-            .iter()
-            .position(|g| g.number == generation)
-            .ok_or_else(|| Error::NoSuchGeneration {
-                wanted: generation,
-                available: generations.iter().map(|g| g.number).collect(),
-            })?;
-        Ok(self.deployment_path(&self.inner.deployments()[position]))
+        let (_, deployment) = self.deployment_of(generation)?;
+        Ok(self.deployment_path(&deployment))
     }
 
     /// The on-disk directory of a deployment, absolute.
@@ -358,6 +351,11 @@ impl Sysroot {
     /// missing safety net, which is worth saying out loud; it is not a reason
     /// to throw away the image.
     fn arm(&self, checksum: &str, tries: u32) -> Counter {
+        // `tries == 0` is the caller switching counting off, which nothing does
+        // today; `can_bless` is the image having nothing that could clear a
+        // counter. Both mean "no probation, and that is fine", and the CLI says
+        // nothing about either — the distinction only matters if a caller ever
+        // asks for zero, at which point this wants its own variant.
         if tries == 0 || !self.can_bless(checksum) {
             return Counter::ImageCannotBless;
         }
@@ -388,15 +386,16 @@ impl Sysroot {
     /// have nothing sensible to fall back to if the reorder itself does not
     /// land, so the retry's own failure is what propagates.
     fn write_deployments(&self, deployments: &[Deployment], what: &'static str) -> Result<()> {
-        match self.inner.write_deployments(deployments, gio::Cancellable::NONE) {
+        match self
+            .inner
+            .write_deployments(deployments, gio::Cancellable::NONE)
+        {
             Ok(()) => Ok(()),
-            Err(_) if self.path == Path::new("/") => {
-                remount_rw_and_retry(&self.boot(), || {
-                    self.inner
-                        .write_deployments(deployments, gio::Cancellable::NONE)
-                        .map_err(Error::of(what))
-                })
-            }
+            Err(_) if self.path == Path::new("/") => remount_rw_and_retry(&self.boot(), || {
+                self.inner
+                    .write_deployments(deployments, gio::Cancellable::NONE)
+                    .map_err(Error::of(what))
+            }),
             Err(e) => Err(Error::of(what)(e)),
         }
     }
@@ -410,21 +409,38 @@ impl Sysroot {
         self.path.join("boot")
     }
 
-    /// Every deployment, newest first, as generations.
+    /// Every deployment Kiln can read, newest first, as generations.
     pub fn generations(&self) -> Result<Vec<Generation>> {
-        let deployments = self.inner.deployments();
+        Ok(self.deployed()?.into_iter().map(|(g, _)| g).collect())
+    }
+
+    /// Each generation paired with the deployment it came from.
+    ///
+    /// Every command that acts on a deployment goes through here rather than
+    /// indexing `inner.deployments()` by a position computed from the
+    /// generation list: the two lists are not the same length. A deployment
+    /// whose commit carries no Kiln metadata — rpm-ostree's, or one written by
+    /// a Kiln too new to read it — is skipped rather than fatal, for the same
+    /// reason `commit::history` tolerates one: a foreign deployment beside
+    /// Kiln's is not a reason for `kiln list`, `kiln status` or `kiln rollback`
+    /// to refuse to run.
+    fn deployed(&self) -> Result<Vec<(Generation, Deployment)>> {
         let booted = self.inner.booted_deployment().map(|d| d.csum().to_string());
         let repo = self.repo();
 
         let mut out = Vec::new();
-        for (position, deployment) in deployments.iter().enumerate() {
+        for (position, deployment) in self.inner.deployments().into_iter().enumerate() {
             let checksum = deployment.csum().to_string();
-            let metadata = commit::read_metadata(&repo, &checksum)?;
-            out.push(Generation {
+            let metadata = match commit::read_metadata(&repo, &checksum) {
+                Ok(m) => m,
+                Err(Error::NotOurs { .. }) => continue,
+                Err(e) => return Err(e),
+            };
+            let generation = Generation {
                 number: metadata.generation,
                 built_at: metadata.built_at,
                 image: metadata.image,
-                index: deployment.index(),
+                index: position,
                 booted: booted.as_deref() == Some(checksum.as_str()),
                 pinned: deployment.is_pinned(),
                 boots_next: position == 0,
@@ -435,9 +451,24 @@ impl Sysroot {
                 rollback_target: position == 1,
                 baseline: metadata.generation == BASELINE,
                 checksum,
-            });
+            };
+            out.push((generation, deployment));
         }
         Ok(out)
+    }
+
+    /// The deployment holding `generation`, or `NoSuchGeneration` naming what
+    /// this machine does have.
+    fn deployment_of(&self, generation: u64) -> Result<(Generation, Deployment)> {
+        let deployed = self.deployed()?;
+        deployed
+            .iter()
+            .find(|(g, _)| g.number == generation)
+            .cloned()
+            .ok_or_else(|| Error::NoSuchGeneration {
+                wanted: generation,
+                available: deployed.iter().map(|(g, _)| g.number).collect(),
+            })
     }
 
     /// Deploy a commit for the next boot, staging it when that is possible.
@@ -583,17 +614,10 @@ impl Sysroot {
     /// `kiln rollback` had to be Kiln's own command — there was
     /// never anything to pass through to.
     pub fn set_default(&self, generation: u64) -> Result<Generation> {
-        let generations = self.generations()?;
-        let position = generations
-            .iter()
-            .position(|g| g.number == generation)
-            .ok_or_else(|| Error::NoSuchGeneration {
-                wanted: generation,
-                available: generations.iter().map(|g| g.number).collect(),
-            })?;
+        let (chosen, _) = self.deployment_of(generation)?;
 
         let mut deployments: Vec<Deployment> = self.inner.deployments();
-        let chosen = deployments.remove(position);
+        let chosen = deployments.remove(chosen.index);
         deployments.insert(0, chosen);
 
         self.write_deployments(&deployments, "reordering the deployments")?;
@@ -614,27 +638,13 @@ impl Sysroot {
         // counter, which the next boot spends and `kiln status` explains.
         grubenv::disarm(&self.path).ok();
 
-        self.generations()?
-            .into_iter()
-            .find(|g| g.number == generation)
-            .ok_or_else(|| Error::NoSuchGeneration {
-                wanted: generation,
-                available: Vec::new(),
-            })
+        self.deployment_of(generation).map(|(g, _)| g)
     }
 
     pub fn set_pinned(&self, generation: u64, pinned: bool) -> Result<()> {
-        let generations = self.generations()?;
-        let position = generations
-            .iter()
-            .position(|g| g.number == generation)
-            .ok_or_else(|| Error::NoSuchGeneration {
-                wanted: generation,
-                available: generations.iter().map(|g| g.number).collect(),
-            })?;
-        let deployments = self.inner.deployments();
+        let (_, deployment) = self.deployment_of(generation)?;
         self.inner
-            .deployment_set_pinned(&deployments[position], pinned)
+            .deployment_set_pinned(&deployment, pinned)
             .map_err(Error::of("pinning the deployment"))
     }
 
@@ -647,28 +657,35 @@ impl Sysroot {
     /// the wrong deployment. The refusals are already decided by
     /// `Removal::plan`; this is the part that touches the disk.
     pub fn remove(&self, generations: &[u64]) -> Result<()> {
-        let known = self.generations()?;
+        let known = self.deployed()?;
         for wanted in generations {
-            if !known.iter().any(|g| g.number == *wanted) {
+            if !known.iter().any(|(g, _)| g.number == *wanted) {
                 return Err(Error::NoSuchGeneration {
                     wanted: *wanted,
-                    available: known.iter().map(|g| g.number).collect(),
+                    available: known.iter().map(|(g, _)| g.number).collect(),
                 });
             }
         }
 
-        let deployments = self.inner.deployments();
-        let keep: Vec<Deployment> = known
+        // Everything the deployment list holds that is not being removed —
+        // including any foreign deployment `deployed()` skipped, which must
+        // survive a `kiln rm` that says nothing about it.
+        let removing: Vec<&str> = known
             .iter()
-            .zip(deployments.iter())
-            .filter(|(g, _)| !generations.contains(&g.number))
-            .map(|(_, d)| d.clone())
+            .filter(|(g, _)| generations.contains(&g.number))
+            .map(|(g, _)| g.checksum.as_str())
+            .collect();
+        let keep: Vec<Deployment> = self
+            .inner
+            .deployments()
+            .into_iter()
+            .filter(|d| !removing.contains(&d.csum().as_str()))
             .collect();
 
         // A pinned deployment that is being removed has to be unpinned first:
         // libostree's own cleanup keeps pinned deployments, and one left in the
         // list would be undeployed here and resurrected by the next prune.
-        for (g, d) in known.iter().zip(deployments.iter()) {
+        for (g, d) in &known {
             if generations.contains(&g.number) && g.pinned {
                 self.inner
                     .deployment_set_pinned(d, false)
@@ -730,6 +747,11 @@ pub struct Removal {
     /// with the reason they are being kept. Rendered by the CLI; a `clean` that
     /// silently keeps things is one nobody can predict.
     pub refused: Vec<(u64, &'static str)>,
+    /// Generations named that this machine does not have. A different mistake
+    /// from a refusal — a typo rather than a policy — and dropping them here
+    /// would make `kiln rm 42` succeed silently on a machine that has 1 to 9.
+    /// Only `requested` can produce these; `budget` names nothing itself.
+    pub unknown: Vec<u64>,
 }
 
 /// Why a generation cannot be removed, in the order the reasons are checked.
@@ -763,7 +785,7 @@ impl Removal {
         let mut out = Removal::default();
         for number in wanted {
             match generations.iter().find(|g| g.number == *number) {
-                None => continue,
+                None => out.unknown.push(*number),
                 Some(g) => match protection(g, remove_baseline) {
                     Some(why) => out.refused.push((*number, why)),
                     None => out.remove.push(*number),
@@ -799,7 +821,8 @@ impl Removal {
     }
 }
 
-/// Deploy a commit onto a sysroot. The free function describes.
+/// Deploy a commit onto a sysroot; `Sysroot::deploy` under a free-function name,
+/// so a caller holding only a `&Sysroot` reads the same as the rest of the API.
 pub fn deploy(
     sysroot: &Sysroot,
     checksum: &str,
@@ -846,7 +869,7 @@ mod tests {
                 checksum: format!("{number:0>64}"),
                 built_at: "2026-09-01T00:00:00Z".into(),
                 image: "workstation".into(),
-                index: position as i32,
+                index: position,
                 booted: *booted,
                 pinned: *pinned,
                 boots_next: position == 0,

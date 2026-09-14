@@ -56,15 +56,22 @@ pub fn load(loader: &mut Loader, entry: PathBuf) -> Result<Unit, Errors> {
 
 impl Walker<'_> {
     fn visit(&mut self, path: PathBuf, at: Option<&Origin>, depth: usize) -> Option<Unit> {
-        if depth > MAX_DEPTH {
-            self.errs.push(
-                Diag::error("kiln::graph", format!("include depth exceeded {MAX_DEPTH}"))
-                    .maybe_help(at.map(|_| {
-                        "a configuration this deep is almost always a cycle that dodged \
-                         detection, or a module library that wants flattening"
-                            .to_string()
-                    })),
+        // The entry point is depth 0, so `MAX_DEPTH` levels of `include` put the
+        // deepest file at `MAX_DEPTH`; `>=` is what makes the cap the number
+        // the module doc promises.
+        if depth >= MAX_DEPTH {
+            let mut diag = Diag::error(
+                "kiln::graph",
+                format!("include depth exceeded {MAX_DEPTH} levels"),
+            )
+            .help(
+                "a configuration this deep is almost always a cycle that dodged detection, \
+                 or a module library that wants flattening",
             );
+            if let Some(at) = at {
+                diag = diag.label(at, "this include is too deep");
+            }
+            self.errs.push(diag);
             return None;
         }
 

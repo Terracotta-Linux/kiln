@@ -66,7 +66,11 @@ pub fn parse(text: &str) -> BTreeMap<String, String> {
     text.lines()
         .filter(|l| !l.starts_with('#'))
         .filter_map(|l| l.split_once('='))
-        .map(|(k, v)| (k.trim().to_string(), v.to_string()))
+        // Both sides trimmed. GRUB writes `key=value` with no padding, but a
+        // file edited by hand is still the file Kiln has to round-trip, and
+        // trimming one side and not the other is an asymmetry with no reason
+        // behind it.
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
         .collect()
 }
 

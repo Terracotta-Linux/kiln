@@ -47,25 +47,19 @@ fn fields_kiln_does_not_model_are_ignored() {
     assert!(rpc::parse(RECORDED).is_ok());
 }
 
-/// The trust seam: arbitrary code from a stranger gets one line of daylight
-/// before it is built.
+/// The trust seam needs a maintainer to report, so the RPC's answer has to
+/// carry one. `kiln-resolve` turns its absence into a warning; `realize` prints
+/// the rest of the line from the plan.
 #[test]
-fn the_trust_summary_names_the_maintainer_and_the_commit() {
+fn the_reply_carries_the_maintainer_and_the_out_of_date_flag() {
     let infos = rpc::parse(RECORDED).unwrap();
-    let line = infos["yay"].trust_summary("cb43f84828ab4f9700f7c6f9c6d7a923d4cfaff0", 1);
-    assert!(line.starts_with("yay "), "{line}");
-    assert!(line.contains("maintainer jguer"), "{line}");
-    assert!(line.contains("commit cb43f84"), "{line}");
-    assert!(line.contains("1 source"), "{line}");
-    assert!(
-        !line.contains("1 sources"),
-        "one source, not sources: {line}"
-    );
+    assert_eq!(infos["yay"].maintainer.as_deref(), Some("jguer"));
+    assert!(infos["yay"].last_modified > 0);
 }
 
-/// An orphaned package is exactly the case the summary exists for.
+/// An orphaned package parses as one rather than failing or inventing a name.
 #[test]
-fn an_orphaned_package_says_so_rather_than_saying_nothing() {
+fn an_orphaned_package_has_no_maintainer_rather_than_an_empty_one() {
     let orphan = rpc::Info {
         name: "abandoned".into(),
         package_base: "abandoned".into(),
@@ -73,9 +67,7 @@ fn an_orphaned_package_says_so_rather_than_saying_nothing() {
         maintainer: None,
         ..rpc::Info::default()
     };
-    assert!(orphan
-        .trust_summary("abc1234", 3)
-        .contains("maintainer ORPHANED"));
+    assert!(orphan.maintainer.is_none());
 }
 
 #[test]

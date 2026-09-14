@@ -1,6 +1,5 @@
 ---
 source: crates/kiln-config/tests/corpus.rs
-assertion_line: 131
 expression: rendered
 ---
 kiln::semantic
@@ -12,8 +11,7 @@ kiln::semantic
    ·             ──────┬─────
    ·                   ╰── not available
    ╰────
-  help: the sysroot pivot needs an initramfs hook, and upstream ostree
-        ships one for dracut (`50ostree`, in the `ostree` package) and
-        none for mkinitcpio. Writing and maintaining a boot-critical
-        hook is not something Kiln does; remove this                              line
-        to get dracut.
+  help: the sysroot pivot needs an initramfs hook, and upstream ostree ships one for
+        dracut (`50ostree`, in the `ostree` package) and none for mkinitcpio. Writing
+        and maintaining a boot-critical hook is not something Kiln does; remove this
+        line to get dracut.

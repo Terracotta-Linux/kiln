@@ -15,8 +15,9 @@ pub const SHIM_LOG: &str = "/run/kiln/shims.log";
 pub struct SandboxSpec {
     /// The staging root the command sees as `/`.
     pub root: PathBuf,
-    /// argv. lists no command because it describes the *isolation*; a
-    /// sandbox with nothing to run is not useful, so it lives here.
+    /// argv. The `Sandbox` trait itself names no command, because it describes
+    /// the *isolation*; a sandbox with nothing to run is not useful, so the
+    /// command lives here in the spec.
     pub command: Vec<String>,
     /// Explicit, with no implicit host access.
     pub binds: Vec<Bind>,
@@ -175,8 +176,8 @@ impl Bind {
         }
     }
 
-    /// What a chrooted distribution tool needs and no more. `/dev`
-    /// minimal, `/proc` from a fresh mount, and no host network namespace.
+    /// What a chrooted distribution tool needs and no more: a minimal `/dev`,
+    /// `/proc` from a fresh mount, and no host network namespace.
     /// `/run` and `/tmp` are private tmpfs mounts so that whatever a scriptlet
     /// leaves in them cannot reach the image — which is the same reason the
     /// tmpfiles hook has to be shadowed.

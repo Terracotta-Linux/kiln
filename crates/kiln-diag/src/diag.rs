@@ -2,7 +2,9 @@
 //!
 //! A Kiln diagnostic can point at several places in several files at once —
 //! "set here" in one file and "and here" in another is the single most common
-//! shape (rule 3). miette carries one `SourceCode` per diagnostic, so a
+//! shape, because two included files disagreeing is an error rather than a
+//! coin flip (`kiln_config::merge`). miette carries one `SourceCode` per
+//! diagnostic, so a
 //! multi-file diagnostic is rendered as a primary plus one `related` per extra
 //! file. That plumbing lives here so no other crate has to know about it.
 
@@ -63,8 +65,13 @@ impl Diag {
         self
     }
 
+    /// Attach a help line if there is one to attach. `None` leaves whatever
+    /// `help()` already set alone — the name says "set if present", so
+    /// clearing an earlier line would be a surprise.
     pub fn maybe_help(mut self, help: Option<String>) -> Diag {
-        self.help = help;
+        if help.is_some() {
+            self.help = help;
+        }
         self
     }
 
@@ -135,12 +142,6 @@ impl Diagnostic for Diag {
         let f = self.primary_file()?;
         Some(Box::new(self.labels_for(f).into_iter()))
     }
-
-    fn related(&self) -> Option<Box<dyn Iterator<Item = &dyn Diagnostic> + '_>> {
-        // Rendered lazily would be nicer, but miette wants borrowed trait
-        // objects; the parts are cheap and a diagnostic is printed once.
-        None
-    }
 }
 
 /// A single file's worth of a multi-file diagnostic, used when rendering.
@@ -171,8 +172,12 @@ impl Diagnostic for DiagPart {
 
 impl Diag {
     /// The extra-file blocks, for a renderer that wants to print them after the
-    /// primary. Kept separate from `related()` because miette's signature there
-    /// cannot return owned values.
+    /// primary.
+    ///
+    /// Not `Diagnostic::related()`, which is left at its default `None`:
+    /// `related()` must hand back *borrowed* trait objects, and these are built
+    /// on demand. `render()` prints them itself instead — without which a
+    /// multi-file conflict names only one of its files.
     pub fn parts(&self) -> Vec<DiagPart> {
         self.extra_files()
             .into_iter()
