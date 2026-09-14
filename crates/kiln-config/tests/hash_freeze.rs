@@ -70,6 +70,14 @@ use std::path::{Path, PathBuf};
 /// `7zip` — GNOME's file manager and an archive manager to go with it, which
 /// `@kiln/desktop/gnome` had been shipping without. Once again only
 /// `workstation` moved.
+///
+/// The sixth was `@kiln/net/networkmanager` masking
+/// `systemd-networkd-wait-online.service` as well as NetworkManager's own
+/// wait-online unit. Disabling `systemd-networkd` leaves that one enabled by
+/// preset and `WantedBy=network-online.target`, so every boot waited two
+/// minutes for links networkd would never manage. A masked unit is image
+/// content, so the identity was supposed to move — and only `workstation`
+/// includes a profile that names this module.
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
@@ -89,7 +97,7 @@ const FROZEN: &[(&str, &str)] = &[
     ),
     (
         "workstation",
-        "b3:9ff41f8be71c3f465234a6ce83f30bb42bbe8fd7a1be312e30831ee708149471",
+        "b3:872e83855cc5caed7551295123ca299a8114af456a046891b26884f12f412038",
     ),
 ];
 

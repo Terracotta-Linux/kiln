@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:9ff41f8be71c3f465234a6ce83f30bb42bbe8fd7a1be312e30831ee708149471
+config_id: b3:872e83855cc5caed7551295123ca299a8114af456a046891b26884f12f412038
 
 
   boot: 
@@ -138,6 +138,7 @@ config_id: b3:9ff41f8be71c3f465234a6ce83f30bb42bbe8fd7a1be312e30831ee708149471
       - "systemd-timesyncd.service"
     mask: 
       - "NetworkManager-wait-online.service"
+      - "systemd-networkd-wait-online.service"
     units: 
       backup.timer: 
         content: []

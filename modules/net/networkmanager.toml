@@ -1,4 +1,11 @@
 # NetworkManager as the network stack.
+#
+# Both wait-online units are masked, not one. Disabling `systemd-networkd`
+# leaves `systemd-networkd-wait-online` enabled by preset, and that one is
+# `WantedBy=network-online.target` — so anything ordered after
+# `network-online.target` waits two minutes for links networkd will never
+# manage, then proceeds anyway. It comes from `systemd` rather than from
+# `networkmanager`, which a module may name without installing.
 kiln = 1
 
 [packages]
@@ -7,4 +14,7 @@ repo = ["networkmanager"]
 [systemd]
 enable  = ["NetworkManager.service"]
 disable = ["systemd-networkd.service"]
-mask    = ["NetworkManager-wait-online.service"]
+mask    = [
+  "NetworkManager-wait-online.service",
+  "systemd-networkd-wait-online.service",
+]
