@@ -64,6 +64,8 @@ fn help_lists_every_command_the_design_promises() {
         "clean",
         "init",
         "sysroot init",
+        "unlock",
+        "live",
         "completions",
     ] {
         assert!(
@@ -381,6 +383,23 @@ fn rebuild_refuses_something_that_is_not_a_generation_number() {
     assert!(stderr(&out).contains("not a generation number"));
 }
 
+/// `kiln live` takes a generation like every other command that names one.
+#[test]
+fn live_without_a_generation_says_where_to_find_one() {
+    let out = kiln(&["live"]);
+    assert_eq!(code(&out), 1);
+    let text = stderr(&out);
+    assert!(text.contains("kiln live 41"), "got: {text}");
+    assert!(text.contains("kiln list"), "got: {text}");
+}
+
+#[test]
+fn live_refuses_something_that_is_not_a_generation_number() {
+    let out = kiln(&["live", "latest"]);
+    assert_eq!(code(&out), 1);
+    assert!(stderr(&out).contains("not a generation number"));
+}
+
 /// `--deep` exists to fetch the inputs that cannot be resolved without
 /// fetching, so `--deep --offline` asks for two opposite things. Refusing with
 /// an explanation beats silently honouring one of them — which would be a
@@ -415,6 +434,8 @@ fn the_inspection_commands_are_real_rather_than_deferred() {
         vec!["why", "mesa"],
         vec!["owns", "/usr/bin/ls"],
         vec!["rm", "3"],
+        vec!["unlock"],
+        vec!["live", "3"],
     ] {
         let dir = scratch(&format!("cli-real-{}", argv[0]));
         let mut full = vec!["--sysroot", dir.to_str().unwrap()];

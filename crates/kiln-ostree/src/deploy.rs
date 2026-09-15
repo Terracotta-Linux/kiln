@@ -9,10 +9,11 @@
 use crate::commit;
 use crate::grubcfg;
 use crate::grubenv;
+use crate::unlock::UnlockState;
 use crate::{Error, Result};
 use kiln_manifest::Manifest;
 use ostree::gio;
-use ostree::{Deployment, SysrootSimpleWriteDeploymentFlags};
+use ostree::{Deployment, DeploymentUnlockedState, SysrootSimpleWriteDeploymentFlags};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -704,6 +705,43 @@ impl Sysroot {
         self.inner
             .cleanup(gio::Cancellable::NONE)
             .map_err(Error::of("cleaning up old deployments"))
+    }
+
+    /// Whether this is the live, booted root — the only place `unlock` and
+    /// `unlock_state` mean anything. A `--sysroot` directory is never booted,
+    /// however it was built.
+    pub fn is_booted(&self) -> bool {
+        self.path == Path::new("/") && self.inner.is_booted()
+    }
+
+    /// The booted deployment's current unlock state. See [`crate::unlock`].
+    pub fn unlock_state(&self) -> Result<UnlockState> {
+        if !self.is_booted() {
+            return Err(Error::NotBooted);
+        }
+        let deployment = self.inner.booted_deployment().ok_or(Error::NotBooted)?;
+        Ok(UnlockState::of(deployment.unlocked()))
+    }
+
+    /// `ostree admin unlock` (transient): make the booted deployment's `/usr`
+    /// writable for the rest of this boot. Nothing survives it — not even a
+    /// reboot back into the same generation — because Kiln only ever asks
+    /// for the transient state; see [`crate::unlock`] for why.
+    ///
+    /// This is dev/test scratch space, not a second deploy path: it never
+    /// touches `plan_id`, the build record, or the deployment list.
+    pub fn unlock(&self) -> Result<()> {
+        if !self.is_booted() {
+            return Err(Error::NotBooted);
+        }
+        let deployment = self.inner.booted_deployment().ok_or(Error::NotBooted)?;
+        self.inner
+            .deployment_unlock(
+                &deployment,
+                DeploymentUnlockedState::Transient,
+                gio::Cancellable::NONE,
+            )
+            .map_err(Error::of("unlocking the booted deployment"))
     }
 }
 

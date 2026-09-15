@@ -88,8 +88,24 @@ pub fn scan(deployment: &Path) -> Result<Vec<Change>> {
     if !shipped.is_dir() || !live.is_dir() {
         return Ok(Vec::new());
     }
+    compare(&shipped, &live, "/etc")
+}
+
+/// The same walk `scan` runs, generalized to any two directories.
+///
+/// `scan` compares one deployment's shipped `/usr/etc` against its own live
+/// `/etc`; `kiln live` needs the other question this same algorithm answers —
+/// what one generation's `/usr/etc` changed relative to another's — so the
+/// walk is exposed rather than duplicated. Either side missing is empty
+/// rather than an error, for the same reason `scan` tolerates a bare
+/// deployment: the caller is answering "what differs", and "nothing was
+/// there to differ" is a valid answer, not a failure.
+pub fn compare(a: &Path, b: &Path, at: &str) -> Result<Vec<Change>> {
+    if !a.is_dir() && !b.is_dir() {
+        return Ok(Vec::new());
+    }
     let mut out = Vec::new();
-    walk(&shipped, &live, "/etc", &mut out)?;
+    walk(a, b, at, &mut out)?;
     out.sort();
     Ok(out)
 }

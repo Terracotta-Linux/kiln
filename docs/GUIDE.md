@@ -849,7 +849,66 @@ Initialized an OSTree sysroot at /mnt.
 It is a separate verb from `kiln init` deliberately: conflating "make me a config" with "make
 me a bootable root" is a mistake somebody makes exactly once.
 
-### 5.6 Shell completions
+### 5.6 Development (dev/test only)
+
+> **These two commands are for developing and testing a configuration — never for a system
+> anyone depends on.** Nothing here is a deployment, a commit, or a way to ship a change:
+> both are temporary, discarded automatically at the next reboot — even a reboot back into
+> the exact generation that was unlocked — and neither ever touches `plan_id`, the build
+> record, or which generation is committed or boots next.
+
+#### `kiln unlock`
+
+`ostree admin unlock`, transient only. Makes the booted deployment's `/usr` writable for the
+rest of this boot, for poking at a package or a file by hand. Refuses under `--sysroot` and on
+a machine that has not booted from OSTree — unlocking is a property of the live, booted root,
+not of a build target.
+
+```console
+$ sudo kiln unlock
+warning dev/test only — never run this on a system you depend on.
+        Temporary: this touches no deployment, writes no commit, and every
+        change is discarded on reboot — even a reboot back into the same
+        generation.
+unlocked  /usr is writable for the rest of this boot
+```
+
+#### `kiln live <gen>`
+
+Previews an already-deployed generation — a freshly staged `kiln apply`, an old rollback
+target, the baseline, anything `kiln list` shows — live, without a reboot. It calls `kiln
+unlock` and then syncs `/usr` and `/etc` from that generation's tree onto the booted root:
+
+- **`/usr`** is made to match the target generation exactly, except `/usr/lib/modules`, which
+  is never touched — kernel and module content never applies live.
+- **`/etc`** gets the same 3-way merge a real deploy would do: a path you have hand-edited on
+  the live system is left alone and reported rather than overwritten, exactly the hazard
+  [`/etc` drift](#115-etc-drift) already warns about.
+- **The kernel, the initramfs, the kernel command line, and the bootloader are never
+  touched.** If the target generation differs in any of those, `kiln live` says so and skips
+  them rather than applying a partial, inconsistent version of a reboot.
+
+```console
+$ sudo kiln live 44
+warning dev/test only — never run this on a system you depend on.
+        Temporary: this touches no deployment, writes no commit, and every
+        change is discarded on reboot — even a reboot back into the same
+        generation.
+previewing generation 44 live over generation 43 — /usr and /etc only
+
+applied   /usr, and /etc where you have no local edits
+
+skipped — needs a real reboot, not applied live:
+  kernel 6.19.2-arch1-1 → 6.19.3-arch1-1
+
+changed services may still be running the old code; restart them by hand, or reboot into
+generation 44 for real.
+```
+
+Nothing here replaces `kiln apply`/`kiln deploy`/a reboot — it is a way to look at a
+generation before committing to one.
+
+### 5.7 Shell completions
 
 ```console
 $ kiln completions bash    # or zsh, or fish
@@ -871,7 +930,7 @@ Or install it where the shell's loader already looks:
 
 The Arch package installs all three.
 
-### 5.7 Commands that will never exist
+### 5.8 Commands that will never exist
 
 Some verbs are recognized and answered rather than reported as unknown:
 
@@ -881,7 +940,7 @@ Some verbs are recognized and answered rather than reported as unknown:
 | `kiln install` | Installation is an installer's job; Kiln exposes `--sysroot` and `kiln sysroot init` for one to build against |
 | `kiln push`, `pull`, `remote` | Kiln is a distribution's build tool, not an image-shipping pipeline |
 
-### 5.8 Exit codes
+### 5.9 Exit codes
 
 | Code | Meaning |
 | --- | --- |

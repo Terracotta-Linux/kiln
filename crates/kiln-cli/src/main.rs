@@ -10,6 +10,7 @@ mod check;
 mod completions;
 mod deep;
 mod deployments;
+mod dev;
 mod disk;
 mod drift;
 mod explain;
@@ -133,6 +134,9 @@ fn run(argv: &[String]) -> ExitCode {
         }
 
         Command::SysrootInit => deployments::sysroot_init(cli.global.sysroot.as_deref()),
+
+        Command::Unlock => dev::unlock(cli.global.sysroot.as_deref()),
+        Command::Live { generation } => dev::live(cli.global.sysroot.as_deref(), *generation),
 
         Command::Build { .. } | Command::Apply { .. } => frontend(&cli),
 

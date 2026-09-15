@@ -20,7 +20,17 @@ These are closed decisions. Do not reintroduce them, and push back if asked to a
 casually:
 
 - **No login accounts / users / dotfiles / desktop settings.** Image content only.
-- **No live-apply.** One image, one reboot. No `/etc`-only fast path.
+- **No live-apply as a way to ship changes.** One image, one reboot. No
+  `/etc`-only fast path. The one exception is dev/test tooling, and it is
+  narrow on purpose: `kiln unlock` (`ostree admin unlock`, transient) and
+  `kiln live <gen>` (unlock, then sync a *deployed* generation's `/usr` and
+  `/etc` onto the booted root, skipping anything that needs a reboot —
+  kernel, initramfs, cmdline, bootloader) exist purely so a config change can
+  be previewed without a reboot loop while developing. Both are temporary —
+  discarded at the next reboot, even one back into the same generation — and
+  neither writes a commit, changes which generation is deployed or boots
+  next, or touches `plan_id` or the build record. They are not a second way
+  to change a running system; they are scratch space that vanishes.
 - **No container image export**, no remotes, no `push`/`pull`, no commit signing, no fleet
   management or templating one config into many images.
 - **No installation.** There is no `kiln install`, no ISO, no partitioning. Kiln exposes
@@ -141,8 +151,11 @@ bottom ones need root and run only in privileged CI containers.
 - `kiln-aur` — RPC, commit identity, the dependency closure, the clone.
 - `kiln-record` — the build record.
 - `kiln-ostree` — commit, deploy, generations, rollback, `grubenv`, the `Removal` policy
-  `kiln rm`/`kiln clean` are written against, and `drift` — the `/usr/etc` vs `/etc` walk
-  behind `/etc` drift detection.
+  `kiln rm`/`kiln clean` are written against, `drift` — the `/usr/etc` vs `/etc` walk
+  behind `/etc` drift detection, generalized as `drift::compare` for diffing any two
+  trees — and `unlock`, the transient-only `ostree admin unlock` wrapper `kiln unlock`
+  and `kiln live` are built on (`kiln-cli/src/dev.rs` owns the sync itself; this crate
+  only owns unlocking and the tree diff).
 - `kiln-state` — planned, not yet built.
 
 Also: `modules/` (the shipped TOML module library → `/usr/share/kiln/modules`; a fixed set of

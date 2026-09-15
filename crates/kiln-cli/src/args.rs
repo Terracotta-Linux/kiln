@@ -81,6 +81,14 @@ pub enum Command {
     Rebuild {
         generation: u64,
     },
+    /// `kiln unlock` — `ostree admin unlock` (transient) on the booted
+    /// deployment. Dev/test only: see `dev.rs`.
+    Unlock,
+    /// `kiln live <gen>` — unlock, then sync a deployed generation's `/usr`
+    /// and `/etc` onto the booted root without a reboot. Dev/test only.
+    Live {
+        generation: u64,
+    },
     Help,
     Version,
     Completions {
@@ -125,6 +133,11 @@ Storage
   kiln init                           scaffold /etc/kiln
   kiln sysroot init <path>            create an OSTree sysroot to build into
 
+Development (dev/test only — temporary, discarded on reboot, no reboot needed)
+  kiln unlock                         make the booted /usr writable for this boot only
+  kiln live <gen>                     preview a generation's /usr and /etc live, no reboot
+                                      never touches kernel, initramfs, cmdline, or bootloader
+
 Shell
   kiln completions <bash|zsh|fish>    print a completion script
 
@@ -164,6 +177,8 @@ pub const VERBS: &[&str] = &[
     "rm",
     "clean",
     "sysroot",
+    "unlock",
+    "live",
     "completions",
     "help",
     "version",
@@ -426,6 +441,11 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
 
         "rebuild" => Command::Rebuild {
             generation: generation(&positional, "rebuild")?,
+        },
+
+        "unlock" => Command::Unlock,
+        "live" => Command::Live {
+            generation: generation(&positional, "live")?,
         },
 
         "completions" => {

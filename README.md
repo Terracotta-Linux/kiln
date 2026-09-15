@@ -148,6 +148,7 @@ Full details are in the [installation section of the guide](docs/GUIDE.md#4-inst
 | `kiln rebuild <gen>` | Reconstruct a past generation from its own build record |
 | `kiln clean` / `kiln pin <gen>` | Reclaim disk; keep a generation regardless |
 | `kiln init` / `kiln sysroot init <path>` | Scaffold a config; create a sysroot to build into |
+| `kiln unlock` / `kiln live <gen>` | **Dev/test only.** Preview changes live, no reboot — discarded on the next one |
 
 Full flags, output and error cases are in the
 [CLI reference](docs/GUIDE.md#5-cli-reference).

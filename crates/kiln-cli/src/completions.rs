@@ -23,7 +23,7 @@ _kiln() {
     _init_completion || return
 
     local verbs="check build apply rebuild explain show diff why owns list \
-status rollback deploy pin unpin rm clean init sysroot completions help version"
+status rollback deploy pin unpin rm clean init sysroot unlock live completions help version"
     local global="--config --sysroot --allow-external-sources --module-root \
 --verbose --version --help"
 
@@ -99,6 +99,8 @@ _kiln() {
         'clean:keep N, the baseline, and anything pinned'
         'init:scaffold /etc/kiln'
         'sysroot:create an OSTree sysroot to build into'
+        'unlock:make the booted /usr writable for this boot only (dev/test)'
+        'live:preview a generation live, no reboot (dev/test)'
         'completions:print a shell completion script'
         'help:show usage'
         'version:print the version'
@@ -135,8 +137,8 @@ _kiln "$@"
 
 const FISH: &str = r#"# kiln(1) completions
 set -l __kiln_verbs check build apply rebuild explain show diff why owns \
-    list status rollback deploy pin unpin rm clean init sysroot completions \
-    help version
+    list status rollback deploy pin unpin rm clean init sysroot unlock live \
+    completions help version
 
 complete -c kiln -f
 complete -c kiln -n "not __fish_seen_subcommand_from $__kiln_verbs" -a "$__kiln_verbs"

@@ -25,6 +25,7 @@ pub mod entries;
 pub mod generation;
 pub mod grubcfg;
 pub mod grubenv;
+pub mod unlock;
 
 pub use commit::{commit, CommitOptions, Committed};
 pub use deploy::{
@@ -33,6 +34,7 @@ pub use deploy::{
 pub use drift::{Change, How};
 pub use generation::{Metadata, KEY_PREFIX};
 pub use grubenv::Counting;
+pub use unlock::UnlockState;
 
 use std::fmt;
 use std::path::PathBuf;
@@ -57,6 +59,11 @@ pub enum Error {
         wanted: u64,
         available: Vec<u64>,
     },
+    /// `kiln unlock`/`kiln live` refuse anywhere but the live, booted root:
+    /// unlocking is `ostree_sysroot_deployment_unlock` acting on
+    /// `booted_deployment()`, which does not exist under `--sysroot` and
+    /// means nothing on a system that has not booted from OSTree at all.
+    NotBooted,
     Io {
         doing: &'static str,
         path: PathBuf,
@@ -98,6 +105,12 @@ impl fmt::Display for Error {
                 path,
                 source,
             } => write!(f, "{doing} {}: {source}", path.display()),
+            Error::NotBooted => write!(
+                f,
+                "this is not the live, booted system — `kiln unlock`/`kiln live` have nothing \
+                 to unlock under `--sysroot`, and nothing to unlock on a machine that has not \
+                 booted from OSTree"
+            ),
         }
     }
 }
