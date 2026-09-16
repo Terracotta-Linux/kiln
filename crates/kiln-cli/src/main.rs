@@ -7,6 +7,7 @@
 mod args;
 mod build;
 mod check;
+mod color;
 mod completions;
 mod config;
 mod deep;
@@ -37,7 +38,7 @@ fn run(argv: &[String]) -> ExitCode {
     let cli = match args::parse(argv) {
         Ok(c) => c,
         Err(msg) => {
-            eprintln!("\x1b[1;31merror\x1b[0m {msg}");
+            eprintln!("{} {msg}", color::error());
             return ExitCode::Config;
         }
     };
@@ -256,9 +257,9 @@ fn check_command(
 
     if deep && offline {
         eprintln!(
-            "\n\x1b[1;31merror\x1b[0m  `--deep` and `--offline` ask for opposite things: \
-             `--deep` exists to\n        fetch the inputs that cannot be resolved without \
-             fetching."
+            "\n{}  `--deep` and `--offline` ask for opposite things: `--deep` exists to\n        \
+             fetch the inputs that cannot be resolved without fetching.",
+            color::error()
         );
         return ExitCode::Config;
     }
@@ -299,7 +300,11 @@ fn check_command(
     };
 
     if record.plan_id() == plan.plan_id() {
-        println!("\nUp to date.  generation {}", record.generation);
+        println!(
+            "\n{}  generation {}",
+            color::success("Up to date."),
+            record.generation
+        );
         if deep_report.is_none() {
             pipeline::report_volatile(&plan);
             return ExitCode::Ok;

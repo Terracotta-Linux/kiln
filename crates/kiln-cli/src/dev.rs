@@ -28,12 +28,14 @@ use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
-const WARNING: &str = "\
-\x1b[1;33mwarning\x1b[0m dev/test only — never run this on a system you depend on.
-        Temporary: this touches no deployment, writes no commit, and every
-        change is discarded on reboot — even a reboot back into the same
-        generation.
-";
+fn warning() -> String {
+    format!(
+        "{} dev/test only — never run this on a system you depend on.\n        Temporary: \
+         this touches no deployment, writes no commit, and every\n        change is \
+         discarded on reboot — even a reboot back into the same\n        generation.\n",
+        crate::color::warning(crate::color::Stream::Out)
+    )
+}
 
 pub fn unlock(sysroot: Option<&Path>) -> ExitCode {
     let root = paths::sysroot(sysroot);
@@ -45,7 +47,7 @@ pub fn unlock(sysroot: Option<&Path>) -> ExitCode {
         return not_booted();
     }
 
-    print!("{WARNING}");
+    print!("{}", warning());
     match sysroot.unlock() {
         Ok(()) => {
             println!("unlocked  /usr is writable for the rest of this boot");
@@ -70,7 +72,10 @@ pub fn live(sysroot: Option<&Path>, generation: u64) -> ExitCode {
         Err(e) => return code(&e),
     };
     let Some(booted) = generations.iter().find(|g| g.booted) else {
-        eprintln!("\x1b[1;31merror\x1b[0m nothing is booted from Kiln on this machine");
+        eprintln!(
+            "{} nothing is booted from Kiln on this machine",
+            crate::color::error()
+        );
         return ExitCode::System;
     };
     let Some(target) = generations.iter().find(|g| g.number == generation) else {
@@ -95,7 +100,7 @@ pub fn live(sysroot: Option<&Path>, generation: u64) -> ExitCode {
 
     let boot_only = reboot_only_changes(&sysroot, booted, target, &booted_root, &target_root);
 
-    print!("{WARNING}");
+    print!("{}", warning());
     println!(
         "previewing generation {} live over generation {} — /usr and /etc only\n",
         target.number, booted.number
@@ -107,13 +112,13 @@ pub fn live(sysroot: Option<&Path>, generation: u64) -> ExitCode {
 
     let live_root = Path::new("/");
     if let Err(e) = sync_usr(&target_root, live_root) {
-        eprintln!("\x1b[1;31merror\x1b[0m syncing /usr: {e}");
+        eprintln!("{} syncing /usr: {e}", crate::color::error());
         return ExitCode::System;
     }
     let etc_report = match sync_etc(&booted_root, &target_root) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("\x1b[1;31merror\x1b[0m syncing /etc: {e}");
+            eprintln!("{} syncing /etc: {e}", crate::color::error());
             return ExitCode::System;
         }
     };
@@ -317,13 +322,13 @@ fn remove_any(path: &Path) -> io::Result<()> {
 }
 
 fn not_booted() -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m {}", OError::NotBooted);
+    eprintln!("{} {}", crate::color::error(), OError::NotBooted);
     ExitCode::System
 }
 
 fn open(root: &Path) -> Result<Sysroot, ExitCode> {
     Sysroot::open(root).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", crate::color::error());
         if !paths::is_initialized(root) {
             eprintln!(
                 "\n`kiln sysroot init --sysroot {}` creates the layout this needs.",
@@ -343,6 +348,6 @@ fn open(root: &Path) -> Result<Sysroot, ExitCode> {
 }
 
 fn code(e: &kiln_ostree::Error) -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m {e}");
+    eprintln!("{} {e}", crate::color::error());
     ExitCode::System
 }

@@ -4,6 +4,7 @@
 //! complete, bootable configuration is short, and a scaffold that opens with
 //! thirty commented-out keys teaches the opposite.
 
+use crate::color;
 use kiln_diag::ExitCode;
 use std::path::{Path, PathBuf};
 
@@ -33,28 +34,23 @@ pub fn run(config: Option<&Path>) -> ExitCode {
 
     if entry.exists() {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m {} already exists — kiln init will not overwrite it",
+            "{} {} already exists — kiln init will not overwrite it",
+            color::error(),
             entry.display()
         );
         return ExitCode::Config;
     }
     if let Some(parent) = entry.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!(
-                "\x1b[1;31merror\x1b[0m cannot create {}: {e}",
-                parent.display()
-            );
+            eprintln!("{} cannot create {}: {e}", color::error(), parent.display());
             return ExitCode::System;
         }
     }
     if let Err(e) = std::fs::write(&entry, TEMPLATE) {
-        eprintln!(
-            "\x1b[1;31merror\x1b[0m cannot write {}: {e}",
-            entry.display()
-        );
+        eprintln!("{} cannot write {}: {e}", color::error(), entry.display());
         return ExitCode::System;
     }
-    println!("wrote {}", entry.display());
+    println!("{} {}", color::success("wrote"), entry.display());
     println!("next:  edit it, then `kiln check --offline`");
     ExitCode::Ok
 }

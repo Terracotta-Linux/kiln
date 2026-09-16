@@ -61,12 +61,13 @@ pub fn report(deployment: &Path, manifest: Option<&Manifest>, verbose: bool) -> 
         return Some(out);
     }
 
+    let summary = match shadowing.len() {
+        1 => "1 local change to a file the image ships".to_string(),
+        n => format!("{n} local changes to files the image ships"),
+    };
     out.push_str(&format!(
-        "/etc        \x1b[1;33m{}\x1b[0m\n",
-        match shadowing.len() {
-            1 => "1 local change to a file the image ships".to_string(),
-            n => format!("{n} local changes to files the image ships"),
-        }
+        "/etc        {}\n",
+        crate::color::yellow(crate::color::Stream::Out, &summary)
     ));
 
     // Kiln's own `[[file]]` targets first, and always named in full however
@@ -78,8 +79,12 @@ pub fn report(deployment: &Path, manifest: Option<&Manifest>, verbose: bool) -> 
 
     for c in &ours {
         out.push_str(&format!(
-            "            {}   \x1b[1m← a [[file]] in this configuration\x1b[0m\n",
-            line(c)
+            "            {}   {}\n",
+            line(c),
+            crate::color::bold(
+                crate::color::Stream::Out,
+                "← a [[file]] in this configuration"
+            )
         ));
     }
     let cut = if verbose { theirs.len() } else { LIST_AT_MOST };

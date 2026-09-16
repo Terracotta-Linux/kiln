@@ -4,6 +4,7 @@
 //! next boot. There is no third thing — live-apply is out of scope — so the
 //! only way a change reaches a running system is one image and one reboot.
 
+use crate::color::{self, Stream};
 use crate::pipeline::{self, Context};
 use crate::{disk, paths};
 use kiln_diag::ExitCode;
@@ -24,11 +25,12 @@ pub fn run(
 ) -> ExitCode {
     if !is_root() {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m building an image needs root: the transaction creates files \
-             owned by root with the modes the packages declare.\n\n\
+            "{} building an image needs root: the transaction creates files owned by root \
+             with the modes the packages declare.\n\n\
              As an ordinary user libalpm extracts the archive, fails every chown, logs a \
              *warning*, and reports success — producing a tree whose ownership, setuid bits \
-             and capabilities are all wrong."
+             and capabilities are all wrong.",
+            color::error()
         );
         return ExitCode::System;
     }
@@ -41,10 +43,11 @@ pub fn run(
     // costs one command; discovered there, it reads like a broken build.
     if !paths::is_initialized(&ctx.sysroot) {
         eprintln!(
-            "\x1b[1;33mwarning\x1b[0m {} is not an initialized Kiln sysroot, so the \
-             generation this\n          build commits cannot be deployed there yet. Run \
+            "{} {} is not an initialized Kiln sysroot, so the generation this\n          \
+             build commits cannot be deployed there yet. Run \
              `kiln sysroot init --sysroot {}`\n          — before or after this build, it \
              takes no argument from either.",
+            color::warning(Stream::Err),
             ctx.sysroot.display(),
             ctx.sysroot.display()
         );
@@ -111,7 +114,7 @@ pub fn build(
 ) -> Result<Built, ExitCode> {
     let plan_id = plan.plan_id().to_string();
     let work = pipeline::fresh_build_dir(&ctx.state, &plan_id).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m preparing the build directory: {e}");
+        eprintln!("{} preparing the build directory: {e}", color::error());
         ExitCode::System
     })?;
 
@@ -164,7 +167,7 @@ pub fn build(
 
     let sandbox = Bubblewrap::new(work.join("sandbox"));
     let report = kiln_image::assemble::assemble(plan, manifest, &opts, &sandbox).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", color::error());
         ExitCode::Build
     })?;
 
@@ -203,7 +206,7 @@ pub fn stage(
     let sysroot = match Sysroot::open(&ctx.sysroot) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("\x1b[1;31merror\x1b[0m {e}");
+            eprintln!("{} {e}", color::error());
             return ExitCode::System;
         }
     };
@@ -218,8 +221,9 @@ pub fn stage(
     ) {
         Ok(deployed) => {
             println!(
-                "Generation {} is staged for the next boot.",
-                deployed.generation
+                "Generation {} is {}.",
+                deployed.generation,
+                color::success("staged for the next boot")
             );
             println!("Reboot to use it. `kiln rollback` returns to the previous one.");
             // Silent degradation here would be the worst kind:
@@ -228,9 +232,10 @@ pub fn stage(
             // until the day they are needed.
             if deployed.backend == kiln_ostree::Backend::None && ctx.sysroot == Path::new("/") {
                 eprintln!(
-                    "\x1b[1;33mwarning\x1b[0m this image ships no `grub`, so libostree writes \
-                     BLS entries and\n          nothing regenerates /boot/grub/grub.cfg. Add \
-                     `include = [\"@kiln/boot/grub2\"]`\n          to turn that on."
+                    "{} this image ships no `grub`, so libostree writes BLS entries \
+                     and\n          nothing regenerates /boot/grub/grub.cfg. Add \
+                     `include = [\"@kiln/boot/grub2\"]`\n          to turn that on.",
+                    color::warning(Stream::Err)
                 );
             }
             // Said out loud rather than done quietly: a regular file
@@ -253,9 +258,9 @@ pub fn stage(
                 // machine's business yet.
                 kiln_ostree::Counter::ImageCannotBless => {}
                 kiln_ostree::Counter::Unwritable(why) => eprintln!(
-                    "\x1b[1;33mwarning\x1b[0m the boot counter could not be armed, so \
-                     automatic rollback on boot\n          failure is off for this \
-                     generation: {why}"
+                    "{} the boot counter could not be armed, so automatic rollback on \
+                     boot\n          failure is off for this generation: {why}",
+                    color::warning(Stream::Err)
                 ),
             }
             if deployed.baseline {
@@ -267,7 +272,7 @@ pub fn stage(
             ExitCode::Ok
         }
         Err(e) => {
-            eprintln!("\x1b[1;31merror\x1b[0m {e}");
+            eprintln!("{} {e}", color::error());
             ExitCode::System
         }
     }
@@ -300,9 +305,10 @@ fn headroom(ctx: &Context) -> Option<String> {
         return None;
     }
     Some(format!(
-        "\x1b[1;33mwarning\x1b[0m {} free where a build of this image wants about {}.\n\
+        "{} {} free where a build of this image wants about {}.\n\
          \x20         {}\n\
          \x20         `kiln clean` frees old generations and trims the artifact cache.",
+        color::warning(Stream::Err),
         crate::fmt::bytes(space.free),
         crate::fmt::bytes(needed),
         match previous {
@@ -369,16 +375,16 @@ fn describe(report: &assemble::Report, verbose: bool) {
     // drift is a warning, not an error — by the time it is visible the
     // tree is built, and refusing to finish leaves nothing to act on.
     for drift in &report.uid_drift {
-        eprintln!("\x1b[1;33mwarning\x1b[0m {}", drift.describe());
+        eprintln!("{} {}", color::warning(Stream::Err), drift.describe());
     }
     for warning in &report.units.warnings {
-        eprintln!("\x1b[1;33mwarning\x1b[0m {warning}");
+        eprintln!("{} {warning}", color::warning(Stream::Err));
     }
     // A script that wrote nothing, or wrote over a package's file. Both are
     // warnings rather than notes: this says so for the first, and the second
     // is the whole of "scripts cannot *silently* clobber package content".
     for note in &report.scripts.notes {
-        eprintln!("\x1b[1;33mwarning\x1b[0m {note}");
+        eprintln!("{} {note}", color::warning(Stream::Err));
     }
     if verbose {
         for call in &report.shimmed {
@@ -391,7 +397,7 @@ fn describe(report: &assemble::Report, verbose: bool) {
 }
 
 fn fail(e: kiln_ostree::Error) -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m {e}");
+    eprintln!("{} {e}", color::error());
     ExitCode::System
 }
 

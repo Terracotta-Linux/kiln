@@ -3,13 +3,14 @@
 //! Never prints an OSTree checksum where a generation number would do, and
 //! keeps identities short outside `--verbose`.
 
+use crate::color::{self, Stream};
 use kiln_manifest::*;
 
 pub fn summary(m: &Manifest, files: &[kiln_diag::Src], verbose: bool) {
     let id = m.config_id();
     println!(
-        "\x1b[1m{}\x1b[0m  {}  config {}",
-        m.image.name,
+        "{}  {}  config {}",
+        color::bold(Stream::Out, &m.image.name),
         m.image.arch,
         if verbose { id.to_string() } else { id.short() }
     );

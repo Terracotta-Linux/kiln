@@ -36,8 +36,8 @@ use kiln_resolve::BuildPlan;
 pub fn run(ctx: &Context, generation: u64) -> ExitCode {
     if !build::is_root() {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m rebuilding an image needs root, for the same reason \
-             building one does."
+            "{} rebuilding an image needs root, for the same reason building one does.",
+            crate::color::error()
         );
         return ExitCode::System;
     }
@@ -58,10 +58,11 @@ pub fn run(ctx: &Context, generation: u64) -> ExitCode {
     // `[[file]]`, unit state and build script the image also had.
     let (Some(record), Some(manifest)) = (metadata.record, metadata.manifest) else {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m generation {generation} ({}) does not carry both the build \
+            "{} generation {generation} ({}) does not carry both the build \
              record and the manifest it was built from, so it cannot be reconstructed.\n\n\
              It was built by a Kiln that wrote only one of the two. Generations built from \
              here on carry both (step 11).",
+            crate::color::error(),
             &checksum[..12]
         );
         return ExitCode::System;
@@ -129,9 +130,10 @@ fn resolve(manifest: &Manifest, ctx: &Context, record: &Record) -> Result<BuildP
     kiln_resolve::resolve(manifest, &ctx.config_root, &opts, &inputs).map_err(|errs| {
         eprint!("{}", render_all(&errs));
         eprintln!(
-            "\n\x1b[1;33mnote\x1b[0m   this resolved against the Archive mirrors for {}, not \
+            "\n{}   this resolved against the Archive mirrors for {}, not \
              today's.\n        A package the Archive no longer serves at that version fails \
              here.",
+            crate::color::note(crate::color::Stream::Err),
             record.repos.snapshot
         );
         ExitCode::Resolution
@@ -148,7 +150,10 @@ fn report_inputs(record: &Record, plan: &BuildPlan) {
         );
         return;
     }
-    println!("\n\x1b[1;33mwarning\x1b[0m the inputs no longer resolve to what was recorded:\n");
+    println!(
+        "\n{} the inputs no longer resolve to what was recorded:\n",
+        crate::color::warning(crate::color::Stream::Out)
+    );
     print!("{}", report.render());
     println!(
         "The rebuild goes ahead with what the Archive serves today. What comes out is a new\n\
@@ -194,7 +199,10 @@ fn report_result(
         .collect();
 
     if !unreproducible.is_empty() {
-        println!("\n\x1b[1;33mwarning\x1b[0m these build scripts are not reproducible:\n");
+        println!(
+            "\n{} these build scripts are not reproducible:\n",
+            crate::color::warning(crate::color::Stream::Out)
+        );
         for name in &unreproducible {
             println!("  script {name}");
             println!(
@@ -239,9 +247,10 @@ fn report_result(
     // this, so it is Kiln's problem and the message says so rather than
     // leaving them to conclude their configuration is at fault.
     println!(
-        "\n\x1b[1;33mwarning\x1b[0m the plan is identical to generation {}'s and every build \
+        "\n{} the plan is identical to generation {}'s and every build \
          script agreed,\n        but the tree came out different ({} against {}).\n\n\
          That is a determinism bug in Kiln itself, not in your configuration.",
+        crate::color::warning(crate::color::Stream::Out),
         record.generation,
         &committed.content_checksum[..12],
         &was[..12]
@@ -255,6 +264,6 @@ fn original_content(ctx: &Context, checksum: &str) -> Result<String, kiln_ostree
 }
 
 fn fail(e: &kiln_ostree::Error) -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m {e}");
+    eprintln!("{} {e}", crate::color::error());
     ExitCode::System
 }

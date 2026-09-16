@@ -56,8 +56,9 @@ pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>) -> ExitC
             }
             None => {
                 eprintln!(
-                    "\x1b[1;31merror\x1b[0m nothing is booted from {}, so there is no second \
+                    "{} nothing is booted from {}, so there is no second \
                      generation to compare against. Name both: `kiln diff <gen> <gen>`.",
+                    crate::color::error(),
                     root.display()
                 );
                 return ExitCode::System;
@@ -101,7 +102,10 @@ pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>) -> ExitC
         // configuration — a `--force` rebuild, or a `kiln rebuild`. Saying so
         // is more useful than an empty table.
         if from.plan_id == to.plan_id {
-            println!("  Identical: both generations were built from the same plan.");
+            println!(
+                "  {}: both generations were built from the same plan.",
+                crate::color::success("Identical")
+            );
             println!("  plan {}", from.plan_id);
         } else {
             println!("  No difference in any input category.");
@@ -213,7 +217,8 @@ pub fn why(sysroot: Option<&Path>, package: &str, generation: Option<u64>) -> Ex
 
     let Some(found) = session.installed_package(package) else {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m generation {} does not contain `{package}`.",
+            "{} generation {} does not contain `{package}`.",
+            crate::color::error(),
             metadata.generation
         );
         eprintln!(
@@ -229,7 +234,11 @@ pub fn why(sysroot: Option<&Path>, package: &str, generation: Option<u64>) -> Ex
         // answer, not a footnote.
         println!("`{package}` is provided by {}.", found.name);
     }
-    println!("{} {}", found.name, found.version);
+    println!(
+        "{} {}",
+        crate::color::bold(crate::color::Stream::Out, &found.name),
+        found.version
+    );
 
     // The build record says which *kind* of input it was, which the pacman
     // database cannot: an AUR package and a repository package are both just
@@ -313,7 +322,7 @@ pub fn owns(sysroot: Option<&Path>, path: &str, generation: Option<u64>) -> Exit
     let candidates = [path.to_string(), etc_to_usr_etc(path)];
     for candidate in &candidates {
         if let Some(owner) = session.owns(candidate) {
-            println!("{owner}");
+            println!("{}", crate::color::bold(crate::color::Stream::Out, &owner));
             if candidate != path {
                 println!(
                     "  {path} is {candidate} in the image: Kiln moves /etc to /usr/etc and the \
@@ -375,7 +384,8 @@ fn target(
             Some(g) => g.number,
             None => {
                 eprintln!(
-                    "\x1b[1;31merror\x1b[0m there are no Kiln deployments on {}.",
+                    "{} there are no Kiln deployments on {}.",
+                    crate::color::error(),
                     root.display()
                 );
                 return Err(ExitCode::System);
@@ -384,7 +394,7 @@ fn target(
     };
 
     let tree = sysroot.deployment_root(wanted).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", crate::color::error());
         if generations.iter().all(|g| g.number != wanted) {
             eprintln!(
                 "\nA generation has to be deployed to be queried this way: `kiln why` and \
@@ -410,7 +420,10 @@ fn target(
 /// database would only invite one about what it could have.
 fn session(tree: &Path, metadata: &Metadata) -> Result<Session, ExitCode> {
     Session::open(Config::for_root(tree, &metadata.arch)).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m reading the image's package database: {e}");
+        eprintln!(
+            "{} reading the image's package database: {e}",
+            crate::color::error()
+        );
         ExitCode::System
     })
 }
@@ -425,8 +438,9 @@ fn record_of(sysroot: &Sysroot, generation: u64) -> Result<Record, ExitCode> {
         commit::find_generation(&sysroot.repo(), generation).map_err(|e| code(&e))?;
     metadata.record.ok_or_else(|| {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m generation {generation} carries no build record, so there \
-             is nothing to compare. It was built by a Kiln that did not write one."
+            "{} generation {generation} carries no build record, so there \
+             is nothing to compare. It was built by a Kiln that did not write one.",
+            crate::color::error()
         );
         ExitCode::System
     })
@@ -443,7 +457,7 @@ fn record_of(sysroot: &Sysroot, generation: u64) -> Result<Record, ExitCode> {
 /// order actually hits.
 fn open(root: &Path) -> Result<Sysroot, ExitCode> {
     Sysroot::open(root).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", crate::color::error());
         if !paths::is_initialized(root) {
             eprintln!(
                 "\n`kiln sysroot init --sysroot {}` creates the layout this needs \
@@ -479,7 +493,7 @@ fn join(names: &[String]) -> String {
 }
 
 fn code(e: &kiln_ostree::Error) -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m {e}");
+    eprintln!("{} {e}", crate::color::error());
     ExitCode::System
 }
 

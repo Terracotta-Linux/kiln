@@ -6,6 +6,7 @@
 //! which makes `kiln rm 1` a footgun. Generations are assigned at commit
 //! time and are stable forever.
 
+use crate::color::{self, Stream};
 use crate::{disk, paths};
 use kiln_diag::ExitCode;
 use kiln_image::bootcount;
@@ -35,38 +36,61 @@ pub fn list(sysroot: Option<&Path>) -> ExitCode {
 /// which one they are running, which one `kiln rollback` would take them to,
 /// and which ones `kiln clean` will not remove.
 pub fn render(generations: &[Generation]) -> String {
-    let rows: Vec<(&Generation, String)> = generations
-        .iter()
-        .map(|g| (g, status_of(g).join(", ")))
-        .collect();
+    let rows: Vec<(&Generation, Vec<&'static str>)> =
+        generations.iter().map(|g| (g, status_of(g))).collect();
 
     // Measured rather than fixed. A deployment can be booted, the rollback
     // target and the baseline at once, and a fixed column narrower than that
     // pushes every later column out of line on exactly the machine where the
-    // listing matters most.
+    // listing matters most. Measured on the *plain* text: color escapes are
+    // invisible ink, not characters, and must never enter the width math.
     let width = rows
         .iter()
-        .map(|(_, s)| display_width(s))
+        .map(|(_, labels)| display_width(&labels.join(", ")))
         .chain(std::iter::once("STATUS".len()))
         .max()
         .unwrap_or(6);
 
     let mut out = format!(
-        "{:>4}  {:<width$} {:<14} {:<19} {}\n",
-        "GEN", "STATUS", "COMMIT", "GENERATED", "IMAGE"
+        "{}\n",
+        color::bold(
+            Stream::Out,
+            &format!(
+                "{:>4}  {:<width$} {:<14} {:<19} {}",
+                "GEN", "STATUS", "COMMIT", "GENERATED", "IMAGE"
+            )
+        )
     );
-    for (g, status) in rows {
+    for (g, labels) in rows {
+        let plain = labels.join(", ");
+        let colored = labels
+            .iter()
+            .map(|l| color_status_label(l))
+            .collect::<Vec<_>>()
+            .join(", ");
         out.push_str(&format!(
             "{:>4}  {}{} {:<14} {:<19} {}\n",
             g.number,
-            status,
-            " ".repeat(width - display_width(&status)),
+            colored,
+            " ".repeat(width - display_width(&plain)),
             &g.checksum[..12.min(g.checksum.len())],
             g.built_at,
             g.image
         ));
     }
     out
+}
+
+/// `kiln list`'s and `kiln status`'s only opinion about color: what is
+/// running now is the one fact worth a color, and what boots next is the one
+/// worth a different one. Everything else in the STATUS column is
+/// informational, not urgent, and stays plain.
+fn color_status_label(label: &str) -> String {
+    match label {
+        "● booted" => color::success(label),
+        "boots next" => color::yellow(Stream::Out, label),
+        _ => label.to_string(),
+    }
 }
 
 /// The status column carries the facts a person acts on: which one they are
@@ -141,7 +165,11 @@ pub fn status(sysroot: Option<&Path>, verbose: bool) -> ExitCode {
     }
     println!(
         "state       {}",
-        if g.booted { "booted" } else { "next boot" }
+        if g.booted {
+            color::success("booted")
+        } else {
+            color::yellow(Stream::Out, "next boot")
+        }
     );
     // The "pending update": something is deployed that the machine is not
     // running. Worth its own line because the deployment list does not say it
@@ -298,12 +326,13 @@ fn deploy_committed(sysroot: &Sysroot, generation: u64) -> ExitCode {
 
     let Some(manifest) = metadata.manifest else {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m generation {generation} carries no manifest, so there is no \
+            "{} generation {generation} carries no manifest, so there is no \
              way to know which\n        kernel command line it was built with. Kargs are fully \
              declarative: deploying\n        without them produces a machine that boots \
              once, or not at all.\n\n\
              It was built by a Kiln that did not record one. `kiln apply` builds and deploys a \
-             new\n        generation from your configuration."
+             new\n        generation from your configuration.",
+            crate::color::error()
         );
         return ExitCode::System;
     };
@@ -419,7 +448,8 @@ pub fn rm(sysroot: Option<&Path>, wanted: &[u64], remove_baseline: bool) -> Exit
     if !plan.unknown.is_empty() {
         let have: Vec<String> = generations.iter().map(|g| g.number.to_string()).collect();
         eprintln!(
-            "\x1b[1;31merror\x1b[0m no deployment for generation {}; this machine has {}",
+            "{} no deployment for generation {}; this machine has {}",
+            crate::color::error(),
             numbers(&plan.unknown),
             if have.is_empty() {
                 "none".to_string()
@@ -542,7 +572,7 @@ pub fn sysroot_init(sysroot: Option<&Path>) -> ExitCode {
 /// order actually hits.
 fn open(root: &Path) -> Result<Sysroot, ExitCode> {
     Sysroot::open(root).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", crate::color::error());
         if !paths::is_initialized(root) {
             eprintln!(
                 "\n`kiln sysroot init --sysroot {}` creates the layout this \
@@ -566,6 +596,6 @@ fn open(root: &Path) -> Result<Sysroot, ExitCode> {
 }
 
 fn fail(e: &kiln_ostree::Error) -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m {e}");
+    eprintln!("{} {e}", crate::color::error());
     ExitCode::System
 }

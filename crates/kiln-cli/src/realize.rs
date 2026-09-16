@@ -28,6 +28,7 @@
 //! `pkgbase` to clone, which recipe directory to build, and which build key
 //! decides whether anything is built at all.
 
+use crate::color::{self, Stream};
 use crate::paths;
 use crate::pipeline::Context;
 use kiln_alpm::{Config, Request, Session};
@@ -70,12 +71,12 @@ pub fn fetch(
     // will need.
     let config = Config::for_resolution(state, &plan.image.arch).with_repos(repos);
     let mut session = Session::open(config).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", color::error());
         ExitCode::System
     })?;
 
     let files = session.fetch(&transaction).map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", color::error());
         ExitCode::Resolution
     })?;
 
@@ -150,23 +151,24 @@ fn file_package_url(
     let from_cache = dest.exists();
     if !from_cache {
         std::fs::create_dir_all(paths::file_packages(state)).map_err(|e| {
-            eprintln!("\x1b[1;31merror\x1b[0m {e}");
+            eprintln!("{} {e}", color::error());
             ExitCode::System
         })?;
-        println!("  \x1b[1mfile\x1b[0m {url}");
+        println!("  {} {url}", color::bold(Stream::Out, "file"));
         transport.download(url, &dest).map_err(|e| {
-            eprintln!("\x1b[1;31merror\x1b[0m could not fetch `{url}`: {e}");
+            eprintln!("{} could not fetch `{url}`: {e}", color::error());
             ExitCode::Resolution
         })?;
         let actual = kiln_alpm::sha256(&dest).ok_or_else(|| {
-            eprintln!("\x1b[1;31merror\x1b[0m could not hash the download of `{url}`");
+            eprintln!("{} could not hash the download of `{url}`", color::error());
             ExitCode::Resolution
         })?;
         if actual != sha256 {
             let _ = std::fs::remove_file(&dest);
             eprintln!(
-                "\x1b[1;31merror\x1b[0m `{url}` is not the file its `sha256` describes\n\n\
-                 downloaded content hashes to sha256 = \"{actual}\""
+                "{} `{url}` is not the file its `sha256` describes\n\n\
+                 downloaded content hashes to sha256 = \"{actual}\"",
+                color::error()
             );
             return Err(ExitCode::Resolution);
         }
@@ -236,7 +238,7 @@ pub fn realize(
         Config::for_resolution(&opts.ctx.state, &plan.image.arch).with_repos(opts.repos.clone()),
     )
     .map_err(|e| {
-        eprintln!("\x1b[1;31merror\x1b[0m {e}");
+        eprintln!("{} {e}", color::error());
         ExitCode::System
     })?;
 
@@ -275,13 +277,14 @@ pub fn realize(
         return Ok(artifacts);
     }
     eprintln!(
-        "\n\x1b[1;31merror\x1b[0m {} package{} failed to build:\n",
+        "\n{} {} package{} failed to build:\n",
+        color::error(),
         failures.len(),
         crate::fmt::plural(failures.len())
     );
     for (name, why) in &failures {
-        eprintln!("\x1b[1m{name}\x1b[0m");
-        eprintln!("{}\n", highlight(why));
+        eprintln!("{}", color::bold(Stream::Err, name));
+        eprintln!("{}\n", highlight(why, Stream::Err.colored()));
     }
     Err(ExitCode::Build)
 }
@@ -360,7 +363,8 @@ impl Job {
                 pulled_in_by,
             } => {
                 print!(
-                    "  \x1b[1maur\x1b[0m {name} {evr} — pkgbase {pkgbase}, commit {}",
+                    "  {} {name} {evr} — pkgbase {pkgbase}, commit {}",
+                    color::bold(Stream::Out, "aur"),
                     &commit[..commit.len().min(7)]
                 );
                 match pulled_in_by {
@@ -368,19 +372,26 @@ impl Job {
                     None => println!(),
                 }
             }
-            Job::Recipe { name, path, .. } => println!("  \x1b[1mbuild\x1b[0m {name} ({path})"),
+            Job::Recipe { name, path, .. } => {
+                println!("  {} {name} ({path})", color::bold(Stream::Out, "build"))
+            }
             Job::Module {
                 name, kernel_evr, ..
-            } => println!("  \x1b[1mmodule\x1b[0m {name} against kernel {kernel_evr}"),
+            } => println!(
+                "  {} {name} against kernel {kernel_evr}",
+                color::bold(Stream::Out, "module")
+            ),
             Job::Dkms {
                 origin, kernel_evr, ..
             } => match origin {
-                DkmsOrigin::Package { name, evr } => {
-                    println!("  \x1b[1mdkms\x1b[0m {name} {evr} against kernel {kernel_evr}")
-                }
-                DkmsOrigin::Tree { path, .. } => {
-                    println!("  \x1b[1mdkms\x1b[0m {path} against kernel {kernel_evr}")
-                }
+                DkmsOrigin::Package { name, evr } => println!(
+                    "  {} {name} {evr} against kernel {kernel_evr}",
+                    color::bold(Stream::Out, "dkms")
+                ),
+                DkmsOrigin::Tree { path, .. } => println!(
+                    "  {} {path} against kernel {kernel_evr}",
+                    color::bold(Stream::Out, "dkms")
+                ),
             },
         }
     }
@@ -762,10 +773,12 @@ fn describe(name: &str, produced: &Produced) {
 /// *the last 40 lines are shown inline, with the `==> ERROR:` line
 /// highlighted*. That line is makepkg's own summary of what went wrong and is
 /// buried in a wall of compiler output without it.
-fn highlight(text: &str) -> String {
+fn highlight(text: &str, colored: bool) -> String {
     text.lines()
         .map(|line| {
-            if line.trim_start().starts_with("==> ERROR:") {
+            if !line.trim_start().starts_with("==> ERROR:") {
+                line.to_string()
+            } else if colored {
                 format!("\x1b[1;31m{line}\x1b[0m")
             } else {
                 line.to_string()
@@ -938,7 +951,7 @@ mod tests {
     #[test]
     fn the_error_line_is_the_one_that_is_highlighted() {
         let text = "gcc: warning\n==> ERROR: A failure occurred in build().\ncc1: note";
-        let out = highlight(text);
+        let out = highlight(text, true);
         assert!(out.contains("\x1b[1;31m==> ERROR: A failure occurred in build()."));
         assert!(!out.contains("\x1b[1;31mgcc: warning"));
     }

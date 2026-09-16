@@ -104,9 +104,15 @@ fn exact(fe: &Frontend, key: &str) -> ExitCode {
         // say which element came from which. When they are available, a
         // separate list of contributing files is the same information twice.
         if !elements(fe, key, items) {
-            println!("  nearest     {}", prov.effective.short());
+            println!(
+                "  nearest     {}",
+                crate::color::dim(crate::color::Stream::Out, &prov.effective.short())
+            );
             for o in &prov.others {
-                println!("              {}", o.short());
+                println!(
+                    "              {}",
+                    crate::color::dim(crate::color::Stream::Out, &o.short())
+                );
             }
         }
         println!(
@@ -115,14 +121,23 @@ fn exact(fe: &Frontend, key: &str) -> ExitCode {
         );
     } else {
         if let Some(v) = value {
-            println!("  value       {}", render(v, key));
+            println!(
+                "  value       {}",
+                crate::color::cyan(crate::color::Stream::Out, &render(v, key))
+            );
         }
-        println!("  set in      {}", prov.effective.short());
+        println!(
+            "  set in      {}",
+            crate::color::dim(crate::color::Stream::Out, &prov.effective.short())
+        );
         match prov.others.len() {
             0 => println!("  overriding  nothing — no other file sets it"),
             _ => {
                 for o in &prov.others {
-                    println!("  overriding  {}", o.short());
+                    println!(
+                        "  overriding  {}",
+                        crate::color::dim(crate::color::Stream::Out, &o.short())
+                    );
                 }
                 println!(
                     "\n  The includer wins over what it includes (rule 2). Two files\n  \
@@ -163,7 +178,10 @@ fn element(fe: &Frontend, list: &str, item: &str) -> Option<ExitCode> {
     };
 
     heading(&key);
-    println!("  asked for   {}", origin.short());
+    println!(
+        "  asked for   {}",
+        crate::color::dim(crate::color::Stream::Out, &origin.short())
+    );
     println!("  in          {list}");
     if list.starts_with("packages.") {
         println!(
@@ -205,20 +223,21 @@ fn prefix(fe: &Frontend, key: &str) -> Option<ExitCode> {
                         .unwrap_or_default(),
                 };
                 println!(
-                    "  {k:<width$}  {value}\n  {:<width$}  {} {}",
+                    "  {k:<width$}  {}\n  {:<width$}  {} {}",
+                    crate::color::cyan(crate::color::Stream::Out, &value),
                     "",
                     if prov.is_list {
                         "unions from"
                     } else {
                         "set in"
                     },
-                    prov.effective.short()
+                    crate::color::dim(crate::color::Stream::Out, &prov.effective.short())
                 );
             }
             None => match default_for(k) {
                 Some(d) => println!(
                     "  {k:<width$}  {}\n  {:<width$}  Kiln's default {}",
-                    d.value,
+                    crate::color::dim(crate::color::Stream::Out, &d.value),
                     "",
                     d.note.map(|n| format!(" — {n}")).unwrap_or_default()
                 ),
@@ -293,7 +312,10 @@ fn count(fe: &Frontend, key: &str) -> usize {
 fn unset_answer(fe: &Frontend, key: &str) -> ExitCode {
     if let Some(d) = default_for(key) {
         heading(key);
-        println!("  value       {}", d.value);
+        println!(
+            "  value       {}",
+            crate::color::dim(crate::color::Stream::Out, &d.value)
+        );
         println!("  set in      nothing — this is Kiln's default");
         if let Some(n) = d.note {
             println!("  because     {n}");
@@ -318,7 +340,10 @@ fn unset_answer(fe: &Frontend, key: &str) -> ExitCode {
 
     // A key the schema does not have. This is the only one of the four answers
     // that is a mistake, so it is the only one that fails.
-    eprint!("\x1b[1;31merror\x1b[0m no key `{key}` in the Kiln schema");
+    eprint!(
+        "{} no key `{key}` in the Kiln schema",
+        crate::color::error()
+    );
     let known = candidates(fe);
     match did_you_mean(key, known.iter().map(String::as_str)) {
         Some(h) => eprintln!(" — {h}"),
@@ -373,7 +398,10 @@ fn elements(fe: &Frontend, key: &str, items: &[Node]) -> bool {
         // the files.
         println!("  {}:", crate::fmt::counted(items.len(), "element"));
         for i in items {
-            println!("    {}", render(i, key));
+            println!(
+                "    {}",
+                crate::color::cyan(crate::color::Stream::Out, &render(i, key))
+            );
         }
         return false;
     }
@@ -384,7 +412,10 @@ fn elements(fe: &Frontend, key: &str, items: &[Node]) -> bool {
     );
     let width = named.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
     for (name, origin) in &named {
-        println!("    {name:<width$}  {}", origin.short());
+        println!(
+            "    {name:<width$}  {}",
+            crate::color::dim(crate::color::Stream::Out, &origin.short())
+        );
     }
     true
 }
@@ -404,7 +435,7 @@ fn elements_of<'a>(fe: &'a Frontend, key: &str) -> Vec<(&'a str, &'a Origin)> {
 }
 
 fn heading(key: &str) {
-    println!("\x1b[1m{key}\x1b[0m");
+    println!("{}", crate::color::bold(crate::color::Stream::Out, key));
 }
 
 /// What Kiln does when a key is absent.
@@ -498,7 +529,7 @@ pub fn list(fe: &Frontend, prefix: Option<&str>) -> ExitCode {
                 keys = vec![p.to_string()];
             }
             Some(p) => {
-                eprint!("\x1b[1;31merror\x1b[0m no key `{p}` in the Kiln schema");
+                eprint!("{} no key `{p}` in the Kiln schema", crate::color::error());
                 match did_you_mean(p, candidates(fe).iter().map(String::as_str)) {
                     Some(h) => eprintln!(" — {h}"),
                     None => eprintln!(),
@@ -511,7 +542,14 @@ pub fn list(fe: &Frontend, prefix: Option<&str>) -> ExitCode {
 
     let width = keys.iter().map(String::len).max().unwrap_or(0);
     for k in &keys {
-        println!("{k:<width$}  {}", resolved_display(fe, k));
+        let set = fe.merged.origins.contains_key(k.as_str());
+        let value = resolved_display(fe, k);
+        let value = if set {
+            crate::color::cyan(crate::color::Stream::Out, &value)
+        } else {
+            crate::color::dim(crate::color::Stream::Out, &value)
+        };
+        println!("{k:<width$}  {value}");
     }
     ExitCode::Ok
 }
@@ -665,7 +703,8 @@ pub fn remove(
             Some(s) => (*s).clone(),
             None => {
                 eprintln!(
-                    "\x1b[1;31merror\x1b[0m `{}` does not contribute `{item}` to `{key}`",
+                    "{} `{}` does not contribute `{item}` to `{key}`",
+                    crate::color::error(),
                     f.display()
                 );
                 return ExitCode::Config;
@@ -674,7 +713,7 @@ pub fn remove(
     } else {
         match hits.as_slice() {
             [] => {
-                eprint!("\x1b[1;31merror\x1b[0m `{item}` is not in `{key}`");
+                eprint!("{} `{item}` is not in `{key}`", crate::color::error());
                 let elements = merged_list_values(fe, key);
                 match did_you_mean(item, elements.iter().map(String::as_str)) {
                     Some(h) => eprintln!(" — {h}"),
@@ -685,9 +724,10 @@ pub fn remove(
             [one] => {
                 if !one.path.starts_with(&fe.config_root) {
                     eprintln!(
-                        "\x1b[1;31merror\x1b[0m `{item}` comes from `{}`, a shipped module\n\n\
+                        "{} `{item}` comes from `{}`, a shipped module\n\n\
                          There is no override for a list element (rule 1: lists union) — edit \
                          the module or drop the include.",
+                        crate::color::error(),
                         one.name
                     );
                     return ExitCode::Config;
@@ -696,7 +736,8 @@ pub fn remove(
             }
             many => {
                 eprintln!(
-                    "\x1b[1;31merror\x1b[0m `{item}` is contributed by {} files:",
+                    "{} `{item}` is contributed by {} files:",
+                    crate::color::error(),
                     many.len()
                 );
                 for s in many {
@@ -746,8 +787,9 @@ fn writable_target(fe: &Frontend, key: &str, file: Option<&Path>) -> Result<Path
         let path = prov.effective.path().to_path_buf();
         if !path.starts_with(&fe.config_root) {
             eprintln!(
-                "\x1b[1;31merror\x1b[0m `{key}` is set by `{}`, a shipped module\n\nSet it in \
+                "{} `{key}` is set by `{}`, a shipped module\n\nSet it in \
                  your own configuration instead — the includer always wins (rule 2).",
+                crate::color::error(),
                 prov.effective.file.name
             );
             return Err(ExitCode::Config);
@@ -769,7 +811,10 @@ fn add_target(fe: &Frontend, file: Option<&Path>) -> Result<PathBuf, ExitCode> {
 
 fn entry_file(fe: &Frontend) -> Result<PathBuf, ExitCode> {
     fe.files.first().map(|s| s.path.clone()).ok_or_else(|| {
-        eprintln!("\x1b[1;31merror\x1b[0m no configuration file to write to");
+        eprintln!(
+            "{} no configuration file to write to",
+            crate::color::error()
+        );
         ExitCode::Config
     })
 }
@@ -778,8 +823,8 @@ fn resolve_file_arg<'a>(fe: &'a Frontend, file: &Path) -> Result<&'a Src, ExitCo
     let resolved = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
     fe.files.iter().find(|s| s.path == resolved).ok_or_else(|| {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m `--file {}` is not part of this configuration's include \
-             graph",
+            "{} `--file {}` is not part of this configuration's include graph",
+            crate::color::error(),
             file.display()
         );
         ExitCode::Config
@@ -817,14 +862,19 @@ fn display_name(fe: &Frontend, path: &Path) -> String {
 fn not_a_scalar_error(fe: &Frontend, key: &str) -> ExitCode {
     if schema::is_list(key) {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m `{key}` is a list; use `kiln config add`/`kiln config remove`"
+            "{} `{key}` is a list; use `kiln config add`/`kiln config remove`",
+            crate::color::error()
         );
     } else if schema::is_map(key) || schema::KEYS.contains(&key) {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m `{key}` is a table, not a scalar `kiln config set` can write"
+            "{} `{key}` is a table, not a scalar `kiln config set` can write",
+            crate::color::error()
         );
     } else {
-        eprint!("\x1b[1;31merror\x1b[0m no key `{key}` in the Kiln schema");
+        eprint!(
+            "{} no key `{key}` in the Kiln schema",
+            crate::color::error()
+        );
         match did_you_mean(key, candidates(fe).iter().map(String::as_str)) {
             Some(h) => eprintln!(" — {h}"),
             None => eprintln!(),
@@ -836,16 +886,23 @@ fn not_a_scalar_error(fe: &Frontend, key: &str) -> ExitCode {
 fn not_a_scalar_list_error(fe: &Frontend, key: &str) -> ExitCode {
     if schema::is_list(key) {
         eprintln!(
-            "\x1b[1;31merror\x1b[0m `{key}` is a keyed list — its entries have their own \
-             fields, not just a value — which `kiln config add`/`remove` do not support yet"
+            "{} `{key}` is a keyed list — its entries have their own \
+             fields, not just a value — which `kiln config add`/`remove` do not support yet",
+            crate::color::error()
         );
     } else if schema::scalar_type(key).is_some()
         || schema::is_map(key)
         || schema::KEYS.contains(&key)
     {
-        eprintln!("\x1b[1;31merror\x1b[0m `{key}` is not a list; use `kiln config set`/`unset`");
+        eprintln!(
+            "{} `{key}` is not a list; use `kiln config set`/`unset`",
+            crate::color::error()
+        );
     } else {
-        eprint!("\x1b[1;31merror\x1b[0m no key `{key}` in the Kiln schema");
+        eprint!(
+            "{} no key `{key}` in the Kiln schema",
+            crate::color::error()
+        );
         match did_you_mean(key, candidates(fe).iter().map(String::as_str)) {
             Some(h) => eprintln!(" — {h}"),
             None => eprintln!(),
@@ -855,7 +912,7 @@ fn not_a_scalar_list_error(fe: &Frontend, key: &str) -> ExitCode {
 }
 
 fn read_error(path: &Path, e: &std::io::Error) -> ExitCode {
-    eprintln!("\x1b[1;31merror\x1b[0m reading {}: {e}", path.display());
+    eprintln!("{} reading {}: {e}", crate::color::error(), path.display());
     ExitCode::System
 }
 
@@ -919,8 +976,8 @@ fn finish(
         }
         Err(errs) => {
             eprintln!(
-                "\x1b[1;31merror\x1b[0m the edit would make the configuration invalid; nothing \
-                 was changed\n"
+                "{} the edit would make the configuration invalid; nothing was changed\n",
+                crate::color::error()
             );
             eprint!("{}", kiln_diag::render_all(&errs));
             ExitCode::Config

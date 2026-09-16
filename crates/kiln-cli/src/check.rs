@@ -8,6 +8,7 @@
 //! The categories match the input taxonomy, so every declared kind of input has
 //! a defined place in the report and nothing can change invisibly.
 
+use crate::color::{self, Stream};
 use kiln_record::Record;
 use kiln_resolve::{BuildPlan, ResolvedInput};
 use std::collections::BTreeMap;
@@ -51,24 +52,45 @@ impl Change {
 
     fn render(&self) -> String {
         match self {
-            Change::Added { name, to } => format!("    {name:<22} {:<12} →  {to}", "—"),
-            Change::Removed { name, from } => format!("    {name:<22} {from:<12} →  removed"),
+            Change::Added { name, to } => {
+                format!("    {name:<22} {:<12} →  {}", "—", color::success(to))
+            }
+            Change::Removed { name, from } => format!(
+                "    {name:<22} {from:<12} →  {}",
+                color::red(Stream::Out, "removed")
+            ),
             Change::Updated {
                 name,
                 from,
                 to,
                 note,
             } => {
-                let line = format!("    {name:<22} {from:<12} →  {to}");
+                let prefix = format!("    {name:<22} {from:<12} →  ");
                 match note {
-                    Some(note) => format!("{line:<58}({note})"),
-                    None => line,
+                    // The note is a separate, aligned column, so the padding
+                    // has to be measured on the *plain* line — a color escape
+                    // is invisible ink, not a character, and must never enter
+                    // the width math.
+                    Some(note) => {
+                        let plain = format!("{prefix}{to}");
+                        let pad = 58usize.saturating_sub(plain.chars().count());
+                        format!(
+                            "{prefix}{}{}({note})",
+                            color::yellow(Stream::Out, to),
+                            " ".repeat(pad)
+                        )
+                    }
+                    None => format!("{prefix}{}", color::yellow(Stream::Out, to)),
                 }
             }
             Change::Rebuild { name, why } => {
                 // The same note column as an updated AUR package, so a report
                 // with both reads as one table rather than two.
-                format!("{:<58}({why})", format!("    {name:<22}"))
+                format!(
+                    "{:<58}({})",
+                    format!("    {name:<22}"),
+                    color::cyan(Stream::Out, why)
+                )
             }
         }
     }
@@ -96,7 +118,11 @@ impl Report {
                 "  {:<22} {} {}\n",
                 category,
                 changes.len(),
-                if rebuilds { "rebuild" } else { "changed" }
+                if rebuilds {
+                    color::cyan(Stream::Out, "rebuild")
+                } else {
+                    color::yellow(Stream::Out, "changed")
+                }
             ));
             for change in changes {
                 out.push_str(&change.render());
