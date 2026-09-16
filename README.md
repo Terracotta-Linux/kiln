@@ -51,9 +51,9 @@ schema, every command, the architecture, and troubleshooting.
 
 ## 🤔 What Kiln is
 
-Kiln is **a distribution's build tool, not an image-shipping pipeline**. The loop is: write
-config on your system, build on your system, deploy on your system, use your system. No
-remotes, no registry, no push, no pull, no fleet.
+Kiln is **a distribution's build tool**. The loop is: write config on your system, build on your
+system, deploy on your system, use your system. No remotes, no registry, no push, no pull, no
+fleet.
 
 It answers exactly one question: *what is inside the image?* The test for whether something
 belongs in Kiln is simple. **If it changes, do you need a new image and a reboot?** If not,
@@ -78,9 +78,10 @@ it is out of scope, deliberately and permanently:
 - 🔍 **`kiln check` covers every input**, not only official packages. Your files, your
   PKGBUILDs, your AUR pins and your settings report in one place, and the fix is always one
   command.
-- 💬 **It explains itself.** `kiln explain boot.timeout` says which file set a value and what
-  it overrode. `kiln why firefox` says what pulled a package in. `kiln diff 41 42` says what
-  changed between two generations, read from the commits rather than from a lockfile.
+- 💬 **It explains itself.** `kiln config get boot.timeout` says which file set a value and what
+  it overrode; `kiln config set/add/...` edits `/etc/kiln` the same way. `kiln why firefox` says
+  what pulled a package in. `kiln diff 41 42` says what changed between two generations, read
+  from the commits rather than from a lockfile.
 - 🚫 **There is no lockfile.** Every commit carries its own build record. OSTree is already a
   versioned content-addressed store; a second source of truth could only disagree with it.
 
@@ -142,7 +143,8 @@ Full details are in the [installation section of the guide](docs/GUIDE.md#4-inst
 | `kiln list` / `kiln status` | Every generation; what is booted, what boots next, `/etc` drift |
 | `kiln rollback` / `kiln deploy <gen>` | Boot the previous generation, or a specific one |
 | `kiln diff [<gen>] [<gen>]` | What changed between two generations |
-| `kiln explain <key>` | Which file set a value, and what it overrode |
+| `kiln config get <key>` | Which file set a value, and what it overrode |
+| `kiln config set/unset/add/remove` | Edit `/etc/kiln` from the command line |
 | `kiln why <pkg>` / `kiln owns <path>` | What pulled a package in; which package owns a file |
 | `kiln show [<gen>]` | The merged manifest, on disk or from a past commit |
 | `kiln rebuild <gen>` | Reconstruct a past generation from its own build record |
@@ -182,7 +184,7 @@ target = "/etc/motd"                       # Kiln owns the /usr/etc translation
 
 Merging is three rules: **lists union**, **the includer wins**, and **two siblings setting the
 same scalar differently is a hard error**, never a silent last-one-wins. Every key keeps the
-file and line it came from, which is what `kiln explain` prints.
+file and line it came from, which is what `kiln config get` prints.
 
 The [configuration chapter](docs/GUIDE.md#6-the-configuration-system) documents every key,
 its type, its default and its behaviour.

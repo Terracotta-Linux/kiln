@@ -14,6 +14,7 @@
 
 pub mod digest;
 pub mod discover;
+pub mod edit;
 pub mod include;
 pub mod merge;
 pub mod node;

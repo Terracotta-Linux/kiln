@@ -8,6 +8,7 @@ mod args;
 mod build;
 mod check;
 mod completions;
+mod config;
 mod deep;
 mod deployments;
 mod dev;
@@ -151,7 +152,10 @@ fn run(argv: &[String]) -> ExitCode {
             cli.global.verbose,
         ),
 
-        Command::Check { .. } | Command::Explain { .. } | Command::Show { .. } => frontend(&cli),
+        Command::Check { .. }
+        | Command::Explain { .. }
+        | Command::Show { .. }
+        | Command::Config(_) => frontend(&cli),
     }
 }
 
@@ -183,6 +187,41 @@ fn frontend(cli: &args::Cli) -> ExitCode {
 
     match &cli.command {
         Command::Explain { key } => explain::run(&fe, key.as_deref().unwrap_or_default()),
+        Command::Config(sub) => match sub {
+            args::ConfigCommand::Get { key } => config::get(&fe, key),
+            args::ConfigCommand::List { prefix } => config::list(&fe, prefix.as_deref()),
+            args::ConfigCommand::Set { key, value, file } => config::set(
+                &fe,
+                cli.global.config.as_deref(),
+                &opts,
+                key,
+                value,
+                file.as_deref(),
+            ),
+            args::ConfigCommand::Unset { key, file } => config::unset(
+                &fe,
+                cli.global.config.as_deref(),
+                &opts,
+                key,
+                file.as_deref(),
+            ),
+            args::ConfigCommand::Add { key, value, file } => config::add(
+                &fe,
+                cli.global.config.as_deref(),
+                &opts,
+                key,
+                value,
+                file.as_deref(),
+            ),
+            args::ConfigCommand::Remove { key, value, file } => config::remove(
+                &fe,
+                cli.global.config.as_deref(),
+                &opts,
+                key,
+                value,
+                file.as_deref(),
+            ),
+        },
         Command::Show { .. } => {
             show::summary(&fe.manifest, &fe.files, cli.global.verbose);
             show::detail(&fe.manifest);

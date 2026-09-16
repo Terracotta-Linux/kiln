@@ -411,8 +411,9 @@ $ cargo run --bin kiln -- --config ./myconfig --module-root ./modules check --of
 
 ### 4.5 Permissions
 
-- `kiln check`, `explain`, `show`, `list`, `status`, `diff`, `why`, `owns` run as an ordinary
-  user.
+- `kiln check`, `explain`, `config`, `show`, `list`, `status`, `diff`, `why`, `owns` run as an
+  ordinary user — `kiln config set/unset/add/remove` only ever edit files under `--config`, never
+  the running system, so they need no more privilege than editing the TOML by hand would.
 - `kiln build`, `apply` and `rebuild` **require root**. As an ordinary user libalpm extracts
   archives, fails every `chown`, logs a warning, and reports success, producing a tree whose
   ownership, setuid bits and capabilities are all wrong. Kiln refuses rather than allow that.
@@ -582,15 +583,16 @@ that wrote only one of the two says so and stops.
 
 ### 5.3 Inspection
 
-#### `kiln explain <key>`
+#### `kiln config get <key>`
 
 Which file set a value, and what it overrode. Four things can be asked about, and the argument
-alone says which.
+alone says which. `kiln explain <key>` is an alias for the same command, and both print
+identical output.
 
 **An exact key:**
 
 ```console
-$ kiln explain boot.timeout
+$ kiln config get boot.timeout
 boot.timeout
   value       0
   set in      system.toml:30
@@ -603,7 +605,7 @@ boot.timeout
 **A group** lists every key underneath it, set or not:
 
 ```console
-$ kiln explain boot
+$ kiln config get boot
 boot
   a group of keys, not a value of its own
 
@@ -614,13 +616,13 @@ boot
   boot.initramfs  "dracut"
                   Kiln's default  — the only supported value
 
-  `kiln explain <one of these>` for the whole story of one of them.
+  `kiln config get <one of these>` for the whole story of one of them.
 ```
 
 **A list** shows who asked for each element:
 
 ```console
-$ kiln explain packages.repo
+$ kiln config get packages.repo
 packages.repo
   kind        a list — 9 files unions into it (rule 1)
   25 elements, and who asked for each:
@@ -631,13 +633,13 @@ packages.repo
     ...
 
   Order does not matter: every contributor's elements are in the image,
-  deduplicated. `kiln explain packages.repo/<element>` asks about one of them.
+  deduplicated. `kiln config get packages.repo/<element>` asks about one of them.
 ```
 
 **An element** answers "which file put this here":
 
 ```console
-$ kiln explain packages.repo/gnome-shell
+$ kiln config get packages.repo/gnome-shell
 packages.repo/gnome-shell
   asked for   @kiln/desktop/gnome:8
   in          packages.repo
@@ -647,11 +649,11 @@ packages.repo/gnome-shell
   something else depends on it.
 ```
 
-`kiln explain include` is the odd one out. There is no value to print, because the graph
+`kiln config get include` is the odd one out. There is no value to print, because the graph
 consumes the key, so it prints the graph:
 
 ```console
-$ kiln explain include
+$ kiln config get include
 include
   kind        the include graph, not a value
   10 files, entry point first:
@@ -662,8 +664,56 @@ include
     ...
 ```
 
-An unknown key is the only one of the four answers that is a mistake, and the only one that
-exits nonzero (`1`) with a did-you-mean suggestion.
+#### `kiln config list [<prefix>]`
+
+A flattened, origin-free `key  value` line per resolved key — for scanning, not the whole story
+`get` tells. With no argument it lists the entire schema; with a prefix, everything under it:
+
+```console
+$ kiln config list boot
+boot.loader     "grub2"
+boot.timeout    0
+boot.initramfs  "dracut"
+```
+
+#### `kiln config set|unset|add|remove`
+
+Edit `/etc/kiln`'s TOML files from the command line, respecting the same include graph and merge
+rules `kiln config get` reads by. None of these build or deploy — `kiln build`/`kiln apply` are
+still separate steps — and each edit is reloaded before it is kept; an invalid edit is rejected
+and the file is left untouched.
+
+`set`/`unset` work on scalar keys (`boot.timeout`, `system.hostname`, ...):
+
+```console
+$ kiln config set boot.timeout 10
+set `boot.timeout` in system.toml
+
+$ kiln config unset system.hostname
+unset `system.hostname` in system.toml
+```
+
+`add`/`remove` work on plain scalar-set list keys (`kernel.cmdline`, `packages.exclude`,
+`systemd.enable`, ...) — not identity-keyed lists like `packages.repo` or `systemd.unit`, which
+are read-only through this path for now:
+
+```console
+$ kiln config add kernel.cmdline splash
+added `splash` to `kernel.cmdline` in system.toml
+
+$ kiln config remove kernel.cmdline splash
+removed `splash` from `kernel.cmdline` in system.toml
+```
+
+- `set`/`unset` target the file currently winning the key (rule 2), or the entry point if
+  nothing sets it yet. A key set only by a shipped module is refused, naming the module — set it
+  in your own file instead.
+- `add` always targets the entry point; a list has no single "currently winning" file.
+- `remove` targets the one file that contributes the value. A module's contribution is refused
+  outright (rule 1: lists union, so there is no override); a value contributed by more than one
+  file is refused with all of them named.
+
+`--file <path>` targets a specific file instead, but only one already reached by an `include`.
 
 #### `kiln show [<gen>]`
 
@@ -1053,7 +1103,7 @@ dkms = ["nvidia-open-dkms"]              # ≡ [{ name = "nvidia-open-dkms" }]
 ```
 
 Shorthand is expanded *before* merging, so `"firefox"` and `{ name = "firefox" }` deduplicate
-against each other. `kiln explain` collapses it back when printing, so you see what you wrote.
+against each other. `kiln config get` collapses it back when printing, so you see what you wrote.
 
 `[[script]]` is the one exception: it identifies by `name`, but shorthand writes only
 `source`, so the name is derived from the source file's stem. A script with inline `content`
@@ -1220,7 +1270,7 @@ See [section 7](#7-packages).
 | `kernel.dkms` | list of names, or array of tables | `[]` | DKMS drivers compiled at build time. Entry keys: `name` (required), `source` (optional). `name` has the same `pkgname` restriction as `kernel.module` |
 
 **On `kernel.headers`.** It defaults to `false`, is part of `config_id`, and is reported by
-`kiln show` and `kiln explain`. Nothing in assembly currently reads it: module and DKMS builds
+`kiln show` and `kiln config get`. Nothing in assembly currently reads it: module and DKMS builds
 install `<kernel>-headers` into their build root from the resolved kernel regardless, and that
 root is never the image. If you genuinely want headers *inside* the image, name
 `linux-headers` in `packages.repo`. Shipping ~150 MB of headers in an immutable system that
@@ -2633,7 +2683,7 @@ rather than failing** when run without root. Anything new that needs root goes t
 
 ```console
 $ cargo run --bin kiln -- --config <dir> --module-root ./modules check --offline
-$ cargo run --bin kiln -- --config <dir> --module-root ./modules explain boot.timeout
+$ cargo run --bin kiln -- --config <dir> --module-root ./modules config get boot.timeout
 ```
 
 `tests/corpus/valid/workstation` is a realistic configuration to point at.
@@ -2685,7 +2735,7 @@ guest never holding the disk, or a cached view of it, at the same time.
 
 - `-v`/`--verbose` on almost every command: OSTree checksums, the full build record, every
   drifted file, per-input digests.
-- `kiln explain` for anything about where a value came from.
+- `kiln config get` for anything about where a value came from.
 - `kiln show` and `kiln show <gen>` for the merged manifest, on disk or from a commit.
 - `sudo kiln build --keep-failed` keeps the staging root; walk into
   `/var/lib/kiln/build/<plan_id>/root`.
@@ -2699,7 +2749,7 @@ guest never holding the disk, or a cached view of it, at the same time.
   name (ordering is content-determined, not file-order-determined).
 - **Ambiguity is an error, not a coin flip.** Two included files setting the same scalar
   differently is a hard error naming both files and lines, never last-wins.
-- **Spans are carried through the whole frontend**, so `kiln explain` can answer "set in
+- **Spans are carried through the whole frontend**, so `kiln config get` can answer "set in
   `hardware.toml:14`, overriding `@kiln/hardware/nvidia:9`".
 - **The config root is a security boundary.**
 - **Network is on only during resolution and source fetching**, never during a build phase or
@@ -2848,10 +2898,11 @@ near the bootloader.
 
 The `kiln` binary. Hand-written argument parsing (`args.rs`, which also holds the one list of
 verbs and the table of flags each one takes), one module per command family (`check`, `build`,
-`deep`, `deployments`, `disk`, `drift`, `explain`, `init`, `inspect`, `realize`, `rebuild`,
-`show`, `completions`), `fmt.rs` for the renderers more than one command needs, and
-`pipeline.rs`, which is the one place `check`, `build` and `apply` are written as the same
-pipeline stopped at three different points so they cannot drift.
+`config` — `get`/`list`/`set`/`unset`/`add`/`remove`, with `explain.rs` a permanent alias for
+`config::get` — `deep`, `deployments`, `disk`, `drift`, `init`,
+`inspect`, `realize`, `rebuild`, `show`, `completions`), `fmt.rs` for the renderers more than one
+command needs, and `pipeline.rs`, which is the one place `check`, `build` and `apply` are
+written as the same pipeline stopped at three different points so they cannot drift.
 
 ---
 
@@ -2868,11 +2919,12 @@ not add a key.
    canonical encoding changes every identity, so **bump `HASH_EPOCH`** and add a row to its
    table explaining why the change is a genuinely different image.
 2. **`crates/kiln-config/src/schema.rs`**: add the dotted key to `KEYS`; add a `ListSpec` to
-   `LISTS` if it is a list (with its identity key and shorthand); add its `scalar_type`; add
-   `entry_keys` if it is an array of tables.
+   `LISTS` if it is a list (with its identity key and shorthand) — and to `SCALAR_LISTS` too if
+   it is a plain `BTreeSet<String>` with no identity key, which is what makes `kiln config
+   add`/`remove` support it; add its `scalar_type`; add `entry_keys` if it is an array of tables.
 3. **`crates/kiln-config/src/validate.rs`**: extract and validate it, with a diagnostic that
    names the span and says what to write instead.
-4. **`crates/kiln-cli/src/explain.rs`**: add it to `default_for` if it has a default. That
+4. **`crates/kiln-cli/src/config.rs`**: add it to `default_for` if it has a default. That
    table must match the schema's defaults exactly; a default in one and not the other is a bug
    in one of the two.
 5. **`crates/kiln-cli/src/show.rs`**: show it, if a reader would want it.
@@ -3265,7 +3317,7 @@ Because 10 means "found changes". `kiln check && echo current` works in a timer 
 without parsing anything.
 
 **Can I install Kiln on a normal (non-OSTree) Arch system?**
-Yes; the binary installs anywhere. You can run `kiln check`, `explain` and `show` there. To
+Yes; the binary installs anywhere. You can run `kiln check`, `config` and `show` there. To
 `build` and `deploy` you need an OSTree sysroot, which is what `kiln sysroot init` creates.
 
 **Does Kiln need the AUR?**
@@ -3348,7 +3400,7 @@ Worth reporting:
 1. `kiln --version` output (it includes the schema version and hash epoch).
 2. The exact command you ran and its full output.
 3. The smallest configuration that reproduces it. `kiln check --offline` output is often
-   enough; if not, `kiln show` and `kiln explain <key>` are.
+   enough; if not, `kiln show` and `kiln config get <key>` are.
 4. For a build failure: whether `sudo kiln build --keep-failed` reproduces it, and the sandbox
    log path it printed.
 5. For a boot failure: `kiln status` and `kiln list` from the generation you landed on.

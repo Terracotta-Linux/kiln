@@ -21,6 +21,7 @@ pub enum Command {
     Explain {
         key: Option<String>,
     },
+    Config(ConfigCommand),
     /// `kiln show` describes the configuration on disk; `kiln show <gen>`
     /// describes a generation, from its own commit.
     Show {
@@ -101,6 +102,39 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// `kiln config`'s subcommands. Unlike every other verb's flags, `--file`
+/// only makes sense on the four that write, so it is checked in the
+/// `"config"` parse arm itself rather than through `verb_flags`, which has no
+/// notion of a second-level verb.
+#[derive(Debug)]
+pub enum ConfigCommand {
+    Get {
+        key: String,
+    },
+    List {
+        prefix: Option<String>,
+    },
+    Set {
+        key: String,
+        value: String,
+        file: Option<PathBuf>,
+    },
+    Unset {
+        key: String,
+        file: Option<PathBuf>,
+    },
+    Add {
+        key: String,
+        value: String,
+        file: Option<PathBuf>,
+    },
+    Remove {
+        key: String,
+        value: String,
+        file: Option<PathBuf>,
+    },
+}
+
 const HELP: &str = "\
 kiln — a declarative Linux system image builder
 
@@ -117,9 +151,19 @@ Inspection
   kiln owns <path>                    which package owns a file in the image
   kiln explain <key>                  which file set a config value, and to what
                                       also `<group>` and `<list>/<element>`
+                                      (an alias for `kiln config get`)
   kiln show [<gen>]                   the merged manifest, or a past generation
 
-Deployments (by generation, never by OSTree index)
+Configuration
+  kiln config get <key>               which file set a value, and to what
+  kiln config list [<prefix>]         every resolved key, or every key under one
+  kiln config set <key> <value>       set a scalar key
+  kiln config unset <key>             remove a scalar key
+  kiln config add <key> <value>       append to a list key
+  kiln config remove <key> <value>    remove one value from a list key
+      --file <path>                  target a specific file, on set/unset/add/remove
+
+Deployments
   kiln list                           every generation on this machine
   kiln status                         what is booted, what boots next, /etc drift
   kiln rollback                       boot the previous generation
@@ -133,7 +177,8 @@ Storage
   kiln init                           scaffold /etc/kiln
   kiln sysroot init <path>            create an OSTree sysroot to build into
 
-Development (dev/test only — temporary, discarded on reboot, no reboot needed)
+Development
+  warning: dev/test only — temporary, discarded on reboot
   kiln unlock                         make the booted /usr writable for this boot only
   kiln live <gen>                     preview a generation's /usr and /etc live, no reboot
                                       never touches kernel, initramfs, cmdline, or bootloader
@@ -163,6 +208,7 @@ pub const VERBS: &[&str] = &[
     "apply",
     "rebuild",
     "explain",
+    "config",
     "show",
     "init",
     "list",
@@ -210,6 +256,7 @@ pub fn verb_flags(verb: &str) -> &'static [&'static str] {
         "check" => &["--offline", "--deep"],
         "build" | "apply" => &["--force", "--offline", "--keep-failed"],
         "clean" => &["--keep", "--dry-run", "--remove-baseline"],
+        "config" => &["--file"],
         "rm" => &["--remove-baseline"],
         _ => &[],
     }
@@ -223,6 +270,11 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
     // The default: three generations, plus the baseline, plus anything
     // pinned, plus the running system.
     let mut keep = DEFAULT_KEEP;
+    // `kiln config set/unset/add/remove --file <path>`. Not global — it only
+    // means something on those four subcommands — but it takes a value, so it
+    // has to be pulled out here the same way `--keep` is, before its argument
+    // can land in `positional` and be read as the key or value.
+    let mut file_flag: Option<PathBuf> = None;
 
     let mut it = argv.iter();
     while let Some(a) = it.next() {
@@ -246,6 +298,10 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
                 // Recorded as well as consumed: it is global only because its
                 // *value* would otherwise be read as a generation number, and
                 // `kiln apply --keep 9` still has to be refused.
+                flags.push(a.clone());
+            }
+            "--file" => {
+                file_flag = Some(need(&mut it, "--file")?.into());
                 flags.push(a.clone());
             }
             // `--version`/`-V` and `--help`/`-h` answer regardless of position,
@@ -308,6 +364,81 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
         },
         "explain" => Command::Explain {
             key: positional.get(1).cloned(),
+        },
+
+        "config" => match positional.get(1).map(String::as_str) {
+            Some("get") => Command::Config(ConfigCommand::Get {
+                key: positional.get(2).cloned().ok_or_else(|| {
+                    "`kiln config get` needs a key, for example `kiln config get boot.timeout`"
+                        .to_string()
+                })?,
+            }),
+            Some("list") => {
+                if file_flag.is_some() {
+                    return Err("`kiln config list` does not take `--file`".into());
+                }
+                Command::Config(ConfigCommand::List {
+                    prefix: positional.get(2).cloned(),
+                })
+            }
+            Some("set") => Command::Config(ConfigCommand::Set {
+                key: positional.get(2).cloned().ok_or_else(|| {
+                    "`kiln config set` needs a key and a value, for example \
+                     `kiln config set boot.timeout 10`"
+                        .to_string()
+                })?,
+                value: positional.get(3).cloned().ok_or_else(|| {
+                    "`kiln config set` needs a value, for example `kiln config set \
+                     boot.timeout 10`"
+                        .to_string()
+                })?,
+                file: file_flag.clone(),
+            }),
+            Some("unset") => Command::Config(ConfigCommand::Unset {
+                key: positional.get(2).cloned().ok_or_else(|| {
+                    "`kiln config unset` needs a key, for example `kiln config unset \
+                     system.hostname`"
+                        .to_string()
+                })?,
+                file: file_flag.clone(),
+            }),
+            Some("add") => Command::Config(ConfigCommand::Add {
+                key: positional.get(2).cloned().ok_or_else(|| {
+                    "`kiln config add` needs a key and a value, for example `kiln config add \
+                     kernel.cmdline quiet`"
+                        .to_string()
+                })?,
+                value: positional.get(3).cloned().ok_or_else(|| {
+                    "`kiln config add` needs a value, for example `kiln config add \
+                     kernel.cmdline quiet`"
+                        .to_string()
+                })?,
+                file: file_flag.clone(),
+            }),
+            Some("remove") => Command::Config(ConfigCommand::Remove {
+                key: positional.get(2).cloned().ok_or_else(|| {
+                    "`kiln config remove` needs a key and a value, for example `kiln config \
+                     remove kernel.cmdline quiet`"
+                        .to_string()
+                })?,
+                value: positional.get(3).cloned().ok_or_else(|| {
+                    "`kiln config remove` needs a value, for example `kiln config remove \
+                     kernel.cmdline quiet`"
+                        .to_string()
+                })?,
+                file: file_flag.clone(),
+            }),
+            Some(other) => {
+                return Err(format!(
+                    "unknown `kiln config {other}`; subcommands are get, list, set, unset, \
+                     add, remove"
+                ))
+            }
+            None => {
+                return Err(
+                    "`kiln config` needs a subcommand: get, list, set, unset, add, remove".into(),
+                )
+            }
         },
         "show" => Command::Show {
             generation: match positional.get(1) {

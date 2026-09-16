@@ -51,6 +51,12 @@ fn help_lists_every_command_the_design_promises() {
         "apply",
         "rebuild",
         "explain",
+        "config get",
+        "config list",
+        "config set",
+        "config unset",
+        "config add",
+        "config remove",
         "show",
         "diff",
         "why",
@@ -346,6 +352,241 @@ fn explain_include_prints_the_graph_rather_than_a_value() {
     assert!(said.contains("hardware.toml"), "{said}");
     assert!(said.contains("@kiln/profiles/minimal"), "{said}");
     assert!(!said.contains("empty"), "{said}");
+}
+
+/// A private copy of the `workstation` corpus fixture, for tests that write to
+/// it — `workstation()` above points straight at the committed fixture, which
+/// a write test must never touch.
+fn mutable_workstation(name: &str) -> PathBuf {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let src = root.join("tests/corpus/valid/workstation");
+    let dir = scratch(name);
+    let status = Command::new("cp")
+        .arg("-a")
+        .arg(format!("{}/.", src.display()))
+        .arg(&dir)
+        .status()
+        .expect("cp should run");
+    assert!(status.success(), "copying the workstation fixture failed");
+    dir
+}
+
+fn kiln_in(dir: &Path, args: &[&str]) -> Output {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let modules = root.join("modules");
+    let mut argv = vec![
+        "--config",
+        dir.to_str().unwrap(),
+        "--module-root",
+        modules.to_str().unwrap(),
+    ];
+    argv.extend_from_slice(args);
+    kiln(&argv)
+}
+
+#[test]
+fn config_get_matches_explain_byte_for_byte() {
+    let a = workstation(&["explain", "kernel.cmdline"]);
+    let b = workstation(&["config", "get", "kernel.cmdline"]);
+    assert_eq!(code(&a), code(&b));
+    assert_eq!(stdout(&a), stdout(&b));
+}
+
+#[test]
+fn config_list_shows_resolved_values_under_a_prefix() {
+    let out = workstation(&["config", "list", "boot"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let said = stdout(&out);
+    assert!(said.contains("boot.timeout"), "{said}");
+    assert!(said.contains("boot.loader"), "{said}");
+    assert!(said.contains("boot.initramfs"), "{said}");
+}
+
+#[test]
+fn config_list_with_no_prefix_lists_the_whole_schema() {
+    let out = workstation(&["config", "list"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let said = stdout(&out);
+    assert!(said.contains("boot.timeout"), "{said}");
+    assert!(said.contains("packages.repo"), "{said}");
+    assert!(said.contains("system.hostname"), "{said}");
+    // `kiln`/`include` describe the file, not the image, and are stripped
+    // from the merged tree the same way before a Manifest ever sees them.
+    assert!(!said.contains("\ninclude "), "{said}");
+}
+
+#[test]
+fn config_set_writes_the_file_that_is_currently_winning_the_key() {
+    let dir = mutable_workstation("config-set-owning-file");
+    let out = kiln_in(&dir, &["config", "set", "boot.timeout", "10"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let text = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    assert!(text.contains("timeout = 10"), "{text}");
+
+    let after = kiln_in(&dir, &["config", "get", "boot.timeout"]);
+    assert!(
+        stdout(&after).contains("value       10"),
+        "{}",
+        stdout(&after)
+    );
+}
+
+/// `kernel.package` is set only by `@kiln/kernel/linux`, reached through
+/// `@kiln/profiles/minimal`; nothing in the workstation fixture's own files
+/// sets it. There is no file of the user's own to write into — rule 2 means
+/// editing the module *would* change the resolved value, but Kiln must not
+/// rewrite a shipped module other configurations may also include.
+#[test]
+fn config_set_refuses_a_key_set_only_by_a_module() {
+    let dir = mutable_workstation("config-set-module-only-key");
+    let out = kiln_in(&dir, &["config", "set", "kernel.package", "linux-lts"]);
+    assert_eq!(code(&out), 1);
+    let said = stderr(&out);
+    assert!(said.contains("@kiln/kernel/linux"), "{said}");
+    assert!(said.contains("shipped module"), "{said}");
+}
+
+#[test]
+fn config_unset_removes_the_key() {
+    let dir = mutable_workstation("config-unset-removes-key");
+    let out = kiln_in(&dir, &["config", "unset", "system.hostname"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let text = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    assert!(!text.contains("forge"), "{text}");
+
+    let after = kiln_in(&dir, &["config", "get", "system.hostname"]);
+    assert!(
+        stdout(&after).contains("systemd's own default applies"),
+        "{}",
+        stdout(&after)
+    );
+}
+
+#[test]
+fn config_unset_is_a_noop_when_already_unset() {
+    let dir = mutable_workstation("config-unset-noop");
+    let out = kiln_in(&dir, &["config", "unset", "kernel.headers"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert!(stdout(&out).contains("already unset"), "{}", stdout(&out));
+}
+
+#[test]
+fn config_add_appends_to_a_list() {
+    let dir = mutable_workstation("config-add-appends");
+    let out = kiln_in(&dir, &["config", "add", "kernel.cmdline", "splash"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let text = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    assert!(text.contains("splash"), "{text}");
+
+    let after = kiln_in(&dir, &["config", "get", "kernel.cmdline"]);
+    assert!(stdout(&after).contains("splash"), "{}", stdout(&after));
+}
+
+#[test]
+fn config_add_is_a_noop_when_already_present() {
+    let dir = mutable_workstation("config-add-noop");
+    let before = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    let out = kiln_in(&dir, &["config", "add", "kernel.cmdline", "quiet"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert!(stdout(&out).contains("already in"), "{}", stdout(&out));
+    let after = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    assert_eq!(before, after);
+}
+
+#[test]
+fn config_remove_deletes_from_the_owning_file() {
+    let dir = mutable_workstation("config-remove-owning-file");
+    let out = kiln_in(&dir, &["config", "remove", "kernel.cmdline", "quiet"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let text = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    assert!(!text.contains("\"quiet\""), "{text}");
+}
+
+/// `NetworkManager.service` is enabled only by `@kiln/net/networkmanager`,
+/// which the workstation fixture includes. There is no override for a list
+/// element — lists union (rule 1) — so this must be a hard refusal, not a
+/// silent no-op or a write to the wrong file.
+#[test]
+fn config_remove_refuses_a_module_contribution() {
+    let dir = mutable_workstation("config-remove-module-contribution");
+    let out = kiln_in(
+        &dir,
+        &[
+            "config",
+            "remove",
+            "systemd.enable",
+            "NetworkManager.service",
+        ],
+    );
+    assert_eq!(code(&out), 1);
+    let said = stderr(&out);
+    assert!(said.contains("@kiln/net/networkmanager"), "{said}");
+    assert!(said.contains("no override"), "{said}");
+}
+
+#[test]
+fn config_remove_errors_when_contributed_by_multiple_files() {
+    let dir = mutable_workstation("config-remove-multiple-contributors");
+    // Both `system.toml` and `hardware.toml` set `kernel.cmdline`; give them
+    // an element in common so `quiet` has two contributors to be ambiguous
+    // between.
+    let hw = dir.join("hardware.toml");
+    let text = std::fs::read_to_string(&hw).unwrap();
+    std::fs::write(&hw, text.replace("amd_iommu=on", "amd_iommu=on\", \"quiet")).unwrap();
+
+    let out = kiln_in(&dir, &["config", "remove", "kernel.cmdline", "quiet"]);
+    assert_eq!(code(&out), 1);
+    let said = stderr(&out);
+    assert!(said.contains("system.toml"), "{said}");
+    assert!(said.contains("hardware.toml"), "{said}");
+    assert!(said.contains("--file"), "{said}");
+}
+
+/// `boot.loader = "systemd-boot"` is a syntactically valid string — the type
+/// check `kiln_config::edit::set_scalar` does lets it through — but fails
+/// Kiln's semantic validation. The write-then-reload loop has to catch that
+/// and restore the file rather than leaving a configuration that no longer
+/// loads.
+#[test]
+fn config_set_rejects_a_semantically_invalid_value_and_restores_the_file() {
+    let dir = mutable_workstation("config-set-invalid-rollback");
+    // `boot.loader` is set only by `@kiln/boot/grub2` in this fixture, so
+    // seed it into the entry file with `--file` first — the case this test is
+    // actually after is a value that is *structurally* fine (a string, where
+    // a string is expected) but fails Kiln's semantic check on reload, which
+    // needs a key already owned by a file in the config root, not a module.
+    let system_toml = dir.join("system.toml");
+    let seed = kiln_in(
+        &dir,
+        &[
+            "config",
+            "set",
+            "boot.loader",
+            "grub2",
+            "--file",
+            system_toml.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code(&seed), 0, "{}", stderr(&seed));
+    let before = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+
+    let out = kiln_in(&dir, &["config", "set", "boot.loader", "systemd-boot"]);
+    assert_eq!(code(&out), 1);
+    assert!(
+        stderr(&out).contains("nothing was changed"),
+        "{}",
+        stderr(&out)
+    );
+    let after = std::fs::read_to_string(dir.join("system.toml")).unwrap();
+    assert_eq!(before, after);
 }
 
 fn is_root() -> bool {

@@ -22,13 +22,13 @@ _kiln() {
     local cur prev words cword
     _init_completion || return
 
-    local verbs="check build apply rebuild explain show diff why owns list \
+    local verbs="check build apply rebuild explain config show diff why owns list \
 status rollback deploy pin unpin rm clean init sysroot unlock live completions help version"
     local global="--config --sysroot --allow-external-sources --module-root \
 --verbose --version --help"
 
     case "$prev" in
-        --config|-c|--sysroot|--module-root)
+        --config|-c|--sysroot|--module-root|--file)
             _filedir -d
             return
             ;;
@@ -37,6 +37,10 @@ status rollback deploy pin unpin rm clean init sysroot unlock live completions h
             ;;
         sysroot)
             COMPREPLY=($(compgen -W "init" -- "$cur"))
+            return
+            ;;
+        config)
+            COMPREPLY=($(compgen -W "get list set unset add remove" -- "$cur"))
             return
             ;;
         completions)
@@ -68,6 +72,7 @@ status rollback deploy pin unpin rm clean init sysroot unlock live completions h
         build|apply) COMPREPLY=($(compgen -W "--force --offline --keep-failed" -- "$cur")) ;;
         clean) COMPREPLY=($(compgen -W "--keep --dry-run --remove-baseline" -- "$cur")) ;;
         rm) COMPREPLY=($(compgen -W "--remove-baseline" -- "$cur")) ;;
+        config) COMPREPLY=($(compgen -W "--file" -- "$cur")) ;;
         *) COMPREPLY=($(compgen -W "$global" -- "$cur")) ;;
     esac
 }
@@ -85,6 +90,7 @@ _kiln() {
         'apply:build, then stage for next boot'
         'rebuild:rebuild a past generation from its record'
         'explain:which file set a config value'
+        'config:read or edit /etc/kiln from the command line'
         'show:the merged manifest, or a past generation'
         'diff:what changed between two generations'
         'why:what pulled a package into the image'
@@ -125,6 +131,13 @@ _kiln() {
                 build|apply) _arguments '--force' '--offline' '--keep-failed' ;;
                 clean) _arguments '--keep[generations to keep]:count' '--dry-run' '--remove-baseline' ;;
                 rm) _arguments '--remove-baseline' ;;
+                config)
+                    if (( CURRENT == 2 )); then
+                        _values 'subcommand' get list set unset add remove
+                    else
+                        _arguments '--file[target a specific file]:path:_files'
+                    fi
+                    ;;
                 sysroot) (( CURRENT == 2 )) && _values 'subcommand' 'init[create an OSTree sysroot]' ;;
                 completions) (( CURRENT == 2 )) && _values 'shell' bash zsh fish ;;
             esac
@@ -136,7 +149,7 @@ _kiln "$@"
 "#;
 
 const FISH: &str = r#"# kiln(1) completions
-set -l __kiln_verbs check build apply rebuild explain show diff why owns \
+set -l __kiln_verbs check build apply rebuild explain config show diff why owns \
     list status rollback deploy pin unpin rm clean init sysroot unlock live \
     completions help version
 
@@ -161,6 +174,9 @@ complete -c kiln -n "__fish_seen_subcommand_from clean" -l dry-run
 complete -c kiln -n "__fish_seen_subcommand_from clean rm" -l remove-baseline
 complete -c kiln -n "__fish_seen_subcommand_from sysroot; and not __fish_seen_subcommand_from init" -a init
 complete -c kiln -n "__fish_seen_subcommand_from completions" -a "bash zsh fish"
+
+complete -c kiln -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from get list set unset add remove" -a "get list set unset add remove"
+complete -c kiln -n "__fish_seen_subcommand_from config" -l file -d 'target a specific file' -rF
 "#;
 
 #[cfg(test)]

@@ -76,6 +76,32 @@ pub fn is_list(path: &str) -> bool {
     list_spec(path).is_some()
 }
 
+/// The `LISTS` entries with `identity: None` — a plain set of scalars with no
+/// per-element identity, which is exactly the shape typed `BTreeSet<String>`
+/// in `Manifest`. `kiln config set/unset` (scalars) and `add/remove` (these)
+/// are the only mutations `kiln-config::edit` supports; the identity-keyed
+/// entries (`packages.repo`, `kernel.dkms`, `systemd.unit`, `file`, `script`,
+/// ...) are keyed tables on the TOML surface and are read-only through this
+/// path. `include` is also `identity: None` but is consumed by the include
+/// graph before merge and has no `Manifest` field, so it is excluded here.
+pub const SCALAR_LISTS: &[&str] = &[
+    "repos.mirrors",
+    "packages.exclude",
+    "kernel.cmdline",
+    "kernel.dracut_modules",
+    "kernel.modules.load",
+    "kernel.modules.blacklist",
+    "kernel.modules.initramfs",
+    "systemd.enable",
+    "systemd.disable",
+    "systemd.mask",
+    "system.locale.generate",
+];
+
+pub fn is_scalar_list(path: &str) -> bool {
+    SCALAR_LISTS.contains(&path)
+}
+
 /// Every key the schema knows, dotted, for `deny_unknown_fields` and
 /// did-you-mean. — "that is the whole language".
 pub const KEYS: &[&str] = &[
