@@ -278,14 +278,16 @@ fn apply(change: &Change, src_root: &Path, dst_root: &Path) -> io::Result<()> {
             how: drift::How::Mode | drift::How::Owner,
             ..
         } => {
-            let meta = fs::symlink_metadata(src_root.join(rel))?;
-            fs::set_permissions(&dst, meta.permissions())?;
-            std::os::unix::fs::chown(&dst, Some(meta.uid()), Some(meta.gid()))
+            let src = src_root.join(rel);
+            let meta = fs::symlink_metadata(&src).map_err(|e| at(e, "reading", &src))?;
+            fs::set_permissions(&dst, meta.permissions()).map_err(|e| at(e, "chmod'ing", &dst))?;
+            std::os::unix::fs::lchown(&dst, Some(meta.uid()), Some(meta.gid()))
+                .map_err(|e| at(e, "chown'ing", &dst))
         }
         Change::Modified { .. } | Change::Added { .. } => {
             let src = src_root.join(rel);
             if let Some(parent) = dst.parent() {
-                fs::create_dir_all(parent)?;
+                fs::create_dir_all(parent).map_err(|e| at(e, "creating", parent))?;
             }
             remove_any(&dst)?;
             copy_any(&src, &dst)
@@ -293,31 +295,43 @@ fn apply(change: &Change, src_root: &Path, dst_root: &Path) -> io::Result<()> {
     }
 }
 
+/// Attach the path an `fs` call was acting on to its error, so a failure names
+/// the file rather than surfacing a bare `No such file or directory (os error
+/// 2)` with no way to tell which of the many paths `apply` touches it was.
+fn at(e: io::Error, doing: &str, path: &Path) -> io::Error {
+    io::Error::other(format!("{doing} {}: {e}", path.display()))
+}
+
 fn copy_any(src: &Path, dst: &Path) -> io::Result<()> {
-    let meta = fs::symlink_metadata(src)?;
+    let meta = fs::symlink_metadata(src).map_err(|e| at(e, "reading", src))?;
     if meta.file_type().is_symlink() {
-        let target = fs::read_link(src)?;
-        std::os::unix::fs::symlink(target, dst)?;
+        let target = fs::read_link(src).map_err(|e| at(e, "reading the symlink", src))?;
+        std::os::unix::fs::symlink(target, dst).map_err(|e| at(e, "creating the symlink", dst))?;
     } else if meta.is_dir() {
-        fs::create_dir_all(dst)?;
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
+        fs::create_dir_all(dst).map_err(|e| at(e, "creating", dst))?;
+        for entry in fs::read_dir(src).map_err(|e| at(e, "reading", src))? {
+            let entry = entry.map_err(|e| at(e, "reading an entry of", src))?;
             copy_any(&entry.path(), &dst.join(entry.file_name()))?;
         }
-        fs::set_permissions(dst, meta.permissions())?;
+        fs::set_permissions(dst, meta.permissions()).map_err(|e| at(e, "chmod'ing", dst))?;
     } else {
-        fs::copy(src, dst)?;
-        fs::set_permissions(dst, meta.permissions())?;
+        fs::copy(src, dst).map_err(|e| at(e, "copying", src))?;
+        fs::set_permissions(dst, meta.permissions()).map_err(|e| at(e, "chmod'ing", dst))?;
     }
-    std::os::unix::fs::chown(dst, Some(meta.uid()), Some(meta.gid()))
+    // `lchown`, not `chown`: for the symlink branch above, `dst` is itself the
+    // symlink, and `chown` follows it — to a target that, mid-sync, may not
+    // exist on the live system yet, or may exist but belong to a file this
+    // change has no business touching the ownership of.
+    std::os::unix::fs::lchown(dst, Some(meta.uid()), Some(meta.gid()))
+        .map_err(|e| at(e, "chown'ing", dst))
 }
 
 fn remove_any(path: &Path) -> io::Result<()> {
     match fs::symlink_metadata(path) {
-        Ok(m) if m.is_dir() => fs::remove_dir_all(path),
-        Ok(_) => fs::remove_file(path),
+        Ok(m) if m.is_dir() => fs::remove_dir_all(path).map_err(|e| at(e, "removing", path)),
+        Ok(_) => fs::remove_file(path).map_err(|e| at(e, "removing", path)),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e),
+        Err(e) => Err(at(e, "reading", path)),
     }
 }
 
