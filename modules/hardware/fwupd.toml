@@ -1,0 +1,13 @@
+# Firmware updates through fwupd.
+#
+# `fwupd.service` itself is D-Bus activated — `fwupdmgr` starts it on demand
+# — so nothing needs enabling for that. `fwupd-refresh.timer` is the part
+# that runs on its own: it periodically refreshes the metadata fwupdmgr
+# checks against, and a timer nobody enabled never fires.
+kiln = 1
+
+[packages]
+repo = ["fwupd"]
+
+[systemd]
+enable = ["fwupd-refresh.timer"]

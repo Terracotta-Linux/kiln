@@ -1793,9 +1793,11 @@ which is exactly what distinguishes them. Finding two is an error, not a guess, 
 including two `@kiln/kernel/*` modules is a conflict on `kernel.package` reported against both
 files.
 
-Every shipped profile already includes a kernel module. To run a different kernel, copy a
-profile's include list into your own configuration and swap the `@kiln/kernel/*` line; a
-profile is five lines.
+Every shipped profile already includes a kernel module, except its `-base` sibling
+(`@kiln/profiles/minimal-base`, `-server-base`, `-workstation-base`), which is the same profile
+minus that one line — include it plus exactly one `@kiln/kernel/*` module yourself. To run a
+different kernel on a non-`-base` profile, copy its include list into your own configuration
+and swap the `@kiln/kernel/*` line; a profile is five lines.
 
 ### 10.2 The initramfs
 
@@ -2401,10 +2403,11 @@ and lines, and setting it here is the fix.
 
 ### 14.3 The module library
 
-Kiln ships 61 modules under `/usr/share/kiln/modules`:
+Kiln ships 66 modules under `/usr/share/kiln/modules`:
 
 ```text
 @kiln/profiles/    minimal · workstation · server
+                   minimal-base · workstation-base · server-base  (same, kernel left unpicked)
 @kiln/kernel/      linux · linux-lts · linux-zen · linux-hardened · linux-rt
 @kiln/boot/        grub2 · plymouth
 @kiln/net/         networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale
@@ -2416,7 +2419,7 @@ Kiln ships 61 modules under `/usr/share/kiln/modules`:
                    cosmic-minimal · cosmic
 @kiln/wm/          hyprland · sway · niri · i3
 @kiln/audio/       pipewire
-@kiln/hardware/    firmware · bluetooth · printing · laptop · intel-ucode · amd-ucode
+@kiln/hardware/    firmware · bluetooth · printing · laptop · tlp · fwupd · intel-ucode · amd-ucode
 @kiln/virt/        libvirt · podman · docker · nvidia-docker · distrobox · lilipod
 @kiln/dev/         base-devel · rust · go
 @kiln/security/    wheel-sudo · apparmor
@@ -3145,9 +3148,10 @@ source  = "files/seed.db"
 ```toml
 kiln = 1
 
-include = ["@kiln/profiles/workstation", "@kiln/kernel/linux-zen"]
-# note: profiles already include a kernel. Copy the profile's include list and
-# swap the kernel line instead of adding a second one; two is a conflict.
+include = ["@kiln/profiles/workstation-base", "@kiln/kernel/linux-zen"]
+# note: @kiln/profiles/workstation already includes a kernel; its -base
+# sibling leaves that line out instead, so this can add linux-zen without
+# a second kernel module conflicting with the profile's own choice.
 
 [kernel]
 cmdline = ["quiet"]

@@ -1,0 +1,15 @@
+# @kiln/profiles/minimal without a kernel picked for you. Same smallest
+# bootable, administrable image; add exactly one @kiln/kernel/* module
+# yourself. @kiln/profiles/minimal exists so most people do not have to.
+kiln = 1
+
+include = [
+  "@kiln/boot/grub2",
+  "@kiln/hardware/firmware",
+]
+
+[packages]
+repo = ["base", "dracut", "ostree", "systemd-sysvcompat"]
+
+[systemd]
+enable = ["systemd-timesyncd.service"]

@@ -7,9 +7,9 @@
 # machine has nothing to read without it. There is no network stack here;
 # @kiln/profiles/workstation and server make opposite choices about that.
 #
-# It picks `linux`. To run a different kernel, copy this include list into your
-# own configuration and swap the `@kiln/kernel/*` line: a second kernel module
-# alongside a profile is a conflict, by design.
+# It picks `linux`. To run a different kernel, use @kiln/profiles/minimal-base
+# instead and add your own @kiln/kernel/* module: a second kernel module
+# alongside a profile that already picked one is a conflict, by design.
 kiln = 1
 
 include = [

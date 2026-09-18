@@ -2,7 +2,8 @@
 # that changes least. No desktop, no audio, no bluetooth, no printing.
 #
 # It picks `linux-lts`, which is the whole difference in temperament between
-# this profile and @kiln/profiles/workstation; see minimal on swapping that.
+# this profile and @kiln/profiles/workstation. To run a different kernel, use
+# @kiln/profiles/server-base instead and add your own @kiln/kernel/* module.
 kiln = 1
 
 include = [

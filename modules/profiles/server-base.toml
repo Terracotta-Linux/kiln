@@ -1,0 +1,20 @@
+# @kiln/profiles/server without a kernel picked for you: reachable,
+# firewalled, no desktop, no audio, no bluetooth, no printing — but the
+# kernel is your call instead of `linux-lts`. Add exactly one
+# @kiln/kernel/* module yourself.
+kiln = 1
+
+include = [
+  "@kiln/boot/grub2",
+  "@kiln/hardware/firmware",
+  "@kiln/net/systemd-networkd",
+  "@kiln/net/nftables",
+  "@kiln/net/sshd",
+  "@kiln/security/wheel-sudo",
+]
+
+[packages]
+repo = ["base", "dracut", "ostree", "systemd-sysvcompat"]
+
+[systemd]
+enable = ["systemd-timesyncd.service"]

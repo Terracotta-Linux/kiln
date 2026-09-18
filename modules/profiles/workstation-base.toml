@@ -1,0 +1,23 @@
+# @kiln/profiles/workstation without a kernel picked for you: everything a
+# person sitting in front of the machine needs, but the kernel is your call
+# instead of `linux`. Add exactly one @kiln/kernel/* module yourself.
+#
+# No graphics driver and no desktop here either: @kiln/gpu/* depends on the
+# card and @kiln/desktop/* on taste, so both are yours to add too.
+kiln = 1
+
+include = [
+  "@kiln/boot/grub2",
+  "@kiln/hardware/firmware",
+  "@kiln/hardware/bluetooth",
+  "@kiln/hardware/printing",
+  "@kiln/net/networkmanager",
+  "@kiln/audio/pipewire",
+  "@kiln/security/wheel-sudo",
+]
+
+[packages]
+repo = ["base", "dracut", "ostree", "systemd-sysvcompat"]
+
+[systemd]
+enable = ["systemd-timesyncd.service"]

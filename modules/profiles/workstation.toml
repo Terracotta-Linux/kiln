@@ -2,8 +2,9 @@
 # sitting in front of one needs.
 #
 # No graphics driver and no desktop: @kiln/gpu/* depends on the card and
-# @kiln/desktop/* on taste, so both are yours to add. It picks `linux`; see
-# @kiln/profiles/minimal on swapping that.
+# @kiln/desktop/* on taste, so both are yours to add. It picks `linux`; to
+# run a different kernel, use @kiln/profiles/workstation-base instead and
+# add your own @kiln/kernel/* module.
 kiln = 1
 
 include = [

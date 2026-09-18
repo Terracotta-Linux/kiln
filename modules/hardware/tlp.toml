@@ -1,0 +1,16 @@
+# TLP: a laptop power management alternative to @kiln/hardware/laptop's
+# power-profiles-daemon. Both manage the same knobs, so running both is two
+# daemons fighting over the same hardware — a machine problem, not something
+# Kiln can resolve for you, so include only one.
+#
+# `systemd-rfkill` duplicates radio-device work TLP already does, and TLP's
+# own documentation asks for it to be masked; it ships inside `systemd`
+# itself, so masking it needs nothing installed here.
+kiln = 1
+
+[packages]
+repo = ["tlp"]
+
+[systemd]
+enable = ["tlp.service"]
+mask   = ["systemd-rfkill.service", "systemd-rfkill.socket"]
