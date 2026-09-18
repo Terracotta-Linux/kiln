@@ -723,10 +723,14 @@ impl Sysroot {
         Ok(UnlockState::of(deployment.unlocked()))
     }
 
-    /// `ostree admin unlock` (transient): make the booted deployment's `/usr`
-    /// writable for the rest of this boot. Nothing survives it — not even a
-    /// reboot back into the same generation — because Kiln only ever asks
-    /// for the transient state; see [`crate::unlock`] for why.
+    /// `ostree admin unlock` (development): make the booted deployment's
+    /// `/usr` writable for the rest of this boot. Nothing survives it — not
+    /// even a reboot back into the same generation — because Kiln only ever
+    /// asks for the development state; see [`crate::unlock`] for why this is
+    /// not `OSTREE_DEPLOYMENT_UNLOCKED_TRANSIENT` despite the name overlap:
+    /// libostree's `Transient` state mounts the overlay read-only, requiring
+    /// a manual remount inside a fresh mount namespace to write to it at
+    /// all — the opposite of what a writable scratch `/usr` needs.
     ///
     /// This is dev/test scratch space, not a second deploy path: it never
     /// touches `plan_id`, the build record, or the deployment list.
@@ -738,7 +742,7 @@ impl Sysroot {
         self.inner
             .deployment_unlock(
                 &deployment,
-                DeploymentUnlockedState::Transient,
+                DeploymentUnlockedState::Development,
                 gio::Cancellable::NONE,
             )
             .map_err(Error::of("unlocking the booted deployment"))
