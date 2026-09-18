@@ -21,6 +21,7 @@ mod init;
 mod inspect;
 mod paths;
 mod pipeline;
+mod progress;
 mod realize;
 mod rebuild;
 mod show;

@@ -95,6 +95,29 @@ impl Transaction {
     }
 }
 
+/// One update from a fetch's download progress — what libalpm's own `dl_cb`
+/// reports, reshaped so a caller does not need the `alpm` crate open to read
+/// it.
+///
+/// No rate or ETA: libalpm hands over `(downloaded, total)` and nothing else,
+/// so a caller that wants a speed has to time successive `Progress` events
+/// itself.
+#[derive(Debug, Clone)]
+pub enum DownloadEvent {
+    /// A file's download is starting.
+    Started { file: String },
+    /// Bytes have landed for `file`. `total` is `0` until the server has said
+    /// how large the file is — not every mirror sends a `Content-Length` up
+    /// front.
+    Progress {
+        file: String,
+        downloaded: i64,
+        total: i64,
+    },
+    /// `file` is done — successfully, already up to date, or not.
+    Finished { file: String, ok: bool },
+}
+
 impl Session {
     /// Download every package the transaction needs into the cache, and nothing
     /// else. **This is the only step in assembly that touches the network.**
@@ -113,6 +136,35 @@ impl Session {
     /// resolve that dependency and then fail reaching for a mirror that is not
     /// there.
     pub fn fetch(&mut self, transaction: &Transaction) -> Result<Vec<PathBuf>> {
+        self.fetch_with_progress(transaction, |_| {})
+    }
+
+    /// As `fetch`, but calls `on_event` for every download update libalpm
+    /// makes. A plain `fetch()` over a slow mirror gives back nothing to look
+    /// at until it returns; this is the hook a caller renders into "N/M
+    /// fetched" or a bytes-per-second line instead.
+    pub fn fetch_with_progress(
+        &mut self,
+        transaction: &Transaction,
+        mut on_event: impl FnMut(DownloadEvent) + 'static,
+    ) -> Result<Vec<PathBuf>> {
+        self.alpm.set_dl_cb((), move |file, event, ()| {
+            let file = file.to_string();
+            match event.event() {
+                alpm::DownloadEvent::Init(_) => on_event(DownloadEvent::Started { file }),
+                alpm::DownloadEvent::Progress(p) => on_event(DownloadEvent::Progress {
+                    file,
+                    downloaded: p.downloaded,
+                    total: p.total,
+                }),
+                alpm::DownloadEvent::Completed(c) => on_event(DownloadEvent::Finished {
+                    file,
+                    ok: !matches!(c.result, alpm::DownloadResult::Failed),
+                }),
+                alpm::DownloadEvent::Retry(_) => {}
+            }
+        });
+
         self.run_transaction(
             transaction,
             TransFlag::DOWNLOAD_ONLY,

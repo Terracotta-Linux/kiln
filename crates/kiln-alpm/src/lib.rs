@@ -32,7 +32,7 @@ pub use mounts::Mounts;
 pub use repo::{mirrors, RepoSpec, Trust};
 pub use session::{Config, Installed, Session};
 pub use solve::{Request, Solution, SolvedPackage};
-pub use transact::{Report, ScriptletOutput, Transaction};
+pub use transact::{DownloadEvent, Report, ScriptletOutput, Transaction};
 
 /// The sha256 of a file, computed by libalpm.
 ///

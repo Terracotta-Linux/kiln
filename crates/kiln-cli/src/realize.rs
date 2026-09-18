@@ -40,6 +40,8 @@ use kiln_resolve::{BuildPlan, DkmsOrigin, ResolvedInput};
 use kiln_sandbox::{Bubblewrap, Sandbox};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 /// Download every repository package the plan names into the artifact store.
 ///
@@ -75,7 +77,18 @@ pub fn fetch(
         ExitCode::System
     })?;
 
-    let files = session.fetch(&transaction).map_err(|e| {
+    // `Rc<RefCell<_>>` rather than a plain move: the callback has to be
+    // `'static`, but `finish()` needs to run after `fetch_with_progress`
+    // returns, to leave the terminal on a clean line.
+    let progress = std::rc::Rc::new(std::cell::RefCell::new(
+        crate::progress::FetchProgress::new(),
+    ));
+    let for_callback = std::rc::Rc::clone(&progress);
+    let result = session.fetch_with_progress(&transaction, move |event| {
+        for_callback.borrow_mut().event(event)
+    });
+    progress.borrow_mut().finish();
+    let files = result.map_err(|e| {
         eprintln!("{} {e}", color::error());
         ExitCode::Resolution
     })?;
@@ -190,7 +203,7 @@ fn file_package_url(
 pub fn realize(
     plan: &BuildPlan,
     opts: &Options<'_>,
-    transport: &dyn kiln_aur::Transport,
+    transport: &(dyn kiln_aur::Transport + Sync),
 ) -> Result<Artifacts, ExitCode> {
     let mut artifacts = Artifacts::default();
     let jobs = jobs(plan);
@@ -223,7 +236,6 @@ pub fn realize(
     );
 
     let builder = Builder::new(&opts.ctx.state);
-    let sandbox = Bubblewrap::new(opts.work.join("build-sandbox"));
     let sources = kiln_build::Sources {
         repos: opts.repos.clone(),
         arch: plan.image.arch.clone(),
@@ -232,45 +244,50 @@ pub fn realize(
         syncdb_from: opts.ctx.state.join("cache/syncdb"),
     };
 
-    // Opened once and reused: the only thing it is asked is what a build-time
-    // dependency closure resolves to, which is metadata already on disk.
-    let mut session = Session::open(
-        Config::for_resolution(&opts.ctx.state, &plan.image.arch).with_repos(opts.repos.clone()),
-    )
-    .map_err(|e| {
-        eprintln!("{} {e}", color::error());
-        ExitCode::System
-    })?;
-
     let mut failures: Vec<(String, String)> = Vec::new();
     let mut failed: BTreeSet<String> = BTreeSet::new();
+    // Counts across every phase, not reset per wave: a build going through
+    // several small waves should still see a steadily climbing "k/n", not
+    // one that resets and looks stuck at the start of each one.
+    let total = jobs.len();
+    let completed = AtomicUsize::new(0);
 
-    for job in &jobs {
-        if let Some(blocker) = job.blocked_by(&failed) {
-            println!("  {:<28} skipped — `{blocker}` failed", job.name());
-            failed.insert(job.name().to_string());
+    // Three phases, each a hard barrier: a recipe may depend on an AUR
+    // package Kiln built, and a module may depend on either, so nothing in a
+    // later phase starts until every job in an earlier one has finished.
+    // Within a phase, jobs are independent of each other — the AUR phase
+    // splits further into waves by depth in the AUR dependency tree, since a
+    // package's AUR build-dependencies are exactly the jobs strictly deeper
+    // than it.
+    let aur: Vec<&Job> = jobs
+        .iter()
+        .filter(|j| matches!(j, Job::Aur { .. }))
+        .collect();
+    let recipes: Vec<&Job> = jobs
+        .iter()
+        .filter(|j| matches!(j, Job::Recipe { .. }))
+        .collect();
+    let modules: Vec<&Job> = jobs
+        .iter()
+        .filter(|j| matches!(j, Job::Module { .. } | Job::Dkms { .. }))
+        .collect();
+
+    let mut phases: Vec<Vec<&Job>> = aur_waves(&aur);
+    phases.push(recipes);
+    phases.push(modules);
+
+    for wave in phases {
+        if wave.is_empty() {
             continue;
         }
-        job.announce();
-        match build_one(
-            job,
-            opts,
-            &builder,
-            &sandbox,
-            &sources,
-            &mut session,
-            &artifacts,
-            transport,
-        ) {
-            Ok(produced) => {
-                describe(job.name(), &produced);
-                artifacts.produced.insert(job.name().to_string(), produced);
-            }
-            Err(why) => {
-                failed.insert(job.name().to_string());
-                failures.push((job.name().to_string(), why));
-            }
+        let (built, wave_failures, newly_failed) = run_wave(
+            &wave, opts, &builder, &sources, &artifacts, transport, &failed, &completed, total,
+        );
+        for (name, produced) in built {
+            artifacts.produced.insert(name, produced);
         }
+        failures.extend(wave_failures);
+        failed.extend(newly_failed);
     }
 
     if failures.is_empty() {
@@ -353,7 +370,15 @@ impl Job {
     /// any new AUR package*. Printed at realization rather than at resolution
     /// because this is the moment a stranger's code is about to run, and a line
     /// printed minutes earlier during a `kiln check` is not that moment.
+    ///
+    /// Built as one string and printed in a single call — parallel jobs
+    /// announce from different threads, and two interleaved `print!`/
+    /// `println!` pairs would tear a line in half on the terminal.
     fn announce(&self) {
+        println!("{}", self.announce_line());
+    }
+
+    fn announce_line(&self) -> String {
         match self {
             Job::Aur {
                 name,
@@ -362,39 +387,180 @@ impl Job {
                 evr,
                 pulled_in_by,
             } => {
-                print!(
+                let mut line = format!(
                     "  {} {name} {evr} — pkgbase {pkgbase}, commit {}",
                     color::bold(Stream::Out, "aur"),
                     &commit[..commit.len().min(7)]
                 );
-                match pulled_in_by {
-                    Some(by) => println!(", pulled in by {by}"),
-                    None => println!(),
+                if let Some(by) = pulled_in_by {
+                    line.push_str(&format!(", pulled in by {by}"));
                 }
+                line
             }
             Job::Recipe { name, path, .. } => {
-                println!("  {} {name} ({path})", color::bold(Stream::Out, "build"))
+                format!("  {} {name} ({path})", color::bold(Stream::Out, "build"))
             }
             Job::Module {
                 name, kernel_evr, ..
-            } => println!(
+            } => format!(
                 "  {} {name} against kernel {kernel_evr}",
                 color::bold(Stream::Out, "module")
             ),
             Job::Dkms {
                 origin, kernel_evr, ..
             } => match origin {
-                DkmsOrigin::Package { name, evr } => println!(
+                DkmsOrigin::Package { name, evr } => format!(
                     "  {} {name} {evr} against kernel {kernel_evr}",
                     color::bold(Stream::Out, "dkms")
                 ),
-                DkmsOrigin::Tree { path, .. } => println!(
+                DkmsOrigin::Tree { path, .. } => format!(
                     "  {} {path} against kernel {kernel_evr}",
                     color::bold(Stream::Out, "dkms")
                 ),
             },
         }
     }
+}
+
+/// How many jobs run at once. Builds are compute-heavy (a sandboxed
+/// `makepkg`), so oversubscribing past the CPU count invites thrashing
+/// rather than speed; a machine that cannot report its own count gets one.
+fn parallelism() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+}
+
+/// Group the AUR jobs into build waves, deepest first.
+///
+/// A wave is exactly the set of packages whose own AUR build-dependencies —
+/// which `jobs()` has already established are strictly deeper — are all in
+/// earlier waves. Nothing in one wave depends on anything else in it, so a
+/// wave is safe to build in parallel; waves themselves run one after
+/// another, so a package always sees its dependencies already realized.
+fn aur_waves<'j>(aur: &[&'j Job]) -> Vec<Vec<&'j Job>> {
+    let parents: BTreeMap<&str, Option<&str>> = aur
+        .iter()
+        .map(|j| match j {
+            Job::Aur {
+                name, pulled_in_by, ..
+            } => (name.as_str(), pulled_in_by.as_deref()),
+            _ => unreachable!("aur_waves only receives Job::Aur"),
+        })
+        .collect();
+
+    let mut by_depth: BTreeMap<usize, Vec<&Job>> = BTreeMap::new();
+    for job in aur {
+        by_depth
+            .entry(depth_of(job.name(), &parents))
+            .or_default()
+            .push(*job);
+    }
+    by_depth.into_values().rev().collect()
+}
+
+/// What building one job in a wave came to.
+enum Outcome {
+    Built(Produced),
+    /// Not attempted — the job it cannot be built without already failed.
+    Skipped,
+    Failed(String),
+}
+
+/// `(built, failures, newly_failed)` — see `run_wave`.
+type WaveResult = (Vec<(String, Produced)>, Vec<(String, String)>, Vec<String>);
+
+/// Build every job in one wave concurrently, and report what happened.
+///
+/// Returns `(built, failures, newly_failed)`: `built` and `failures` are
+/// exactly what the sequential loop used to accumulate directly; every name
+/// in `newly_failed` — whether it failed outright or was skipped — is added
+/// to the caller's `failed` set before the next wave starts, matching the
+/// sequential code's `failed.insert` on both paths.
+#[allow(clippy::too_many_arguments)]
+fn run_wave(
+    wave: &[&Job],
+    opts: &Options<'_>,
+    builder: &Builder,
+    sources: &kiln_build::Sources,
+    have: &Artifacts,
+    transport: &(dyn kiln_aur::Transport + Sync),
+    failed: &BTreeSet<String>,
+    completed: &AtomicUsize,
+    total: usize,
+) -> WaveResult {
+    let next = AtomicUsize::new(0);
+    let results: Mutex<Vec<(usize, Outcome)>> = Mutex::new(Vec::new());
+    let workers = parallelism().min(wave.len()).max(1);
+
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some(&job) = wave.get(i) else {
+                    break;
+                };
+
+                let outcome = if let Some(blocker) = job.blocked_by(failed) {
+                    let n = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    println!(
+                        "  {:<28} {} — `{blocker}` failed  {}",
+                        job.name(),
+                        color::yellow(Stream::Out, "skipped"),
+                        progress_tag(Stream::Out, n, total)
+                    );
+                    Outcome::Skipped
+                } else {
+                    job.announce();
+                    // One scratch directory per job: `Bubblewrap` writes its
+                    // shim wrappers into a fixed path under it, and two jobs
+                    // sharing one would race writing the same files.
+                    let sandbox = Bubblewrap::new(opts.work.join("build-sandbox").join(job.name()));
+                    let outcome =
+                        match build_one(job, opts, builder, &sandbox, sources, have, transport) {
+                            Ok(produced) => Outcome::Built(produced),
+                            Err(why) => Outcome::Failed(why),
+                        };
+                    let n = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    match &outcome {
+                        Outcome::Built(produced) => describe(job.name(), produced, n, total),
+                        // Terse and immediate — so a failure shows up the
+                        // moment it happens rather than staying invisible
+                        // until every other job in the build finishes. The
+                        // full error is still in the summary at the end.
+                        Outcome::Failed(_) => eprintln!(
+                            "  {} {}  {}",
+                            color::red(Stream::Err, "failed"),
+                            job.name(),
+                            progress_tag(Stream::Err, n, total)
+                        ),
+                        Outcome::Skipped => unreachable!(),
+                    }
+                    outcome
+                };
+                results.lock().unwrap().push((i, outcome));
+            });
+        }
+    });
+
+    let mut ordered = results.into_inner().unwrap();
+    ordered.sort_by_key(|(i, _)| *i);
+
+    let mut built = Vec::new();
+    let mut build_failures = Vec::new();
+    let mut newly_failed = Vec::new();
+    for (i, outcome) in ordered {
+        let name = wave[i].name().to_string();
+        match outcome {
+            Outcome::Built(produced) => built.push((name, produced)),
+            Outcome::Skipped => newly_failed.push(name),
+            Outcome::Failed(why) => {
+                newly_failed.push(name.clone());
+                build_failures.push((name, why));
+            }
+        }
+    }
+    (built, build_failures, newly_failed)
 }
 
 /// Every input that has to be built, in an order that respects what depends on
@@ -512,9 +678,8 @@ fn build_one(
     builder: &Builder,
     sandbox: &dyn Sandbox,
     sources: &kiln_build::Sources,
-    session: &mut Session,
     have: &Artifacts,
-    transport: &dyn kiln_aur::Transport,
+    transport: &(dyn kiln_aur::Transport + Sync),
 ) -> Result<Produced, String> {
     let arch = &sources.arch;
     let scratch = opts.work.join("recipes").join(job.name());
@@ -639,7 +804,16 @@ fn build_one(
         // closure comes from the same repository snapshot as the image, which
         // is what makes the key correct rather than merely fast.
         None => {
-            let makedeps = closure_evrs(session, &from_repos)
+            // Opened fresh rather than shared: this runs from whichever
+            // worker thread picked up the job, and the alpm handle a
+            // `Session` wraps is not safe to touch from more than one thread.
+            // What it is asked is local metadata already on disk — no
+            // network — so opening one per job is cheap.
+            let mut session = Session::open(
+                Config::for_resolution(&opts.ctx.state, arch).with_repos(sources.repos.clone()),
+            )
+            .map_err(|e| e.to_string())?;
+            let makedeps = closure_evrs(&mut session, &from_repos)
                 .map_err(|e| format!("resolving what `{}` builds against: {e}", job.name()))?;
             Ingredients::new(aur_recipe_identity(job), arch)
                 .with_makedeps(makedeps)
@@ -754,17 +928,26 @@ fn closure_evrs(session: &mut Session, wanted: &[String]) -> Result<Vec<String>,
         .map_err(|e| e.to_string())
 }
 
-fn describe(name: &str, produced: &Produced) {
+/// The dim `[k/total]` counter appended to a job's completion line — a
+/// steadily climbing number is the cheapest proof a build has not hung.
+fn progress_tag(stream: Stream, completed: usize, total: usize) -> String {
+    color::dim(stream, &format!("[{completed}/{total}]"))
+}
+
+fn describe(name: &str, produced: &Produced, completed: usize, total: usize) {
     let n = produced.files.len();
-    let kind = produced.kind;
+    let kind = color::bold(Stream::Out, produced.kind);
+    let tag = progress_tag(Stream::Out, completed, total);
     if produced.from_cache {
         println!(
-            "    {kind} {name}: {n} package{} from the build cache",
-            crate::fmt::plural(n)
+            "    {kind} {name}: {n} package{} {}  {tag}",
+            crate::fmt::plural(n),
+            color::cyan(Stream::Out, "from the build cache")
         );
     } else {
         println!(
-            "    {kind} {name}: built {n} package{}",
+            "    {kind} {name}: {} {n} package{}  {tag}",
+            color::green(Stream::Out, "built"),
             crate::fmt::plural(n)
         );
     }

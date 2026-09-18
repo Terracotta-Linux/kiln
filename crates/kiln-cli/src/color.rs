@@ -21,6 +21,13 @@ impl Stream {
         if std::env::var_os("NO_COLOR").is_some() {
             return false;
         }
+        self.is_tty()
+    }
+
+    /// Whether this stream is attached to a terminal, ignoring `NO_COLOR` —
+    /// `NO_COLOR` says "no escape codes", not "no redrawn progress line", so
+    /// a redraw-vs-plain-lines decision checks this instead of `colored()`.
+    pub fn is_tty(self) -> bool {
         match self {
             Stream::Out => std::io::stdout().is_terminal(),
             Stream::Err => std::io::stderr().is_terminal(),

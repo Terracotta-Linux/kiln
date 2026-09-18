@@ -557,7 +557,7 @@ Building workstation (b3:99887766abcd)
 Generation 44 committed as c07be1d4f9a2.
 Generation 44 is staged for the next boot.
 Reboot to use it. `kiln rollback` returns to the previous one.
-If it does not reach boot-complete.target in 3 attempts, the previous generation boots instead.
+If it doesn't boot successfully in 3 attempts, the previous generation boots instead.
 ```
 
 #### `kiln rebuild <gen>`

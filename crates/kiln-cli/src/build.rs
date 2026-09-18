@@ -250,8 +250,8 @@ pub fn stage(
             }
             match &deployed.counted {
                 kiln_ostree::Counter::Armed(tries) => println!(
-                    "If it does not reach boot-complete.target in {tries} attempts, the \
-                     previous generation boots instead."
+                    "If it doesn't boot successfully in {tries} attempts, the previous \
+                     generation boots instead."
                 ),
                 // Already explained by the `grub` warning above when that is
                 // the cause; on a `--sysroot` deploy it is simply not this

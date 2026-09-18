@@ -57,3 +57,7 @@ proptest = "1"
 
 [profile.dev]
 debug = 1
+
+[profile.release]
+lto           = "thin"
+codegen-units = 1
