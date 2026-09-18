@@ -734,9 +734,18 @@ impl Sysroot {
     ///
     /// This is dev/test scratch space, not a second deploy path: it never
     /// touches `plan_id`, the build record, or the deployment list.
+    ///
+    /// Idempotent when the deployment is already in the `Development` state:
+    /// `kiln live` calls this on every run, including a second preview in the
+    /// same boot, and libostree itself refuses to unlock a deployment that is
+    /// already unlocked — asking again for the exact state already held is
+    /// not a real failure.
     pub fn unlock(&self) -> Result<()> {
         if !self.is_booted() {
             return Err(Error::NotBooted);
+        }
+        if self.unlock_state()? == UnlockState::Development {
+            return Ok(());
         }
         let deployment = self.inner.booted_deployment().ok_or(Error::NotBooted)?;
         self.inner
