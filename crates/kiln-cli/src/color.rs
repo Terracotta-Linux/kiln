@@ -18,7 +18,12 @@ pub enum Stream {
 
 impl Stream {
     pub fn colored(self) -> bool {
-        if std::env::var_os("NO_COLOR").is_some() {
+        // A unit test's stdout/stderr fd is whatever the developer's shell
+        // happens to be — a real terminal when run interactively, a pipe in
+        // CI — so it can never be the thing color decisions key on. Snapshot
+        // tests (`kiln-cli/src/check.rs`) need `render()` to come out the
+        // same plain text either way.
+        if cfg!(test) || std::env::var_os("NO_COLOR").is_some() {
             return false;
         }
         self.is_tty()
