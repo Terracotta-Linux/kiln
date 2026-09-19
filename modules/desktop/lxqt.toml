@@ -1,0 +1,16 @@
+# LXQt: session, panel, file manager, policykit agent, a window manager —
+# LXQt ships none of its own, so Openbox comes along — and a display manager
+# to start it.
+#
+# Named packages rather than the `lxqt` group: libalpm resolves package
+# names, not group names, so a module naming a group installs nothing at all.
+kiln = 1
+
+[packages]
+repo = [
+  "lxqt-session", "lxqt-panel", "lxqt-config", "lxqt-policykit", "pcmanfm-qt",
+  "openbox", "sddm",
+]
+
+[systemd]
+enable = ["sddm.service"]

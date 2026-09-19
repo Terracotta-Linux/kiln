@@ -2484,7 +2484,7 @@ and lines, and setting it here is the fix.
 
 ### 14.3 The module library
 
-Kiln ships 66 modules under `/usr/share/kiln/modules`:
+Kiln ships 74 modules under `/usr/share/kiln/modules`:
 
 ```text
 @kiln/profiles/    minimal · workstation · server
@@ -2492,18 +2492,20 @@ Kiln ships 66 modules under `/usr/share/kiln/modules`:
 @kiln/kernel/      linux · linux-lts · linux-zen · linux-hardened · linux-rt
 @kiln/boot/        grub2 · plymouth
 @kiln/net/         networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale
-@kiln/gpu/         nvidia-open · nvidia-open-lts · nvidia-open-dkms · nvidia-cuda
-                   amd · amd-rocm · intel
+                   wireguard
+@kiln/gpu/         nvidia-open · nvidia-open-lts · nvidia-open-dkms · nvidia-580xx-dkms
+                   nvidia-cuda · amd · amd-rocm · intel
 @kiln/desktop/     gnome-minimal · gnome · gnome-full
                    plasma-minimal · plasma · plasma-full
                    xfce-minimal · xfce
                    cosmic-minimal · cosmic
+                   budgie · lxqt
 @kiln/wm/          hyprland · sway · niri · i3
 @kiln/audio/       pipewire
 @kiln/hardware/    firmware · bluetooth · printing · laptop · tlp · fwupd · intel-ucode · amd-ucode
-@kiln/virt/        libvirt · podman · docker · nvidia-docker · distrobox · lilipod
-@kiln/dev/         base-devel · rust · go
-@kiln/security/    wheel-sudo · apparmor
+@kiln/virt/        libvirt · qemu · podman · docker · nvidia-docker · distrobox · lilipod
+@kiln/dev/         base-devel · rust · go · python · node
+@kiln/security/    wheel-sudo · doas · apparmor
 @kiln/system/      zram · swapfile
 @kiln/terracotta/  kiln · installer · branding · branding-plymouth
 ```

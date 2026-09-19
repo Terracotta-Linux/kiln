@@ -1,0 +1,15 @@
+# doas (opendoas), as a straight swap for @kiln/security/wheel-sudo's
+# sudoers policy: members of `wheel` may doas as root.
+#
+# `mode = "0400"` is not a preference the way it was for sudoers — doas
+# refuses to read /etc/doas.conf unless it is exactly root-owned and
+# unreadable by anyone else.
+kiln = 1
+
+[packages]
+repo = ["opendoas"]
+
+[[file]]
+target  = "/etc/doas.conf"
+content = "permit persist :wheel\n"
+mode    = "0400"

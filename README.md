@@ -194,22 +194,24 @@ its type, its default and its behaviour.
 
 ## 🧩 The module library
 
-Kiln ships 66 small modules under `/usr/share/kiln/modules`, included by name:
+Kiln ships 74 small modules under `/usr/share/kiln/modules`, included by name:
 
 ```text
 @kiln/profiles/   minimal · workstation · server  (each with a -base sibling that picks no kernel)
 @kiln/kernel/     linux · linux-lts · linux-zen · linux-hardened · linux-rt
 @kiln/boot/       grub2 · plymouth
-@kiln/net/        networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale
-@kiln/gpu/        nvidia-open · nvidia-open-lts · nvidia-open-dkms · nvidia-cuda · amd · amd-rocm · intel
-@kiln/desktop/    gnome · plasma · xfce · cosmic  (each with -minimal, plus gnome-full/plasma-full)
+@kiln/net/        networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale · wireguard
+@kiln/gpu/        nvidia-open · nvidia-open-lts · nvidia-open-dkms · nvidia-580xx-dkms · nvidia-cuda
+                  amd · amd-rocm · intel
+@kiln/desktop/    gnome · plasma · xfce · cosmic · budgie · lxqt  (gnome/plasma/xfce/cosmic each with
+                  -minimal, plus gnome-full/plasma-full)
 @kiln/wm/         hyprland · sway · niri · i3
 @kiln/audio/      pipewire
 @kiln/hardware/   firmware · bluetooth · printing · laptop · tlp · fwupd · intel-ucode · amd-ucode
 @kiln/system/     zram · swapfile
-@kiln/virt/       libvirt · podman · docker · nvidia-docker · distrobox · lilipod
-@kiln/dev/        base-devel · rust · go
-@kiln/security/   wheel-sudo · apparmor
+@kiln/virt/       libvirt · qemu · podman · docker · nvidia-docker · distrobox · lilipod
+@kiln/dev/        base-devel · rust · go · python · node
+@kiln/security/   wheel-sudo · doas · apparmor
 @kiln/terracotta/ kiln · installer · branding · branding-plymouth
 ```
 

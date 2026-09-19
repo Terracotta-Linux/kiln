@@ -1,0 +1,8 @@
+# The Node.js toolchain from the repositories: the runtime, npm, and both
+# alternative package managers as an explicit choice rather than npm's
+# default — pnpm for disk-efficient installs, yarn (classic) for projects
+# still pinned to it.
+kiln = 1
+
+[packages]
+repo = ["nodejs", "npm", "pnpm", "yarn"]

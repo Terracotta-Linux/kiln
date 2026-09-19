@@ -1,0 +1,8 @@
+# QEMU on its own, without libvirt's management daemon — for scripting VMs
+# directly (`qemu-system-x86_64 ...`) rather than through virt-manager or
+# `virsh`. See @kiln/virt/libvirt for the managed alternative; the two are
+# not meant to be included together.
+kiln = 1
+
+[packages]
+repo = ["qemu-desktop"]

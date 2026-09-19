@@ -1,0 +1,12 @@
+# The Python toolchain from the repositories: the interpreter, and the
+# stdlib extras it only pulls in as optional dependencies — `sqlite` for the
+# `sqlite3` module, `tk` for `tkinter`. `venv` needs nothing extra; it ships
+# inside `python` itself.
+#
+# python-poetry over pip's own resolver: it locks a project's dependencies
+# the same way Kiln locks an image's — deterministically, with a record
+# checked into the project rather than resolved fresh each run.
+kiln = 1
+
+[packages]
+repo = ["python", "python-pip", "sqlite", "tk", "python-poetry"]

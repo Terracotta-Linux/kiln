@@ -1,0 +1,11 @@
+# WireGuard, as tools rather than a running tunnel.
+#
+# No systemd unit is enabled here on purpose: `wg-quick@<interface>` is
+# instanced per tunnel, and which interface(s) exist is a fact about the
+# machine's own /etc/wireguard, not something a module can decide for every
+# image that includes it. Enable `wg-quick@wg0.service` yourself once a
+# configuration exists, the same way you would on any system.
+kiln = 1
+
+[packages]
+repo = ["wireguard-tools"]

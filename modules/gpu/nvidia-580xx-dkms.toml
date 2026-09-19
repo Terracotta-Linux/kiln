@@ -1,0 +1,16 @@
+# The proprietary driver's 580xx branch, from the AUR — for Maxwell and
+# Pascal cards (GeForce GTX 900/1000 series) that current `nvidia`/
+# `nvidia-open` releases have dropped. There is no prebuilt package for it:
+# `nvidia-580xx-dkms` builds against whatever kernel the image runs, the same
+# way @kiln/gpu/nvidia-open-dkms does for the supported line.
+kiln = 1
+
+[packages]
+aur = ["nvidia-580xx-dkms", "nvidia-580xx-utils"]
+
+[kernel]
+dkms    = ["nvidia-580xx-dkms"]
+cmdline = ["nvidia_drm.modeset=1"]
+
+[kernel.modules]
+blacklist = ["nouveau"]

@@ -1,0 +1,14 @@
+# Budgie: session, panel, control center, and a display manager to start it.
+#
+# Named packages rather than the `budgie` group: libalpm resolves package
+# names, not group names, so a module naming a group installs nothing at all.
+kiln = 1
+
+[packages]
+repo = [
+  "budgie-desktop", "budgie-desktop-services", "budgie-control-center",
+  "budgie-screensaver", "lightdm", "lightdm-gtk-greeter",
+]
+
+[systemd]
+enable = ["lightdm.service"]
