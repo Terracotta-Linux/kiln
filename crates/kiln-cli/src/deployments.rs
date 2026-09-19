@@ -10,10 +10,12 @@ use crate::color::{self, Stream};
 use crate::{disk, paths};
 use kiln_diag::ExitCode;
 use kiln_image::bootcount;
-use kiln_ostree::{deploy, grubenv, Counting, Generation, Removal, Sysroot};
+use kiln_ostree::drift::Change;
+use kiln_ostree::{deploy, drift, grubenv, Counting, Generation, Removal, Sysroot};
+use serde::Serialize;
 use std::path::Path;
 
-pub fn list(sysroot: Option<&Path>) -> ExitCode {
+pub fn list(sysroot: Option<&Path>, json: bool) -> ExitCode {
     let root = paths::sysroot(sysroot);
     let sysroot = match open(&root) {
         Ok(s) => s,
@@ -23,6 +25,12 @@ pub fn list(sysroot: Option<&Path>) -> ExitCode {
         Ok(g) => g,
         Err(e) => return fail(&e),
     };
+    if json {
+        // Every field a script could want is already on `Generation`; there
+        // is no "verbose" distinction in JSON the way there is in the table,
+        // since nothing here costs a reader anything to include.
+        return crate::fmt::json(&generations);
+    }
     if generations.is_empty() {
         println!("No Kiln deployments on {}.", root.display());
         println!("`kiln apply` builds one.");
@@ -132,7 +140,7 @@ fn display_width(s: &str) -> usize {
     s.chars().count()
 }
 
-pub fn status(sysroot: Option<&Path>, verbose: bool) -> ExitCode {
+pub fn status(sysroot: Option<&Path>, verbose: bool, json: bool) -> ExitCode {
     let root = paths::sysroot(sysroot);
     let sysroot = match open(&root) {
         Ok(s) => s,
@@ -151,9 +159,16 @@ pub fn status(sysroot: Option<&Path>, verbose: bool) -> ExitCode {
         .find(|g| g.booted)
         .or_else(|| generations.first());
     let Some(g) = subject else {
+        if json {
+            return crate::fmt::json(&serde_json::json!(null));
+        }
         println!("No Kiln deployments on {}.", root.display());
         return ExitCode::Ok;
     };
+
+    if json {
+        return status_json(&root, &sysroot, &generations, g);
+    }
 
     println!("generation  {}", g.number);
     println!("image       {}", g.image);
@@ -192,6 +207,75 @@ pub fn status(sysroot: Option<&Path>, verbose: bool) -> ExitCode {
         print!("\n{}", render(&generations));
     }
     ExitCode::Ok
+}
+
+/// `kiln status --json`.
+#[derive(Serialize)]
+struct StatusJson<'a> {
+    generation: &'a Generation,
+    /// The generation `kiln rollback` would move to, when there is one — a
+    /// number rather than nesting the whole `Generation` a second time, since
+    /// `generations` already carries it in full.
+    pending: Option<u64>,
+    rollback_target: Option<u64>,
+    boot: Option<BootJson>,
+    /// `/etc` drift against the generation described, the same walk `kiln
+    /// status`'s text report reads — but every change, not only the
+    /// shadowing ones summarized under `--verbose`, since a script filters
+    /// for itself.
+    etc_drift: Vec<Change>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "state", rename_all = "lowercase")]
+enum BootJson {
+    Armed { left: u32, tries: u32 },
+    Exhausted { tries: u32, demoted_generation: u64 },
+}
+
+fn status_json(
+    root: &Path,
+    sysroot: &Sysroot,
+    generations: &[Generation],
+    g: &Generation,
+) -> ExitCode {
+    let pending = generations
+        .first()
+        .filter(|n| n.number != g.number)
+        .map(|n| n.number);
+    let rollback_target = generations
+        .iter()
+        .find(|x| x.rollback_target)
+        .map(|x| x.number);
+    let boot = match grubenv::counting(root, bootcount::TRIES) {
+        Counting::Off => None,
+        Counting::Armed { left, tries } => Some(BootJson::Armed {
+            left: left.min(tries),
+            tries,
+        }),
+        Counting::Exhausted { tries } => {
+            generations
+                .first()
+                .filter(|f| !f.booted)
+                .map(|f| BootJson::Exhausted {
+                    tries,
+                    demoted_generation: f.number,
+                })
+        }
+    };
+    let etc_drift = sysroot
+        .deployment_root(g.number)
+        .ok()
+        .and_then(|deployment| drift::scan(&deployment).ok())
+        .unwrap_or_default();
+
+    crate::fmt::json(&StatusJson {
+        generation: g,
+        pending,
+        rollback_target,
+        boot,
+        etc_drift,
+    })
 }
 
 /// What the live `/etc` has that the generation did not ship, and what

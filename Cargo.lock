@@ -525,6 +525,7 @@ name = "kiln-alpm"
 version = "0.2.0"
 dependencies = [
  "alpm",
+ "serde",
 ]
 
 [[package]]
@@ -565,6 +566,8 @@ dependencies = [
  "kiln-resolve",
  "kiln-sandbox",
  "libc",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -624,6 +627,7 @@ dependencies = [
  "kiln-record",
  "kiln-resolve",
  "ostree",
+ "serde",
  "serde_json",
  "zstd",
 ]

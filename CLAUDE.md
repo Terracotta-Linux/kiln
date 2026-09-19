@@ -156,7 +156,6 @@ bottom ones need root and run only in privileged CI containers.
   trees — and `unlock`, the transient-only `ostree admin unlock` wrapper `kiln unlock`
   and `kiln live` are built on (`kiln-cli/src/dev.rs` owns the sync itself; this crate
   only owns unlocking and the tree diff).
-- `kiln-state` — planned, not yet built.
 
 Also: `modules/` (the shipped TOML module library → `/usr/share/kiln/modules`; a fixed set of
 files across a dozen namespaces — one decision per file, a 25-line cap, only profiles

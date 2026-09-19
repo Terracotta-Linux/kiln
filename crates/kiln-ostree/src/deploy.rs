@@ -14,6 +14,7 @@ use crate::{Error, Result};
 use kiln_manifest::Manifest;
 use ostree::gio;
 use ostree::{Deployment, DeploymentUnlockedState, SysrootSimpleWriteDeploymentFlags};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -56,7 +57,7 @@ pub struct Sysroot {
 }
 
 /// One deployment, as `kiln list` shows it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Generation {
     pub number: u64,
     pub checksum: String,

@@ -10,6 +10,10 @@ pub struct Global {
     pub allow_external_sources: bool,
     pub module_root: Option<PathBuf>,
     pub verbose: bool,
+    /// `--json`. Not a true global: `verb_flags` accepts it only on the
+    /// read-only commands that already have a value worth serializing —
+    /// `list`, `status`, `show`, `diff`, `why`, `owns`, `config get|list`.
+    pub json: bool,
 }
 
 #[derive(Debug)]
@@ -153,6 +157,7 @@ Inspection
                                       also `<group>` and `<list>/<element>`
                                       (an alias for `kiln config get`)
   kiln show [<gen>]                   the merged manifest, or a past generation
+      --json                         on diff/why/owns/show: machine-readable output
 
 Configuration
   kiln config get <key>               which file set a value, and to what
@@ -162,9 +167,11 @@ Configuration
   kiln config add <key> <value>       append to a list key
   kiln config remove <key> <value>    remove one value from a list key
       --file <path>                  target a specific file, on set/unset/add/remove
+      --json                         on get/list: machine-readable output
 
 Deployments
   kiln list                           every generation on this machine
+      --json                         on list/status: machine-readable output
   kiln status                         what is booted, what boots next, /etc drift
   kiln rollback                       boot the previous generation
   kiln deploy <gen>                   boot a specific generation
@@ -256,8 +263,11 @@ pub fn verb_flags(verb: &str) -> &'static [&'static str] {
         "check" => &["--offline", "--deep"],
         "build" | "apply" => &["--force", "--offline", "--keep-failed"],
         "clean" => &["--keep", "--dry-run", "--remove-baseline"],
-        "config" => &["--file"],
+        "config" => &["--file", "--json"],
         "rm" => &["--remove-baseline"],
+        // Read-only commands, each already backed by a value worth
+        // serializing rather than only rendering for a terminal.
+        "list" | "status" | "show" | "diff" | "why" | "owns" => &["--json"],
         _ => &[],
     }
 }
@@ -352,6 +362,19 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
                 "`kiln {verb}` does not take `{flag}`{hint}\n\n`kiln {verb}` {takes}; \
                  run `kiln help` for the global flags"
             ));
+        }
+    }
+    global.json = has("--json");
+
+    // `--json` is accepted on `config` for `get`/`list`, which is a value
+    // worth serializing; `set`/`unset`/`add`/`remove` print a confirmation,
+    // not a value, so allowing it there would promise a shape that does not
+    // exist.
+    if global.json && verb == "config" {
+        if let Some(sub @ ("set" | "unset" | "add" | "remove")) =
+            positional.get(1).map(String::as_str)
+        {
+            return Err(format!("`kiln config {sub}` does not take `--json`"));
         }
     }
 

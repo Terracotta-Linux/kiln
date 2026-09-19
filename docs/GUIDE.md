@@ -474,6 +474,13 @@ the wrong command says which command it belongs to.
 | `-V`, `--version` | Print `kiln <version> (schema <n>, hash epoch <n>)` and exit |
 | `-h`, `--help` | Print the command summary and exit |
 
+`--json` is not truly global: it is accepted only on the read-only commands that already have a
+value worth serializing — `list`, `status`, `show`, `diff`, `why`, `owns`, `config get`, `config
+list` — and refused everywhere else, the same way an unlisted flag is refused on any other
+command. It prints one JSON value to stdout and exits `0`; the human-only failure paths (a
+missing sysroot, an unknown generation) are unchanged by it; a script reads `kiln`'s exit code
+for those, not stdout.
+
 ### 5.2 Building
 
 #### `kiln check [--offline] [--deep]`
@@ -664,6 +671,28 @@ include
     ...
 ```
 
+`--json` prints the same answer as one tagged value — `"kind"` is `"key"`, `"element"`,
+`"prefix"`, `"unset"` or `"include"`, matching which of the four (or the `include` special case)
+answered:
+
+```console
+$ kiln config get boot.timeout --json
+{
+  "is_list": false,
+  "key": "boot.timeout",
+  "kind": "key",
+  "overridden": [],
+  "set_in": "@kiln/boot/grub2:18",
+  "value": 5
+}
+```
+
+A `"prefix"` or `config list --json` entry never puts a human display string (`the Arch geo
+mirror`, a TOML-quoted `"dracut"`) under `"value"` — that field is always either `null` or the
+key's real typed value. The display text for an unset key's default lives in a separate
+`"default_display"` field, so a script never has to guess whether this run's `"5"` is the number
+5 or the string `"5"`.
+
 #### `kiln config list [<prefix>]`
 
 A flattened, origin-free `key  value` line per resolved key — for scanning, not the whole story
@@ -675,6 +704,9 @@ boot.loader     "grub2"
 boot.timeout    0
 boot.initramfs  "dracut"
 ```
+
+`--json` prints an array of the same `{key, is_list, set, value, set_in, default_display}`
+entries `config get`'s `"prefix"` form uses, one per key.
 
 #### `kiln config set|unset|add|remove`
 
@@ -744,6 +776,10 @@ record
   `kiln show 42 --verbose` prints the whole record.
 ```
 
+`--json`, with no generation, prints `{"config_id", "manifest"}` for the configuration on disk;
+with a generation, `{"checksum", "metadata"}` — the commit's own metadata, including the record
+and manifest when the commit carries them.
+
 #### `kiln diff [<gen>] [<gen>]`
 
 What changed between two generations, read from their commits.
@@ -757,6 +793,11 @@ What changed between two generations, read from their commits.
 With nothing pending, it declines and points at `kiln check`, which answers the question you
 were probably asking. Two generations with the same `plan_id` are reported as identical
 builds of the same plan rather than as an empty table.
+
+`--json` prints `{"comparable": false, "reason": ...}` for a decline, or
+`{"from", "to", "from_built_at", "to_built_at", "same_plan", "plan_id", "report"}` for a real
+comparison — `"report"` is `{"categories": [{"category", "changes"}, ...]}`, one entry per
+input category, always present even when empty.
 
 #### `kiln why <package> [<gen>]`
 
@@ -778,6 +819,10 @@ by anything, which is the answer to "why is this still here" after an `exclude`.
 The optional trailing generation asks a past image instead of the booted one. That generation
 must be **deployed**, because these commands read a checked-out tree.
 
+`--json` prints `{"queried", "package", "provenance"}` — `"package"` is the pacman database's own
+record (name, version, `explicit`, `required_by`, `optional_for`), `"provenance"` is the same
+strings the human report prints, as an array.
+
 #### `kiln owns <path> [<gen>]`
 
 Which package owns a file in the image. Both the path you typed and its `/usr/etc` spelling
@@ -793,6 +838,9 @@ pacman
 
 An unowned path is a real answer, not a failure: it may be a `[[file]]` Kiln placed, a build
 script's output, or runtime state under `/var`.
+
+`--json` prints `{"queried", "resolved_path", "owner", "package"}` when something owns the path,
+or `{"queried", "owner": null}` when nothing does.
 
 ### 5.4 Deployments
 
@@ -813,6 +861,11 @@ which one `kiln rollback` would take you to (`rollback target`), and which ones 
 will not remove (`baseline`, `pinned`). `boots next` marks a generation `kiln apply` staged
 that you have not booted yet.
 
+`--json` prints the array of generations, each with every field the table is built from
+(`number`, `checksum`, `built_at`, `image`, `booted`, `pinned`, `boots_next`, `rollback_target`,
+`baseline`), rather than the rendered `STATUS` labels — a script has its own opinion about how
+to combine the booleans.
+
 #### `kiln status`
 
 ```console
@@ -828,6 +881,12 @@ boot        attempt 1 of 3 — this generation has not been marked good yet
 
 `--verbose` adds the commit checksum and the full `kiln list` table. `kiln status` is also
 where `/etc` drift is reported; see [section 11.5](#115-etc-drift).
+
+`--json` prints `{"generation", "pending", "rollback_target", "boot", "etc_drift"}` — `null`
+when nothing is deployed. `"boot"` is `null` off probation, or a tagged
+`{"state": "armed", "left", "tries"}` / `{"state": "exhausted", "tries", "demoted_generation"}`.
+`"etc_drift"` is every path where the live `/etc` and the shipped `/usr/etc` disagree, not only
+the shadowing ones `--verbose` names — a script filters for itself.
 
 #### `kiln rollback`
 

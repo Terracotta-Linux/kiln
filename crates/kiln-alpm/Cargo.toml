@@ -8,6 +8,7 @@ rust-version.workspace = true
 license.workspace      = true
 
 [dependencies]
-alpm = "5"
+alpm  = "5"
+serde = { workspace = true }
 
 [dev-dependencies]

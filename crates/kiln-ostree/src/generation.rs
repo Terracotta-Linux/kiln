@@ -9,6 +9,7 @@ use crate::{Error, Result};
 use kiln_manifest::Manifest;
 use kiln_record::Record;
 use kiln_resolve::BuildPlan;
+use serde::Serialize;
 
 /// Everything Kiln puts in a commit's metadata is namespaced. `ostree.bootable`
 /// is not — it is libostree's own, and setting it is what makes the deployment
@@ -26,7 +27,7 @@ pub const METADATA_VERSION: &str = "1";
 /// readable without a checkout, which is what makes `kiln list` and `kiln
 /// check` fast; the in-tree copy survives an export to a tarball or an
 /// inspection mount, where metadata does not.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Metadata {
     pub version: String,
     pub plan_id: String,

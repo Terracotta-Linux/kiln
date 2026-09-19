@@ -72,7 +72,8 @@ status rollback deploy pin unpin rm clean init sysroot unlock live completions h
         build|apply) COMPREPLY=($(compgen -W "--force --offline --keep-failed" -- "$cur")) ;;
         clean) COMPREPLY=($(compgen -W "--keep --dry-run --remove-baseline" -- "$cur")) ;;
         rm) COMPREPLY=($(compgen -W "--remove-baseline" -- "$cur")) ;;
-        config) COMPREPLY=($(compgen -W "--file" -- "$cur")) ;;
+        config) COMPREPLY=($(compgen -W "--file --json" -- "$cur")) ;;
+        list|status|show|diff|why|owns) COMPREPLY=($(compgen -W "--json" -- "$cur")) ;;
         *) COMPREPLY=($(compgen -W "$global" -- "$cur")) ;;
     esac
 }
@@ -135,9 +136,10 @@ _kiln() {
                     if (( CURRENT == 2 )); then
                         _values 'subcommand' get list set unset add remove
                     else
-                        _arguments '--file[target a specific file]:path:_files'
+                        _arguments '--file[target a specific file]:path:_files' '--json[machine-readable output]'
                     fi
                     ;;
+                list|status|show|diff|why|owns) _arguments '--json[machine-readable output]' ;;
                 sysroot) (( CURRENT == 2 )) && _values 'subcommand' 'init[create an OSTree sysroot]' ;;
                 completions) (( CURRENT == 2 )) && _values 'shell' bash zsh fish ;;
             esac
@@ -177,6 +179,8 @@ complete -c kiln -n "__fish_seen_subcommand_from completions" -a "bash zsh fish"
 
 complete -c kiln -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from get list set unset add remove" -a "get list set unset add remove"
 complete -c kiln -n "__fish_seen_subcommand_from config" -l file -d 'target a specific file' -rF
+complete -c kiln -n "__fish_seen_subcommand_from config" -l json -d 'machine-readable output'
+complete -c kiln -n "__fish_seen_subcommand_from list status show diff why owns" -l json -d 'machine-readable output'
 "#;
 
 #[cfg(test)]

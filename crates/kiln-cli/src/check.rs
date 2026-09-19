@@ -11,10 +11,12 @@
 use crate::color::{self, Stream};
 use kiln_record::Record;
 use kiln_resolve::{BuildPlan, ResolvedInput};
+use serde::Serialize;
 use std::collections::BTreeMap;
 
 /// One line of the report.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Change {
     Added {
         name: String,
@@ -102,9 +104,26 @@ pub struct Report {
     pub categories: Vec<(&'static str, Vec<Change>)>,
 }
 
+#[derive(Serialize)]
+struct CategoryJson<'a> {
+    category: &'a str,
+    changes: &'a [Change],
+}
+
 impl Report {
     pub fn is_empty(&self) -> bool {
         self.categories.iter().all(|(_, c)| c.is_empty())
+    }
+
+    /// Every category, even an empty one — a script comparing two reports
+    /// benefits from a fixed shape more than a human reading a render does.
+    pub fn to_json(&self) -> serde_json::Value {
+        let categories: Vec<CategoryJson> = self
+            .categories
+            .iter()
+            .map(|(category, changes)| CategoryJson { category, changes })
+            .collect();
+        serde_json::json!({ "categories": categories })
     }
 
     pub fn render(&self) -> String {

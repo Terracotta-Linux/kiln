@@ -4,5 +4,5 @@
 //! implementation in `config.rs` and produce identical output.
 
 pub fn run(fe: &kiln_config::Frontend, key: &str) -> kiln_diag::ExitCode {
-    crate::config::get(fe, key)
+    crate::config::get(fe, key, false)
 }

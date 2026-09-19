@@ -5,7 +5,23 @@
 //! and twelve characters depending on which command you asked. None of that
 //! was a decision anybody made, so there is one of each now.
 
+use kiln_diag::ExitCode;
+use serde::Serialize;
 use std::path::Path;
+
+/// `--json` on every inspection command prints one value this way: pretty,
+/// newline-terminated, and always `ExitCode::Ok` — a value that serialized is
+/// a value the caller asked a real question about and got a real answer to.
+/// The unformatted, human-only failure paths (a missing sysroot, an unknown
+/// generation) are unchanged by `--json`; a script that wants a structured
+/// error parses `kiln`'s exit code, not stderr.
+pub fn json(value: &impl Serialize) -> ExitCode {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).expect("serializable by construction")
+    );
+    ExitCode::Ok
+}
 
 /// A digest abbreviated for reading.
 ///

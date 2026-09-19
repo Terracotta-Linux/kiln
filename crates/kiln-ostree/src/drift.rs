@@ -27,6 +27,7 @@
 //!   and reported quietly.
 
 use crate::{Error, Result};
+use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -35,7 +36,8 @@ use std::path::Path;
 /// One path where the live `/etc` and the shipped `/usr/etc` disagree. `path`
 /// is always spelled the way the user sees it — `/etc/pacman.conf`, not
 /// `usr/etc/pacman.conf` (the user should never have to type `ostree`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Change {
     /// Shipped and present, and not the same. The merge keeps the live one.
     Modified { path: String, how: How },
@@ -47,7 +49,8 @@ pub enum Change {
 
 /// What differs, in the order a person cares: content first, then the metadata
 /// OSTree also tracks and also carries forward.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum How {
     /// A regular file whose bytes differ, or a symlink pointing elsewhere.
     Contents,

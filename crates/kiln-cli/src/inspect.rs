@@ -34,7 +34,7 @@ use std::path::Path;
 /// there is nothing to diff and the command says so and points at `kiln check`,
 /// which answers the question the user was probably asking: what *would*
 /// change. Silently diffing something else would be worse than declining.
-pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>) -> ExitCode {
+pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>, json: bool) -> ExitCode {
     let root = paths::sysroot(sysroot);
     let sysroot = match open(&root) {
         Ok(s) => s,
@@ -47,39 +47,53 @@ pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>) -> ExitC
 
     let (a, b) = match (from, to) {
         (Some(a), Some(b)) => (a, b),
-        (Some(a), None) => match booted(&generations) {
-            Some(b) if b != a => (a, b),
-            Some(_) => {
-                println!("Generation {a} is the one you are running; nothing to compare it to.");
-                println!("`kiln diff {a} <gen>` compares it against another one.");
-                return ExitCode::Ok;
-            }
-            None => {
-                eprintln!(
-                    "{} nothing is booted from {}, so there is no second \
-                     generation to compare against. Name both: `kiln diff <gen> <gen>`.",
-                    crate::color::error(),
-                    root.display()
+        (Some(a), None) => {
+            match booted(&generations) {
+                Some(b) if b != a => (a, b),
+                Some(_) => {
+                    return incomparable(
+                    json,
+                    "nothing to compare it to",
+                    &format!("Generation {a} is the one you are running; nothing to compare it to.\n\
+                     `kiln diff {a} <gen>` compares it against another one."),
                 );
-                return ExitCode::System;
+                }
+                None => {
+                    eprintln!(
+                        "{} nothing is booted from {}, so there is no second \
+                     generation to compare against. Name both: `kiln diff <gen> <gen>`.",
+                        crate::color::error(),
+                        root.display()
+                    );
+                    return ExitCode::System;
+                }
             }
-        },
+        }
         (None, _) => match default_pair(&generations) {
             Some(pair) => pair,
             // Two different situations, and they need different answers.
             // Nothing booted means `--sysroot` against a machine that is not
             // this one, where "booted vs pending" has no first term at all.
             None if booted(&generations).is_none() => {
-                println!("Nothing is booted from {}, so there is no", root.display());
-                println!("\"booted vs pending\" to show. Name both: `kiln diff <gen> <gen>`.");
-                println!("\n`kiln list` shows what is there.");
-                return ExitCode::Ok;
+                return incomparable(
+                    json,
+                    "nothing is booted",
+                    &format!(
+                        "Nothing is booted from {}, so there is no\n\
+                         \"booted vs pending\" to show. Name both: `kiln diff <gen> <gen>`.\n\n\
+                         `kiln list` shows what is there.",
+                        root.display()
+                    ),
+                );
             }
             None => {
-                println!("Nothing is pending: the generation you are running is the one that");
-                println!("boots next, so there is nothing to diff.");
-                println!("\n`kiln check` compares your configuration against it.");
-                return ExitCode::Ok;
+                return incomparable(
+                    json,
+                    "nothing is pending",
+                    "Nothing is pending: the generation you are running is the one that\n\
+                     boots next, so there is nothing to diff.\n\n\
+                     `kiln check` compares your configuration against it.",
+                );
             }
         },
     };
@@ -94,6 +108,17 @@ pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>) -> ExitC
     };
 
     let report = check::between(&from, &to);
+    if json {
+        return crate::fmt::json(&serde_json::json!({
+            "from": a,
+            "to": b,
+            "from_built_at": from.built_at,
+            "to_built_at": to.built_at,
+            "same_plan": from.plan_id == to.plan_id,
+            "plan_id": to.plan_id,
+            "report": report.to_json(),
+        }));
+    }
     println!("generation {a} → {b}");
     println!("  built      {}  →  {}", from.built_at, to.built_at);
     println!();
@@ -113,6 +138,17 @@ pub fn diff(sysroot: Option<&Path>, from: Option<u64>, to: Option<u64>) -> ExitC
         return ExitCode::Ok;
     }
     print!("{}", report.render());
+    ExitCode::Ok
+}
+
+/// The four ways `kiln diff` legitimately declines to compare anything —
+/// still `ExitCode::Ok`, since nothing is wrong, there is simply no second
+/// generation implied by what was typed.
+fn incomparable(json: bool, reason: &str, human: &str) -> ExitCode {
+    if json {
+        return crate::fmt::json(&serde_json::json!({ "comparable": false, "reason": reason }));
+    }
+    println!("{human}");
     ExitCode::Ok
 }
 
@@ -137,7 +173,7 @@ fn booted(generations: &[Generation]) -> Option<u64> {
 /// was committed and never deployed, and on one whose deployment `kiln clean`
 /// has since taken. Kiln puts the manifest and the record in commit metadata for
 /// exactly this.
-pub fn show(sysroot: Option<&Path>, generation: u64, verbose: bool) -> ExitCode {
+pub fn show(sysroot: Option<&Path>, generation: u64, verbose: bool, json: bool) -> ExitCode {
     let root = paths::sysroot(sysroot);
     let sysroot = match open(&root) {
         Ok(s) => s,
@@ -147,6 +183,12 @@ pub fn show(sysroot: Option<&Path>, generation: u64, verbose: bool) -> ExitCode 
         Ok(found) => found,
         Err(e) => return code(&e),
     };
+
+    if json {
+        return crate::fmt::json(
+            &serde_json::json!({ "checksum": checksum, "metadata": metadata }),
+        );
+    }
 
     println!("generation  {}", metadata.generation);
     println!("image       {} {}", metadata.image, metadata.arch);
@@ -205,7 +247,7 @@ fn counted(what: &str, n: usize) {
 /// the plan names the packages the *configuration* asked for, and the image
 /// contains their whole dependency closure. "What pulled `libxkbcommon` in" is
 /// a question about that closure, and only the pacman database has it.
-pub fn why(sysroot: Option<&Path>, package: &str, generation: Option<u64>) -> ExitCode {
+pub fn why(sysroot: Option<&Path>, package: &str, generation: Option<u64>, json: bool) -> ExitCode {
     let (root, metadata) = match target(sysroot, generation) {
         Ok(t) => t,
         Err(exit) => return exit,
@@ -227,6 +269,19 @@ pub fn why(sysroot: Option<&Path>, package: &str, generation: Option<u64>) -> Ex
         );
         return ExitCode::System;
     };
+
+    if json {
+        let provenance = metadata
+            .record
+            .as_ref()
+            .map(|r| provenance(r, &found.name))
+            .unwrap_or_default();
+        return crate::fmt::json(&serde_json::json!({
+            "queried": package,
+            "package": found,
+            "provenance": provenance,
+        }));
+    }
 
     if !found.asked_for {
         // The message is about what the user typed, and they typed a virtual
@@ -304,7 +359,7 @@ fn provenance(record: &Record, name: &str) -> Vec<String> {
 }
 
 /// `kiln owns <path>` — which package owns a file.
-pub fn owns(sysroot: Option<&Path>, path: &str, generation: Option<u64>) -> ExitCode {
+pub fn owns(sysroot: Option<&Path>, path: &str, generation: Option<u64>, json: bool) -> ExitCode {
     let (root, metadata) = match target(sysroot, generation) {
         Ok(t) => t,
         Err(exit) => return exit,
@@ -322,6 +377,15 @@ pub fn owns(sysroot: Option<&Path>, path: &str, generation: Option<u64>) -> Exit
     let candidates = [path.to_string(), etc_to_usr_etc(path)];
     for candidate in &candidates {
         if let Some(owner) = session.owns(candidate) {
+            let found = session.installed_package(&owner);
+            if json {
+                return crate::fmt::json(&serde_json::json!({
+                    "queried": path,
+                    "resolved_path": candidate,
+                    "owner": owner,
+                    "package": found,
+                }));
+            }
             println!("{}", crate::color::bold(crate::color::Stream::Out, &owner));
             if candidate != path {
                 println!(
@@ -329,11 +393,15 @@ pub fn owns(sysroot: Option<&Path>, path: &str, generation: Option<u64>) -> Exit
                      live /etc is merged onto it at deploy."
                 );
             }
-            if let Some(found) = session.installed_package(&owner) {
+            if let Some(found) = &found {
                 println!("  {} {}", found.name, found.version);
             }
             return ExitCode::Ok;
         }
+    }
+
+    if json {
+        return crate::fmt::json(&serde_json::json!({ "queried": path, "owner": null }));
     }
 
     println!(

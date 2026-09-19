@@ -6,6 +6,7 @@
 
 use crate::error::{Error, Result};
 use crate::repo::RepoSpec;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 /// Where the package database lives in a Kiln image. Part of `/usr`,
@@ -331,7 +332,7 @@ fn path_arg(p: &Path) -> Result<&str> {
 }
 
 /// One installed package, as `kiln why` reports it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Installed {
     pub name: String,
     pub version: String,

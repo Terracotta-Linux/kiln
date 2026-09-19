@@ -34,10 +34,14 @@ use kiln_config::{schema, Frontend};
 use kiln_diag::{did_you_mean, ExitCode, Origin, Src};
 use std::path::{Path, PathBuf};
 
-pub fn get(fe: &Frontend, key: &str) -> ExitCode {
+pub fn get(fe: &Frontend, key: &str, json: bool) -> ExitCode {
     // Leading and trailing dots are what a half-typed key looks like, and
     // `kiln config get boot.` meaning `boot` costs one line.
     let key = key.trim().trim_matches('.');
+
+    if json {
+        return get_json(fe, key);
+    }
 
     if key == "include" {
         return includes(fe);
@@ -54,6 +58,124 @@ pub fn get(fe: &Frontend, key: &str) -> ExitCode {
         return code;
     }
     unset_answer(fe, key)
+}
+
+/// `kiln config get --json`: the same four-way answer `get` renders for a
+/// terminal, as one JSON value tagged by which of the four it is.
+fn get_json(fe: &Frontend, key: &str) -> ExitCode {
+    if key == "include" {
+        return crate::fmt::json(&serde_json::json!({
+            "kind": "include",
+            "files": fe.files.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
+        }));
+    }
+
+    if let Some((list, item)) = split_element(key) {
+        if schema::is_list(list) {
+            let element_key = format!("{list}/{item}");
+            return crate::fmt::json(&match fe.manifest.item_origins.get(&element_key) {
+                Some(origin) => serde_json::json!({
+                    "kind": "element",
+                    "key": element_key,
+                    "set": true,
+                    "asked_for_in": origin.short(),
+                }),
+                None => serde_json::json!({
+                    "kind": "element",
+                    "key": element_key,
+                    "set": false,
+                }),
+            });
+        }
+    }
+
+    if let Some(prov) = fe.merged.origins.get(key) {
+        let value = node::get(&fe.merged.doc, key).map(|e| node_to_json(&e.value));
+        return crate::fmt::json(&serde_json::json!({
+            "kind": "key",
+            "key": key,
+            "is_list": prov.is_list,
+            "value": value,
+            "set_in": prov.effective.short(),
+            "overridden": prov.others.iter().map(Origin::short).collect::<Vec<_>>(),
+        }));
+    }
+
+    let keys = under(fe, Some(key));
+    if !keys.is_empty() {
+        let entries: Vec<serde_json::Value> = keys.iter().map(|k| key_entry_json(fe, k)).collect();
+        return crate::fmt::json(
+            &serde_json::json!({ "kind": "prefix", "key": key, "keys": entries }),
+        );
+    }
+
+    if let Some(d) = default_for(key) {
+        return crate::fmt::json(&serde_json::json!({
+            "kind": "unset",
+            "key": key,
+            "default": d.value,
+            "note": d.note,
+        }));
+    }
+    if schema::KEYS.contains(&key) {
+        return crate::fmt::json(&serde_json::json!({
+            "kind": "unset",
+            "key": key,
+            "default": serde_json::Value::Null,
+            "note": serde_json::Value::Null,
+        }));
+    }
+
+    eprintln!(
+        "{} no key `{key}` in the Kiln schema",
+        crate::color::error()
+    );
+    ExitCode::Config
+}
+
+/// One key's entry in `config get <prefix> --json` and `config list --json`.
+///
+/// `value` is always either `null` or the typed value a set key actually
+/// holds — never the display string `default_for` builds for a human
+/// ("the Arch geo mirror", `"dracut"` with its quotes kept so it reads as a
+/// string). A script parsing `value` should never have to guess whether this
+/// run's `"5"` is the number 5 or the string `"5"`; `default_display` carries
+/// the human text separately, only when the key is unset.
+fn key_entry_json(fe: &Frontend, k: &str) -> serde_json::Value {
+    match fe.merged.origins.get(k) {
+        Some(prov) => serde_json::json!({
+            "key": k,
+            "is_list": prov.is_list,
+            "set": true,
+            "value": node::get(&fe.merged.doc, k).map(|e| node_to_json(&e.value)),
+            "set_in": prov.effective.short(),
+            "default_display": serde_json::Value::Null,
+        }),
+        None => serde_json::json!({
+            "key": k,
+            "is_list": schema::is_list(k) || schema::is_map(k),
+            "set": false,
+            "value": serde_json::Value::Null,
+            "set_in": serde_json::Value::Null,
+            "default_display": default_for(k).map(|d| d.value),
+        }),
+    }
+}
+
+fn node_to_json(n: &Node) -> serde_json::Value {
+    match &n.kind {
+        NodeKind::Str(s) => serde_json::Value::String(s.clone()),
+        NodeKind::Int(i) => serde_json::json!(i),
+        NodeKind::Bool(b) => serde_json::json!(b),
+        NodeKind::Array(items) => {
+            serde_json::Value::Array(items.iter().map(node_to_json).collect())
+        }
+        NodeKind::Table(t) => serde_json::Value::Object(
+            t.iter()
+                .map(|(k, e)| (k.clone(), node_to_json(&e.value)))
+                .collect(),
+        ),
+    }
 }
 
 /// `include` is the one key with no value to explain: the include graph
@@ -516,9 +638,15 @@ fn render(n: &Node, key: &str) -> String {
 /// A flattened, origin-free view of every resolved key (or every key under a
 /// prefix): one `key  value` line each, for scanning rather than for the
 /// whole story of one key — that is `get`'s job.
-pub fn list(fe: &Frontend, prefix: Option<&str>) -> ExitCode {
+pub fn list(fe: &Frontend, prefix: Option<&str>, json: bool) -> ExitCode {
     let prefix = prefix.map(|p| p.trim().trim_matches('.'));
     if prefix == Some("include") {
+        if json {
+            return crate::fmt::json(&serde_json::json!({
+                "kind": "include",
+                "files": fe.files.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
+            }));
+        }
         return includes(fe);
     }
 
@@ -529,6 +657,11 @@ pub fn list(fe: &Frontend, prefix: Option<&str>) -> ExitCode {
                 keys = vec![p.to_string()];
             }
             Some(p) => {
+                if json {
+                    return crate::fmt::json(
+                        &serde_json::json!({ "error": format!("no key `{p}` in the Kiln schema") }),
+                    );
+                }
                 eprint!("{} no key `{p}` in the Kiln schema", crate::color::error());
                 match did_you_mean(p, candidates(fe).iter().map(String::as_str)) {
                     Some(h) => eprintln!(" — {h}"),
@@ -538,6 +671,11 @@ pub fn list(fe: &Frontend, prefix: Option<&str>) -> ExitCode {
             }
             None => {}
         }
+    }
+
+    if json {
+        let entries: Vec<serde_json::Value> = keys.iter().map(|k| key_entry_json(fe, k)).collect();
+        return crate::fmt::json(&entries);
     }
 
     let width = keys.iter().map(String::len).max().unwrap_or(0);

@@ -70,8 +70,12 @@ fn run(argv: &[String]) -> ExitCode {
 
         Command::Init => init::run(cli.global.config.as_deref()),
 
-        Command::List => deployments::list(cli.global.sysroot.as_deref()),
-        Command::Status => deployments::status(cli.global.sysroot.as_deref(), cli.global.verbose),
+        Command::List => deployments::list(cli.global.sysroot.as_deref(), cli.global.json),
+        Command::Status => deployments::status(
+            cli.global.sysroot.as_deref(),
+            cli.global.verbose,
+            cli.global.json,
+        ),
         Command::Rollback => deployments::rollback(cli.global.sysroot.as_deref()),
         Command::Deploy { generation } => {
             deployments::set_default(cli.global.sysroot.as_deref(), *generation)
@@ -127,14 +131,24 @@ fn run(argv: &[String]) -> ExitCode {
         // None of the three reads `/etc/kiln`: they answer questions
         // about a *generation*, and the configuration it was built from is very
         // often one that has since been edited or deleted.
-        Command::Diff { from, to } => inspect::diff(cli.global.sysroot.as_deref(), *from, *to),
+        Command::Diff { from, to } => {
+            inspect::diff(cli.global.sysroot.as_deref(), *from, *to, cli.global.json)
+        }
         Command::Why {
             package,
             generation,
-        } => inspect::why(cli.global.sysroot.as_deref(), package, *generation),
-        Command::Owns { path, generation } => {
-            inspect::owns(cli.global.sysroot.as_deref(), path, *generation)
-        }
+        } => inspect::why(
+            cli.global.sysroot.as_deref(),
+            package,
+            *generation,
+            cli.global.json,
+        ),
+        Command::Owns { path, generation } => inspect::owns(
+            cli.global.sysroot.as_deref(),
+            path,
+            *generation,
+            cli.global.json,
+        ),
 
         Command::SysrootInit => deployments::sysroot_init(cli.global.sysroot.as_deref()),
 
@@ -152,6 +166,7 @@ fn run(argv: &[String]) -> ExitCode {
             cli.global.sysroot.as_deref(),
             *generation,
             cli.global.verbose,
+            cli.global.json,
         ),
 
         Command::Check { .. }
@@ -190,8 +205,10 @@ fn frontend(cli: &args::Cli) -> ExitCode {
     match &cli.command {
         Command::Explain { key } => explain::run(&fe, key.as_deref().unwrap_or_default()),
         Command::Config(sub) => match sub {
-            args::ConfigCommand::Get { key } => config::get(&fe, key),
-            args::ConfigCommand::List { prefix } => config::list(&fe, prefix.as_deref()),
+            args::ConfigCommand::Get { key } => config::get(&fe, key, cli.global.json),
+            args::ConfigCommand::List { prefix } => {
+                config::list(&fe, prefix.as_deref(), cli.global.json)
+            }
             args::ConfigCommand::Set { key, value, file } => config::set(
                 &fe,
                 cli.global.config.as_deref(),
@@ -225,6 +242,12 @@ fn frontend(cli: &args::Cli) -> ExitCode {
             ),
         },
         Command::Show { .. } => {
+            if cli.global.json {
+                return crate::fmt::json(&serde_json::json!({
+                    "config_id": fe.manifest.config_id().to_string(),
+                    "manifest": fe.manifest,
+                }));
+            }
             show::summary(&fe.manifest, &fe.files, cli.global.verbose);
             show::detail(&fe.manifest);
             ExitCode::Ok
