@@ -559,13 +559,35 @@ uninitialized target succeeds and then fails several hundred megabytes later at 
 ```console
 $ sudo kiln apply
 Building workstation (b3:99887766abcd)
+  2 packages to realize from source
+  aur zen-browser-bin 1.17.0 — pkgbase zen-browser-bin, commit 88bd02c
+    aur zen-browser-bin: built 1 package  [1/2]
+  dkms v4l2loopback 1.20.0-1 against kernel 6.19.3-1
+    dkms v4l2loopback: built 1 package  [2/2]
   312 packages fetched
-  ...
 Generation 44 committed as c07be1d4f9a2.
 Generation 44 is staged for the next boot.
 Reboot to use it. `kiln rollback` returns to the previous one.
 If it doesn't boot successfully in 3 attempts, the previous generation boots instead.
 ```
+
+**Realization runs in parallel.** AUR packages, build recipes and out-of-tree/DKMS modules are
+three barriers — nothing in a later phase starts until every job in an earlier one has
+finished — but within a phase, independent jobs (AUR packages split further into waves by
+depth in the dependency tree) build concurrently, one worker per CPU. There is no flag to
+change the worker count; a compute-heavy sandboxed build oversubscribed past the CPU count
+would thrash rather than go faster. A dependent of a job that failed is skipped, named as such,
+rather than attempted and failed a second time for a reason that is not its own.
+
+**Package downloads show live progress.** On a terminal, one line is redrawn in place with
+files in flight, a running count and current speed; piped, logged, or under CI, one line is
+printed per file as it finishes instead, since a redrawn line only makes sense where something
+is watching it move.
+
+**Output is colored** when stdout/stderr is a terminal, checked separately for each stream so
+redirecting one and not the other does the right thing. `NO_COLOR` (any value) turns it off
+everywhere; nothing here affects diagnostics rendered by `kiln check`/`kiln build`'s config
+errors, which are always plain text so they can be captured and compared reliably.
 
 #### `kiln rebuild <gen>`
 

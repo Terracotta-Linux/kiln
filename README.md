@@ -72,6 +72,9 @@ it is out of scope, deliberately and permanently:
 - ⏪ **Atomic and reversible.** Every build is a numbered generation. `kiln rollback` boots
   the previous one, and a machine that fails to boot three times demotes the new generation
   and boots the old one by itself.
+- ⚡ **Realization runs in parallel**, one worker per CPU, with live fetch progress and
+  colored output. `kiln list`, `status`, `show`, `diff`, `why`, `owns` and `config get/list`
+  take `--json` for scripting.
 - 📦 **It stays Arch.** Real pacman packages from real Arch repositories, the AUR, your own
   PKGBUILDs, out-of-tree and DKMS kernel modules, local or remote `.pkg.tar.zst` files.
   `pacman -Q`, `kiln why` and `kiln owns` all work inside the booted image.
@@ -203,6 +206,7 @@ Kiln ships 66 small modules under `/usr/share/kiln/modules`, included by name:
 @kiln/wm/         hyprland · sway · niri · i3
 @kiln/audio/      pipewire
 @kiln/hardware/   firmware · bluetooth · printing · laptop · tlp · fwupd · intel-ucode · amd-ucode
+@kiln/system/     zram · swapfile
 @kiln/virt/       libvirt · podman · docker · nvidia-docker · distrobox · lilipod
 @kiln/dev/        base-devel · rust · go
 @kiln/security/   wheel-sudo · apparmor
