@@ -194,11 +194,11 @@ its type, its default and its behaviour.
 
 ## 🧩 The module library
 
-Kiln ships 74 small modules under `/usr/share/kiln/modules`, included by name:
+Kiln ships 75 small modules under `/usr/share/kiln/modules`, included by name:
 
 ```text
 @kiln/profiles/   minimal · workstation · server  (each with a -base sibling that picks no kernel)
-@kiln/kernel/     linux · linux-lts · linux-zen · linux-hardened · linux-rt
+@kiln/kernel/     linux · linux-lts · linux-zen · linux-hardened · linux-rt · linux-rt-lts
 @kiln/boot/       grub2 · plymouth
 @kiln/net/        networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale · wireguard
 @kiln/gpu/        nvidia-open · nvidia-open-lts · nvidia-open-dkms · nvidia-580xx-dkms · nvidia-cuda

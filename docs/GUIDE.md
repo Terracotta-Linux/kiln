@@ -2484,12 +2484,12 @@ and lines, and setting it here is the fix.
 
 ### 14.3 The module library
 
-Kiln ships 74 modules under `/usr/share/kiln/modules`:
+Kiln ships 75 modules under `/usr/share/kiln/modules`:
 
 ```text
 @kiln/profiles/    minimal · workstation · server
                    minimal-base · workstation-base · server-base  (same, kernel left unpicked)
-@kiln/kernel/      linux · linux-lts · linux-zen · linux-hardened · linux-rt
+@kiln/kernel/      linux · linux-lts · linux-zen · linux-hardened · linux-rt · linux-rt-lts
 @kiln/boot/        grub2 · plymouth
 @kiln/net/         networkmanager · systemd-networkd · nftables · sshd · iwd · tailscale
                    wireguard
