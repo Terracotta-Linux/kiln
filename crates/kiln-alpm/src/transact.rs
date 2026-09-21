@@ -11,8 +11,10 @@ use crate::error::{Error, Result};
 use crate::session::Session;
 use alpm::{Event, LogLevel, PackageOperation, TransFlag};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// What one transaction did, for the build log and for `kiln build -v`.
 #[derive(Debug, Clone, Default)]
@@ -148,6 +150,24 @@ impl Session {
         transaction: &Transaction,
         mut on_event: impl FnMut(DownloadEvent) + 'static,
     ) -> Result<Vec<PathBuf>> {
+        // `kiln-cli`'s realize step assembles several build roots in parallel
+        // threads that all point `with_cache` at the same shared directory.
+        // libalpm's downloader has no cross-session awareness of that sharing
+        // and will happily let two sessions write the same cached filename at
+        // once, which is how a *freshly emptied* cache still produces "invalid
+        // or corrupted package": two downloads interleaved into one file.
+        // Serializing the download step per cache directory is enough — once a
+        // fetch returns, every file it named is complete on disk and safe for
+        // any number of concurrent `install`s to read.
+        let cache_lock = self
+            .config
+            .cachedirs
+            .first()
+            .map(|dir| Self::fetch_lock(dir));
+        let _download_guard = cache_lock
+            .as_ref()
+            .map(|lock| lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
+
         self.alpm.set_dl_cb((), move |file, event, ()| {
             let file = file.to_string();
             match event.event() {
@@ -189,6 +209,24 @@ impl Session {
             }
         }
         Ok(files)
+    }
+
+    /// One lock per shared cache directory, so concurrent `fetch`es into the
+    /// same directory (several build roots assembled in parallel, see the
+    /// comment on `fetch_with_progress`) take turns downloading instead of
+    /// racing to write the same cached filename. Keyed by path rather than a
+    /// single global lock so resolution's cache and a build root's cache —
+    /// ordinarily the same directory, but not guaranteed to be — never wait on
+    /// each other needlessly.
+    fn fetch_lock(dir: &Path) -> Arc<Mutex<()>> {
+        static LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+        let registry = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+        registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(dir.to_path_buf())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
     }
 
     /// Install into the root. Assumes every package is already in the cache —
