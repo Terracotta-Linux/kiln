@@ -192,19 +192,6 @@ impl Validator<'_> {
         }
     }
 
-    fn bool(&mut self, doc: &Node, path: &str, default: bool) -> bool {
-        match self.node(doc, path) {
-            None => default,
-            Some(n) => match n.kind {
-                NodeKind::Bool(b) => b,
-                _ => {
-                    self.wrong_type(n, path, "a boolean");
-                    default
-                }
-            },
-        }
-    }
-
     fn int(&mut self, doc: &Node, path: &str, default: i64) -> i64 {
         match self.node(doc, path) {
             None => default,
@@ -507,7 +494,6 @@ impl Validator<'_> {
 
         Kernel {
             package: self.string(doc, "kernel.package", "linux"),
-            headers: self.bool(doc, "kernel.headers", false),
             cmdline: self.str_set(doc, "kernel.cmdline"),
             dracut_modules: self.str_set(doc, "kernel.dracut_modules"),
             modules: KernelModules {

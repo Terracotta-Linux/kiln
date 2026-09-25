@@ -1,0 +1,7 @@
+# `kernel.headers` was a key until headers became a package like any other.
+# A configuration written before then should be told what to write instead.
+kiln = 1
+
+[kernel]
+package = "linux-zen"
+headers = true

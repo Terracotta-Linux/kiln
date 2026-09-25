@@ -1,0 +1,15 @@
+---
+source: crates/kiln-config/tests/corpus.rs
+expression: rendered
+---
+kiln::structure
+
+  × `kernel.headers` has been removed
+   ╭─[system.toml:7:1]
+ 6 │ package = "linux-zen"
+ 7 │ headers = true
+   · ───┬───
+   ·    ╰── no longer part of the schema
+   ╰────
+  help: to ship the kernel headers in the image, add them as a package — `packages.repo
+        = ["linux-zen-headers"]` — and delete this line

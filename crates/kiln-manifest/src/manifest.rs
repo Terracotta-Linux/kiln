@@ -30,7 +30,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// | 5 | `kernel.modules.initramfs` joined `KernelModules`' canonical encoding. Which drivers are *in* the initramfs decides what the machine can do before it has a root filesystem — whether the panel has a KMS driver for the splash, most visibly — and dracut's non-hostonly selection does not put a GPU driver there on its own. |
 /// | 6 | `kernel.dkms` joined `Kernel`'s canonical encoding. A DKMS package's modules are compiled into the image at build time rather than on the machine at install time, so which DKMS packages a configuration names decides what drivers the image contains. |
 /// | 7 | `kernel.dkms` became entries carrying an optional `source` rather than a flat set of package names, so a DKMS tree in the configuration itself can be built the same way. A tree the user wrote is a different input from a package with the same name, and a set of strings has nowhere to say which one it is. |
-pub const HASH_EPOCH: u32 = 7;
+/// | 8 | `kernel.headers` left `Kernel`'s canonical encoding, and the schema. It never did anything a package could not: a module's build root installs `<kernel>-headers` on its own, and headers wanted *in* the image are named in `packages.repo` like anything else. |
+pub const HASH_EPOCH: u32 = 8;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -184,11 +185,6 @@ pub fn is_url(path: &str) -> bool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Kernel {
     pub package: String,
-    /// Whether to ship the kernel headers *in the image*. Off by default:
-    /// headers are a build-time dependency, installed into a build root that is
-    /// never the image, and ~150 MB of them in an immutable system that never
-    /// rebuilds a module at runtime is pure waste.
-    pub headers: bool,
     pub cmdline: BTreeSet<String>,
     /// dracut modules to `--add` beyond the `ostree` one Kiln always requests.
     /// Needed because dracut's default, non-hostonly module selection does not
@@ -206,7 +202,6 @@ impl Default for Kernel {
     fn default() -> Self {
         Kernel {
             package: "linux".into(),
-            headers: false,
             cmdline: BTreeSet::new(),
             dracut_modules: BTreeSet::new(),
             modules: KernelModules::default(),
@@ -489,7 +484,6 @@ impl Canonical for Kernel {
     fn canon(&self) -> Canon {
         Canon::map([
             ("package", Canon::str(&self.package)),
-            ("headers", Canon::Bool(self.headers)),
             ("cmdline", self.cmdline.canon()),
             ("dracut_modules", self.dracut_modules.canon()),
             ("modules", self.modules.canon()),

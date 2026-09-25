@@ -586,10 +586,6 @@ fn default_for(key: &str) -> Option<Fallback> {
             Some("works everywhere, including CI"),
         ),
         "kernel.package" => ("\"linux\"", None),
-        "kernel.headers" => (
-            "false",
-            Some("headers are a module's build-time dependency, not image content"),
-        ),
         "boot.loader" => ("\"grub2\"", Some("the only supported value")),
         "boot.timeout" => ("5", None),
         "boot.initramfs" => ("\"dracut\"", Some("the only supported value")),
@@ -1153,7 +1149,6 @@ mod tests {
             ("image.name", quoted(&m.image.name)),
             ("image.arch", quoted(&m.image.arch)),
             ("kernel.package", quoted(&m.kernel.package)),
-            ("kernel.headers", m.kernel.headers.to_string()),
             ("boot.timeout", m.boot.timeout.to_string()),
             ("system.timezone", quoted(&m.system.timezone)),
             ("system.keymap", quoted(&m.system.keymap)),

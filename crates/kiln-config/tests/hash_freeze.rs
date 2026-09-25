@@ -12,7 +12,14 @@
 use kiln_config::Options;
 use std::path::{Path, PathBuf};
 
-/// Frozen at hash epoch 7 — `kernel.dkms` became entries carrying an optional
+/// Frozen at hash epoch 8 — `kernel.headers` left the schema and the canonical
+/// encoding. It was a boolean that duplicated what a package already says:
+/// headers wanted in the image are `<kernel>-headers` in `packages.repo`, and a
+/// module's build root installs them regardless. All five fixtures moved
+/// together, and none of them sets the key, which is what says it was the
+/// encoding that changed rather than any fixture's content.
+///
+/// Epoch 7 was `kernel.dkms` becoming entries carrying an optional
 /// `source` rather than a flat set of package names, so that a DKMS tree in the
 /// configuration itself can be built the same way a packaged one is. A tree the
 /// user wrote and a package with the same name are different inputs, and a set
@@ -81,29 +88,29 @@ use std::path::{Path, PathBuf};
 const FROZEN: &[(&str, &str)] = &[
     (
         "four-lines",
-        "b3:107c6b86f1c203aac4cf4f800e0ff735d084a2d8462e1c958b0ed2506ad91e5b",
+        "b3:cd02f1492d9ee29f43dc9ca95e19c9ce89c0351004f8bd3b9557d7ae7e948b6a",
     ),
     (
         "minimal",
-        "b3:c13cb2d67524f9ffad72526d82447e384a77ceec96df073b1ddc8f2235679a29",
+        "b3:f85a4c2580bb4920ecfedf317ebd39ae8a41ea28483486534f28506898c7b7f5",
     ),
     (
         "order-independence-a",
-        "b3:b4540d883d504446590553ba81428c507770b1d997f2ab28c0c9b6b79d63fcbc",
+        "b3:b990b4b53db7803e01a533c07c4584cc09ae9ebc78a88075137b537f3aeeaf6f",
     ),
     (
         "order-independence-b",
-        "b3:b4540d883d504446590553ba81428c507770b1d997f2ab28c0c9b6b79d63fcbc",
+        "b3:b990b4b53db7803e01a533c07c4584cc09ae9ebc78a88075137b537f3aeeaf6f",
     ),
     (
         "workstation",
-        "b3:872e83855cc5caed7551295123ca299a8114af456a046891b26884f12f412038",
+        "b3:31c9d4a4a168b78ddaa39de12a7e0816797c9e02e28bc60cb8ae9ef864f19e55",
     ),
 ];
 
 /// The epoch the values above were taken at. Changing `HASH_EPOCH` without
 /// changing this is the mistake this constant exists to catch.
-const FROZEN_AT_EPOCH: u32 = 7;
+const FROZEN_AT_EPOCH: u32 = 8;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

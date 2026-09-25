@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:38d282ea7bc2f62f9189ec78337230de208d77cb342e1207ed29d42855ad2701
+config_id: b3:96d718deb6bb99d28a6a793a838546df4caaa23028445d7d73138122ceb13d4d
 
 
   boot: 
@@ -17,7 +17,7 @@ config_id: b3:38d282ea7bc2f62f9189ec78337230de208d77cb342e1207ed29d42855ad2701
         - 384
       source: []
       target: "/etc/motd"
-  hash_epoch: 7
+  hash_epoch: 8
   image: 
     arch: "[ARCH]"
     name: "system"
@@ -25,7 +25,6 @@ config_id: b3:38d282ea7bc2f62f9189ec78337230de208d77cb342e1207ed29d42855ad2701
     cmdline: []
     dkms: {}
     dracut_modules: []
-    headers: false
     modules: 
       blacklist: []
       initramfs: []

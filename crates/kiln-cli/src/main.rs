@@ -51,10 +51,9 @@ fn run(argv: &[String]) -> ExitCode {
         }
         Command::Version => {
             println!(
-                "kiln {} (schema {}, hash epoch {})",
+                "kiln {} (schema {})",
                 env!("CARGO_PKG_VERSION"),
-                kiln_manifest::SCHEMA_VERSION,
-                kiln_manifest::HASH_EPOCH
+                kiln_manifest::SCHEMA_VERSION
             );
             ExitCode::Ok
         }

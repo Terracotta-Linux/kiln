@@ -80,6 +80,8 @@ fn check_keys(node: &Node, path: &mut Vec<String>, errs: &mut Errors) {
 
         if key == "include" && path.len() > 1 {
             misplaced_include(entry, &dotted, errs);
+        } else if dotted == "kernel.headers" {
+            removed_headers(table, entry, errs);
         } else if !schema::KEYS.contains(&dotted.as_str()) {
             unknown_key(key, &dotted, entry, path, errs);
         } else if schema::is_list(&dotted) {
@@ -102,6 +104,33 @@ fn misplaced_include(entry: &Entry, dotted: &str, errs: &mut Errors) {
                 "`include` must be a top-level key, before any table header. Written after a \
                  `[section]` header, TOML makes it a key *of that section* instead.",
             ),
+    );
+}
+
+/// `kernel.headers` was a key once. It is gone because headers are a package
+/// like any other: a module's build root installs `<kernel>-headers` on its
+/// own, and an image that wants them names them in `packages.repo`. A file
+/// that still sets it gets told what to write instead, rather than a bare
+/// "unknown key".
+fn removed_headers(kernel: &crate::node::Table, entry: &Entry, errs: &mut Errors) {
+    let kernel_package = kernel
+        .get("package")
+        .and_then(|e| e.value.as_str())
+        .unwrap_or("linux");
+    let help = if matches!(entry.value.kind, NodeKind::Bool(false)) {
+        "`false` was already the default, and a module's build installs the headers \
+         into its build root on its own: delete this line"
+            .to_string()
+    } else {
+        format!(
+            "to ship the kernel headers in the image, add them as a package — \
+             `packages.repo = [\"{kernel_package}-headers\"]` — and delete this line"
+        )
+    };
+    errs.push(
+        Diag::error("kiln::structure", "`kernel.headers` has been removed")
+            .label(&entry.key, "no longer part of the schema")
+            .help(help),
     );
 }
 

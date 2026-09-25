@@ -2,7 +2,7 @@
 source: crates/kiln-config/tests/corpus.rs
 expression: rendered
 ---
-config_id: b3:872e83855cc5caed7551295123ca299a8114af456a046891b26884f12f412038
+config_id: b3:31c9d4a4a168b78ddaa39de12a7e0816797c9e02e28bc60cb8ae9ef864f19e55
 
 
   boot: 
@@ -29,7 +29,7 @@ config_id: b3:872e83855cc5caed7551295123ca299a8114af456a046891b26884f12f412038
       mode: []
       source: []
       target: "/usr/lib/tmpfiles.d/scratch.conf"
-  hash_epoch: 7
+  hash_epoch: 8
   image: 
     arch: "[ARCH]"
     name: "workstation"
@@ -49,7 +49,6 @@ config_id: b3:872e83855cc5caed7551295123ca299a8114af456a046891b26884f12f412038
         name: "v4l2loopback-dkms"
         source: []
     dracut_modules: []
-    headers: false
     modules: 
       blacklist: 
         - "nouveau"

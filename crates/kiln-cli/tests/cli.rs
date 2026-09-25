@@ -325,7 +325,7 @@ fn explain_a_group_lists_the_defaults_too() {
 #[test]
 fn explain_tells_the_three_kinds_of_unset_apart() {
     // A default.
-    let out = workstation(&["explain", "kernel.headers"]);
+    let out = workstation(&["explain", "boot.initramfs"]);
     assert_eq!(code(&out), 0);
     assert!(stdout(&out).contains("Kiln's default"), "{}", stdout(&out));
 
@@ -473,7 +473,7 @@ fn config_unset_removes_the_key() {
 #[test]
 fn config_unset_is_a_noop_when_already_unset() {
     let dir = mutable_workstation("config-unset-noop");
-    let out = kiln_in(&dir, &["config", "unset", "kernel.headers"]);
+    let out = kiln_in(&dir, &["config", "unset", "boot.initramfs"]);
     assert_eq!(code(&out), 0, "{}", stderr(&out));
     assert!(stdout(&out).contains("already unset"), "{}", stdout(&out));
 }

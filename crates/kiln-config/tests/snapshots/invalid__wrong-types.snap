@@ -20,17 +20,6 @@ kiln::structure
  7 │ repo = "git"
    ·        ──┬──
    ·          ╰── here
- 8 │ 
    ╰────
-kiln::structure
 
-  × `kernel.headers` must be a boolean, found string
-    ╭─[system.toml:10:11]
-  9 │ [kernel]
- 10 │ headers = "yes"
-    ·           ──┬──
-    ·             ╰── here
-    ╰────
-  help: write `kernel.headers = true`
-
-3 problems found.
+2 problems found.

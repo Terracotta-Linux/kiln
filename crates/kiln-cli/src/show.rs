@@ -128,10 +128,7 @@ pub fn detail(m: &Manifest) {
         m.packages.file.values().map(|p| p.path.clone()),
     );
     list("packages.exclude", m.packages.exclude.iter().cloned());
-    println!(
-        "kernel       {} (headers: {})",
-        m.kernel.package, m.kernel.headers
-    );
+    println!("kernel       {}", m.kernel.package);
     list("kernel.cmdline", m.kernel.cmdline.iter().cloned());
     // A tree's path is the interesting half; a package is only its name.
     list(

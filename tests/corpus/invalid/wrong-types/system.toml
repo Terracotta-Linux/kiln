@@ -5,6 +5,3 @@ timeout = "five"
 
 [packages]
 repo = "git"
-
-[kernel]
-headers = "yes"

@@ -424,7 +424,7 @@ $ cargo run --bin kiln -- --config ./myconfig --module-root ./modules check --of
 
 ```console
 $ kiln --version
-kiln 0.1.13 (schema 1, hash epoch 7)
+kiln 0.2.0 (schema 1)
 
 $ kiln help
 $ sudo kiln init            # scaffolds /etc/kiln/system.toml
@@ -471,7 +471,7 @@ the wrong command says which command it belongs to.
 | `--module-root <path>` | Override `/usr/share/kiln/modules`. Also `$KILN_MODULE_DIR` |
 | `--allow-external-sources` | Permit `source`/`path` values that resolve outside the config root. Warns once per path |
 | `-v`, `--verbose` | More detail: OSTree checksums, full records, every drifted file, per-file digests |
-| `-V`, `--version` | Print `kiln <version> (schema <n>, hash epoch <n>)` and exit |
+| `-V`, `--version` | Print `kiln <version> (schema <n>)` and exit |
 | `-h`, `--help` | Print the command summary and exit |
 
 `--json` is not truly global: it is accepted only on the read-only commands that already have a
@@ -1231,7 +1231,6 @@ exclude = ["nano"]                        # must not appear, even as a dependenc
 
 [kernel]
 package        = "linux"
-headers        = false
 cmdline        = ["quiet", "amd_iommu=on"]
 dracut_modules = ["plymouth"]             # dracut modules to --add beyond ostree
 dkms           = ["nvidia-open-dkms"]     # DKMS sources, compiled at build time
@@ -1340,7 +1339,6 @@ See [section 7](#7-packages).
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `kernel.package` | string | `"linux"` | Which kernel package the image is built around. Kiln locates it by `/usr/lib/modules/*/pkgbase` and refuses to guess if it finds two |
-| `kernel.headers` | boolean | `false` | Declares whether the image should carry the kernel's headers. See the note below |
 | `kernel.cmdline` | list of strings | `[]` | Kernel command line. **Fully declarative**: Kiln passes exactly this set at every deploy and keeps no hidden additions |
 | `kernel.dracut_modules` | list of strings | `[]` | dracut modules to `--add` beyond the `ostree` one Kiln always requests. Needed because dracut's non-hostonly selection does not pull in every module whose package is installed |
 | `kernel.modules.load` | list of strings | `[]` | Modules the booted system should load. Written to `/etc/modules-load.d/kiln.conf`, one name per line, for `systemd-modules-load.service` |
@@ -1350,12 +1348,30 @@ See [section 7](#7-packages).
 | `kernel.module` | array of tables | `[]` | Out-of-tree modules built from source with `make`. Entry keys: `name`, `source` (both required). `name` becomes a `pkgname` in a recipe Kiln writes, so it has to be a legal one: lower-case letters, digits and `@ . _ + -` |
 | `kernel.dkms` | list of names, or array of tables | `[]` | DKMS drivers compiled at build time. Entry keys: `name` (required), `source` (optional). `name` has the same `pkgname` restriction as `kernel.module` |
 
-**On `kernel.headers`.** It defaults to `false`, is part of `config_id`, and is reported by
-`kiln show` and `kiln config get`. Nothing in assembly currently reads it: module and DKMS builds
-install `<kernel>-headers` into their build root from the resolved kernel regardless, and that
-root is never the image. If you genuinely want headers *inside* the image, name
-`linux-headers` in `packages.repo`. Shipping ~150 MB of headers in an immutable system that
-never rebuilds modules at runtime is usually waste, which is why the default is what it is.
+**On kernel headers.** There is no key for them: headers are a package, so an image that
+wants them names them in `packages.repo` — `<kernel>-headers`, e.g. `linux-headers` or
+`linux-zen-headers`. You do not need them to build modules: `kernel.module` and `kernel.dkms`
+builds install `<kernel>-headers` into their build root from the resolved kernel on their own,
+and that root is never the image. Shipping ~150 MB of headers in an immutable system that never
+rebuilds modules at runtime is usually waste.
+
+Configurations written before this had a `kernel.headers` boolean. It is now an error that says
+what to write instead — delete a `headers = false` line outright, and turn `headers = true` into
+the headers package:
+
+```
+kiln::structure
+
+  × `kernel.headers` has been removed
+   ╭─[system.toml:7:1]
+ 6 │ package = "linux-zen"
+ 7 │ headers = true
+   · ───┬───
+   ·    ╰── no longer part of the schema
+   ╰────
+  help: to ship the kernel headers in the image, add them as a package — `packages.repo
+        = ["linux-zen-headers"]` — and delete this line
+```
 
 **On `kernel.cmdline`.** Because kargs are fully declarative, a deploy without `root=`
 produces a machine that boots exactly once. `@kiln/boot/grub2` contributes `rw`, without which
@@ -1852,7 +1868,6 @@ Four different things, four different keys.
 ```toml
 [kernel]
 package = "linux"                         # which kernel package
-headers = false                           # see §6.7
 dkms    = ["nvidia-open-dkms"]            # DKMS sources, compiled into the image
 
 [kernel.modules]                          # in-tree modules, just configured
@@ -3484,7 +3499,7 @@ Worth reporting:
 
 ### What makes a useful report
 
-1. `kiln --version` output (it includes the schema version and hash epoch).
+1. `kiln --version` output (it includes the schema version).
 2. The exact command you ran and its full output.
 3. The smallest configuration that reproduces it. `kiln check --offline` output is often
    enough; if not, `kiln show` and `kiln config get <key>` are.

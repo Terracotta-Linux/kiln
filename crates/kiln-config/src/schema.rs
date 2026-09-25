@@ -122,7 +122,6 @@ pub const KEYS: &[&str] = &[
     "packages.exclude",
     "kernel",
     "kernel.package",
-    "kernel.headers",
     "kernel.cmdline",
     "kernel.dracut_modules",
     "kernel.modules",
@@ -195,7 +194,6 @@ pub fn scalar_type(path: &str) -> Option<Ty> {
         "image.name" | "image.arch" | "repos.snapshot" | "kernel.package" | "boot.loader"
         | "boot.initramfs" | "system.hostname" | "system.timezone" | "system.keymap"
         | "system.locale.lang" => Ty::Str,
-        "kernel.headers" => Ty::Bool,
         "boot.timeout" => Ty::Int,
         _ => return None,
     })
